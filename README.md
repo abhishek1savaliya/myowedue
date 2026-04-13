@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Personal Credit/Debit Manager
 
-## Getting Started
+Full-stack Next.js (App Router) application to track personal dues, credits, debits, reminders and exports.
 
-First, run the development server:
+## Tech Stack
+
+- Next.js 16 (App Router)
+- MongoDB + Mongoose
+- Tailwind CSS v4
+- JWT auth with secure httpOnly cookie session
+- Resend for emails
+- node-cron for automatic reminders
+- PDFKit + html-to-image for exports
+
+## Core Features
+
+- Authentication (signup, login, logout)
+- Dashboard with totals, pending dues, paid history, charts
+- Person management
+- Transactions with filters, search, date range, status
+- Due management and mark as paid
+- Bin management with 3-year restore window
+- Reminder emails and summary notifications
+- PDF + CSV + JPG export
+- Multi-currency transaction support
+- WhatsApp share link
+- Activity logs
+
+## Setup
+
+1. Install dependencies
+
+```bash
+npm install
+```
+
+2. Create environment file
+
+```bash
+copy .env.example .env.local
+```
+
+3. Fill MongoDB and SMTP values in .env.local
+
+4. Run dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open http://localhost:3000
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Important Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- MONGODB_URI
+- JWT_SECRET
+- RESEND_API_KEY
+- RESEND_FROM
+- ENABLE_CRON
 
-## Learn More
+## API Routes
 
-To learn more about Next.js, take a look at the following resources:
+- /api/auth/signup
+- /api/auth/login
+- /api/auth/logout
+- /api/auth/me
+- /api/person
+- /api/person/:id
+- /api/transaction
+- /api/transaction/:id
+- /api/dashboard
+- /api/reminder
+- /api/reminder/settings
+- /api/bin/person
+- /api/bin/person/:id/restore
+- /api/bin/transaction
+- /api/bin/transaction/:id/restore
+- /api/export/pdf
+- /api/export
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- For automatic reminders in production, use an external scheduler to hit /api/reminder (or enable a persistent Node process with ENABLE_CRON=true).
+- Set strong JWT secrets and production SMTP credentials.
