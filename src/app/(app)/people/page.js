@@ -67,6 +67,24 @@ export default function PeoplePage() {
     }
   }
 
+  function shareOnWhatsApp(person) {
+    const totalCredit = Number(person.totalCredit || 0);
+    const totalDebit = Number(person.totalDebit || 0);
+    const remaining = Math.abs(totalDebit - totalCredit).toFixed(2);
+    const invoiceUrl = `${window.location.origin}/api/export/person/${person._id}/invoice?scope=all`;
+
+    let message = "";
+    if (totalDebit > totalCredit) {
+      message = `Hi ${person.name}, this amount ${remaining} is remaining from my end to you. I will pay you ASAP. Full invoice PDF: ${invoiceUrl}`;
+    } else if (totalCredit > totalDebit) {
+      message = `Hi ${person.name}, please send me remaining amount ${remaining} ASAP. Full invoice PDF: ${invoiceUrl}`;
+    } else {
+      message = `Hi ${person.name}, no remaining balance at the moment. Sharing full invoice PDF for reference: ${invoiceUrl}`;
+    }
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <div className="space-y-6">
       <header>
@@ -154,13 +172,18 @@ export default function PeoplePage() {
                   Pending Invoice
                 </a>
                 <a
-                  href={`https://wa.me/?text=${encodeURIComponent(`Hi ${p.name}, please settle your pending amount.`)}`}
-                  target="_blank"
-                  rel="noreferrer"
+                  href={`/api/export/person/${p._id}/invoice?scope=all`}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
+                >
+                  Full Invoice
+                </a>
+                <button
+                  type="button"
+                  onClick={() => shareOnWhatsApp(p)}
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
                 >
                   Share on WhatsApp
-                </a>
+                </button>
                 <button
                   type="button"
                   onClick={() => removePerson(p._id)}
