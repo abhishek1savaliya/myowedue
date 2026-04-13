@@ -142,6 +142,12 @@ export default function PeoplePage() {
                   Credit Invoice
                 </a>
                 <a
+                  href={`/api/export/person/${p._id}/invoice?scope=debit`}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
+                >
+                  Debit Invoice
+                </a>
+                <a
                   href={`/api/export/person/${p._id}/invoice?scope=pending`}
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
                 >
