@@ -1,0 +1,37 @@
+import { connectDB } from "@/lib/db";
+import { fail, ok } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import User from "@/models/User";
+
+export async function PUT(request) {
+  const { user, error } = await requireUser();
+  if (error) return error;
+
+  try {
+    const { reminderFrequency, darkMode } = await request.json();
+
+    if (reminderFrequency && !["daily", "weekly", "monthly"].includes(reminderFrequency)) {
+      return fail("Invalid reminder frequency", 422);
+    }
+
+    await connectDB();
+    const updated = await User.findByIdAndUpdate(
+      user._id,
+      {
+        ...(reminderFrequency ? { reminderFrequency } : {}),
+        ...(typeof darkMode === "boolean" ? { darkMode } : {}),
+      },
+      { new: true }
+    );
+
+    return ok({
+      message: "Settings updated",
+      user: {
+        reminderFrequency: updated.reminderFrequency,
+        darkMode: updated.darkMode,
+      },
+    });
+  } catch {
+    return fail("Failed to update settings", 500);
+  }
+}
