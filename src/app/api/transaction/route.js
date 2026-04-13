@@ -22,18 +22,16 @@ export async function GET(request) {
   const minAmount = Number(searchParams.get("minAmount") || 0);
   const maxAmount = Number(searchParams.get("maxAmount") || 0);
 
-  const query = { userId: user._id, ...activeQuery() };
+  const query = { userId: user._id, status: "pending", ...activeQuery() };
   if (view === "credit_pending") {
     query.status = "pending";
     query.type = "credit";
   } else if (view === "debit_pending") {
     query.status = "pending";
     query.type = "debit";
-  } else if (view === "paid") {
-    query.status = "paid";
   }
 
-  if (status && ["pending", "paid"].includes(status)) query.status = status;
+  if (status === "pending") query.status = "pending";
   if (type && ["credit", "debit"].includes(type)) query.type = type;
   if (start || end) {
     query.date = {};
@@ -106,14 +104,6 @@ export async function GET(request) {
       },
     ];
 
-    if (plain.status === "paid" && plain.paidAt) {
-      fallbackLogs.push({
-        action: "status_changed",
-        message: "Marked PAID",
-        at: plain.paidAt,
-      });
-    }
-
     plain.changeLogs = fallbackLogs;
     return plain;
   });
@@ -127,13 +117,12 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { personId, amount, type, status, notes, date, currency } = body;
+    const { personId, amount, type, notes, date, currency } = body;
 
     if (!personId || !amount || !type || !date) {
       return fail("personId, amount, type and date are required", 422);
     }
     if (!["credit", "debit"].includes(type)) return fail("Invalid type", 422);
-    if (status && !["pending", "paid"].includes(status)) return fail("Invalid status", 422);
 
     await connectDB();
     const person = await Person.findOne({ _id: personId, userId: user._id, ...activeQuery() });
@@ -147,7 +136,7 @@ export async function POST(request) {
       notes: notes || "",
       date: new Date(date),
       currency: currency || "USD",
-      status: status || "pending",
+      status: "pending",
       changeLogs: [
         {
           action: "created",

@@ -18,7 +18,15 @@ export async function GET() {
 
   const balanceMap = new Map();
   for (const p of people) {
-    balanceMap.set(p._id.toString(), { totalCredit: 0, totalDebit: 0 });
+    balanceMap.set(p._id.toString(), {
+      totalCredit: 0,
+      totalDebit: 0,
+      pendingCredit: 0,
+      pendingDebit: 0,
+      netDue: 0,
+      dueAmount: 0,
+      dueDirection: "settled",
+    });
   }
 
   for (const item of tx) {
@@ -26,6 +34,17 @@ export async function GET() {
     if (!bucket) continue;
     if (item.type === "credit") bucket.totalCredit += item.amount;
     if (item.type === "debit") bucket.totalDebit += item.amount;
+
+    if (item.status === "pending") {
+      if (item.type === "credit") bucket.pendingCredit += item.amount;
+      if (item.type === "debit") bucket.pendingDebit += item.amount;
+    }
+  }
+
+  for (const bucket of balanceMap.values()) {
+    bucket.netDue = bucket.pendingDebit - bucket.pendingCredit;
+    bucket.dueAmount = Math.abs(bucket.netDue);
+    bucket.dueDirection = bucket.netDue < 0 ? "person_owes_you" : bucket.netDue > 0 ? "you_owe_person" : "settled";
   }
 
   const data = people.map((p) => ({ ...p, ...balanceMap.get(p._id.toString()) }));

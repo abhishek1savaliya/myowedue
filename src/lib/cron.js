@@ -5,12 +5,22 @@ import Person from "@/models/Person";
 import Transaction from "@/models/Transaction";
 import { sendMail } from "@/lib/mailer";
 import { activeQuery } from "@/lib/bin";
+import { refreshExchangeRatesIfNeeded } from "@/lib/exchangeRates";
 
 let started = false;
 
 export function startReminderCron() {
   if (started || process.env.ENABLE_CRON !== "true") return;
   started = true;
+
+  // Refresh currency rates at most twice a day to respect provider limits.
+  cron.schedule("0 */12 * * *", async () => {
+    try {
+      await refreshExchangeRatesIfNeeded({ force: true });
+    } catch (error) {
+      console.error("Exchange rate refresh failed:", error);
+    }
+  });
 
   cron.schedule("0 9 * * *", async () => {
     await connectDB();

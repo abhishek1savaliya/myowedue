@@ -3,7 +3,6 @@ import { fail, logActivity, ok } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import Transaction from "@/models/Transaction";
 import Person from "@/models/Person";
-import { sendPaymentReceivedMail } from "@/lib/reminders";
 import { activeQuery, buildBinMeta } from "@/lib/bin";
 import { clearDashboardCache } from "@/lib/redis";
 
@@ -41,19 +40,9 @@ export async function PUT(request, { params }) {
       notes: body.notes ?? existing.notes,
       currency: body.currency || existing.currency,
       date: body.date ? new Date(body.date) : existing.date,
-      status: body.status || existing.status,
+      status: "pending",
+      paidAt: null,
     };
-
-    // If type is being explicitly edited to a pending entry type, ensure status is pending unless caller forces paid.
-    if (!body.status && body.type && body.type !== existing.type) {
-      setFields.status = "pending";
-    }
-
-    if (setFields.status === "paid" && existing.status !== "paid") {
-      setFields.paidAt = new Date();
-    } else if (setFields.status === "pending") {
-      setFields.paidAt = null;
-    }
 
     const history = [];
     const existingDate = new Date(existing.date).toISOString().slice(0, 10);
@@ -80,13 +69,10 @@ export async function PUT(request, { params }) {
         at: eventAt,
       });
     }
-    if (existing.status !== setFields.status) {
+    if (existing.status !== "pending") {
       history.push({
         action: "status_changed",
-        message:
-          setFields.status === "paid"
-            ? `Marked PAID on ${eventAtText}`
-            : `Changed status from ${existing.status.toUpperCase()} to ${setFields.status.toUpperCase()} on ${eventAtText}`,
+        message: `Status normalized to PENDING on ${eventAtText}`,
         at: eventAt,
       });
     }
@@ -130,15 +116,6 @@ export async function PUT(request, { params }) {
     ).populate("personId", "name email");
 
     if (!tx) return fail("Transaction not found", 404);
-
-    if (setFields.status === "paid" && existing.status !== "paid") {
-      await sendPaymentReceivedMail({
-        personEmail: tx.personId?.email,
-        personName: tx.personId?.name,
-        amount: tx.amount,
-        currency: tx.currency,
-      });
-    }
 
     await clearDashboardCache(user._id);
     await logActivity(user._id, "transaction_updated", `Updated ${tx._id}`);

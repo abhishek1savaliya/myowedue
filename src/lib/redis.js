@@ -72,10 +72,30 @@ export async function delRedisKey(key) {
   }
 }
 
-export function dashboardCacheKey(userId) {
-  return `dashboard:${String(userId)}`;
+export function dashboardCacheKey(userId, currency = "AUD") {
+  return `dashboard:${String(userId)}:${String(currency || "AUD").toUpperCase()}`;
 }
 
 export async function clearDashboardCache(userId) {
-  return delRedisKey(dashboardCacheKey(userId));
+  try {
+    const client = await getRedisClient();
+    if (!client) return false;
+
+    const pattern = `dashboard:${String(userId)}:*`;
+    const keys = [];
+    for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keys.push(key);
+    }
+
+    if (keys.length > 0) {
+      await client.del(keys);
+    }
+
+    // Cleanup legacy single-key cache if present.
+    await client.del(`dashboard:${String(userId)}`);
+    return true;
+  } catch (error) {
+    console.error("Redis dashboard cache clear failed:", error?.message || error);
+    return false;
+  }
 }

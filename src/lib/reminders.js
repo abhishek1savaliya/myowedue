@@ -18,12 +18,12 @@ export async function sendDueReminderToPerson({ user, personId }) {
   });
 
   const total = tx.reduce((sum, item) => {
-    const signed = item.type === "credit" ? item.amount : -item.amount;
+    const signed = item.type === "credit" ? -item.amount : item.amount;
     return sum + signed;
   }, 0);
 
-  const subject = total >= 0 ? "Payment Reminder" : "Amount I Owe You";
-  const headline = total >= 0 ? `You owe ${user.name}` : `${user.name} owes you`;
+  const subject = total <= 0 ? "Payment Reminder" : "Amount I Owe You";
+  const headline = total <= 0 ? `${person.name} owes ${user.name}` : `${user.name} owes ${person.name}`;
   const message = `Current outstanding amount is ${formatCurrency(Math.abs(total), tx[0]?.currency || "USD")}. Please review and confirm payment status.`;
 
   return sendMail({ to: person.email, subject, headline, message });

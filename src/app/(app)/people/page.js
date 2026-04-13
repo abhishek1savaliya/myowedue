@@ -10,6 +10,7 @@ export default function PeoplePage() {
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingPersonId, setEditingPersonId] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -37,13 +38,11 @@ export default function PeoplePage() {
   }
 
   async function removePerson(id) {
-    const yes = window.confirm("Move this person and related transactions to bin?");
-    if (!yes) return;
-
     const res = await fetch(`/api/person/${id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
       setPeople((prev) => prev.filter((person) => person._id !== id));
+      setDeleteTarget(null);
       await load();
     } else {
       window.alert(data.message || "Failed to delete person");
@@ -68,15 +67,14 @@ export default function PeoplePage() {
   }
 
   function shareOnWhatsApp(person) {
-    const totalCredit = Number(person.totalCredit || 0);
-    const totalDebit = Number(person.totalDebit || 0);
-    const remaining = Math.abs(totalDebit - totalCredit).toFixed(2);
+    const dueDirection = person.dueDirection || "settled";
+    const remaining = Number(person.dueAmount || 0).toFixed(2);
     const invoiceUrl = `${window.location.origin}/api/export/person/${person._id}/invoice?scope=all`;
 
     let message = "";
-    if (totalDebit > totalCredit) {
+    if (dueDirection === "you_owe_person") {
       message = `Hi ${person.name}, this amount ${remaining} is remaining from my end to you. I will pay you ASAP. Full invoice PDF: ${invoiceUrl}`;
-    } else if (totalCredit > totalDebit) {
+    } else if (dueDirection === "person_owes_you") {
       message = `Hi ${person.name}, please send me remaining amount ${remaining} ASAP. Full invoice PDF: ${invoiceUrl}`;
     } else {
       message = `Hi ${person.name}, no remaining balance at the moment. Sharing full invoice PDF for reference: ${invoiceUrl}`;
@@ -89,7 +87,7 @@ export default function PeoplePage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">People</h1>
-        <p className="text-sm text-zinc-600">Manage contacts and see per-person credit/debit totals.</p>
+        <p className="text-sm text-zinc-600">Manage contacts and view give vs received-back balance.</p>
       </header>
 
       <form onSubmit={editingPersonId ? saveEdit : addPerson} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-4">
@@ -126,16 +124,27 @@ export default function PeoplePage() {
           {people.map((p) => (
             <article key={p._id} className="rounded-2xl border border-zinc-200 bg-white p-4">
               <h3 className="text-lg font-semibold text-black">{p.name}</h3>
-              <p className="mt-1 text-sm text-zinc-600">{p.email || "No email"}</p>
-              <p className="text-sm text-zinc-600">{p.phone || "No phone"}</p>
+              {p.email ? <p className="mt-1 text-sm text-zinc-600">{p.email}</p> : null}
+              {p.phone ? <p className="text-sm text-zinc-600">{p.phone}</p> : null}
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded-lg bg-zinc-100 p-2">
-                  <p className="text-zinc-500">Credit</p>
-                  <p className="font-semibold text-black">{p.totalCredit || 0}</p>
+                  <p className="text-zinc-500">Total Given</p>
+                  <p className="font-semibold text-black">{Number(p.pendingCredit || 0).toFixed(2)}</p>
                 </div>
                 <div className="rounded-lg bg-zinc-100 p-2">
-                  <p className="text-zinc-500">Debit</p>
-                  <p className="font-semibold text-black">{p.totalDebit || 0}</p>
+                  <p className="text-zinc-500">Total Received Back</p>
+                  <p className="font-semibold text-black">{Number(p.pendingDebit || 0).toFixed(2)}</p>
+                </div>
+                <div className="col-span-2 rounded-lg bg-zinc-100 p-2">
+                  <p className="text-zinc-500">Current Due</p>
+                  <p className="font-semibold text-black">{Number(p.dueAmount || 0).toFixed(2)}</p>
+                  <p className="mt-1 text-zinc-600">
+                    {p.dueDirection === "person_owes_you"
+                      ? `${p.name} owes you`
+                      : p.dueDirection === "you_owe_person"
+                        ? `You owe ${p.name}`
+                        : "No due"}
+                  </p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -154,24 +163,6 @@ export default function PeoplePage() {
                   Edit
                 </button>
                 <a
-                  href={`/api/export/person/${p._id}/invoice?scope=credit`}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
-                >
-                  Credit Invoice
-                </a>
-                <a
-                  href={`/api/export/person/${p._id}/invoice?scope=debit`}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
-                >
-                  Debit Invoice
-                </a>
-                <a
-                  href={`/api/export/person/${p._id}/invoice?scope=pending`}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
-                >
-                  Pending Invoice
-                </a>
-                <a
                   href={`/api/export/person/${p._id}/invoice?scope=all`}
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
                 >
@@ -186,7 +177,7 @@ export default function PeoplePage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => removePerson(p._id)}
+                  onClick={() => setDeleteTarget({ id: p._id, name: p.name })}
                   className="w-full rounded-lg border border-black px-3 py-2 text-center text-xs sm:w-auto"
                 >
                   Delete
@@ -196,6 +187,33 @@ export default function PeoplePage() {
           ))}
         </div>
       )}
+
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+            <h2 className="text-lg font-semibold text-black">Delete Person?</h2>
+            <p className="mt-2 text-sm text-zinc-600">
+              Move {deleteTarget.name} and related transactions to bin?
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => removePerson(deleteTarget.id)}
+                className="rounded-lg bg-black px-4 py-2 text-sm text-white"
+              >
+                Yes, Move to Bin
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

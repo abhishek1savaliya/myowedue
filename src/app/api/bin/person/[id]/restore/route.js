@@ -35,6 +35,7 @@ export async function POST(_request, { params }) {
     },
     {
       $set: { isDeleted: false, lastRestoredAt: eventAt },
+      $set: { isDeleted: false, lastRestoredAt: eventAt, status: "pending", paidAt: null },
       $unset: { deletedAt: 1, restoreUntil: 1, deletionSource: 1 },
       $push: {
         changeLogs: {

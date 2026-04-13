@@ -18,9 +18,9 @@ function short(text, max = 34) {
 }
 
 function getScope(searchParams) {
-  const scope = (searchParams.get("scope") || "pending").toLowerCase();
+  const scope = (searchParams.get("scope") || "all").toLowerCase();
   if (["pending", "credit", "debit", "all"].includes(scope)) return scope;
-  return "pending";
+  return "all";
 }
 
 export async function GET(request, { params }) {
@@ -57,7 +57,7 @@ export async function GET(request, { params }) {
 
     const scopeTotal = transactions.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
     const signedScopeTotal = transactions.reduce(
-      (sum, tx) => sum + (tx.type === "credit" ? Number(tx.amount || 0) : -Number(tx.amount || 0)),
+      (sum, tx) => sum + (tx.type === "credit" ? -Number(tx.amount || 0) : Number(tx.amount || 0)),
       0
     );
     const creditTotal = allTransactions
@@ -268,7 +268,7 @@ export async function GET(request, { params }) {
 
         const isCredit = tx.type === "credit";
         const typeColor = isCredit ? rgb(0.06, 0.47, 0.22) : rgb(0.6, 0.1, 0.1);
-        const signedAmountText = `${isCredit ? "+" : "-"}${money(tx.amount)} ${tx.currency}`;
+        const signedAmountText = `${isCredit ? "-" : "+"}${money(tx.amount)} ${tx.currency}`;
 
         page.drawText(tx.type.toUpperCase(), { x: margin + 8, y: y - 15, size: 8.5, font: bold, color: typeColor });
         page.drawText(signedAmountText, { x: margin + 92, y: y - 15, size: 8.5, font: bold, color: typeColor });
@@ -284,8 +284,8 @@ export async function GET(request, { params }) {
     const isNegative = signedScopeTotal < 0;
     const summaryColor = isNegative ? rgb(0.65, 0.1, 0.1) : rgb(0.06, 0.47, 0.22);
     const summaryMessage = isNegative
-      ? "I will pay you ASAP"
-      : "Please send me this amount ASAP";
+      ? "Please send me this amount ASAP"
+      : "I will pay you ASAP";
 
     page.drawRectangle({
       x: margin,

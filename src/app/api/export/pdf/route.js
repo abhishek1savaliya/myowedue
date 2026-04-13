@@ -18,7 +18,7 @@ export async function GET() {
   if (error) return error;
 
   await connectDB();
-  const tx = await Transaction.find({ userId: user._id, ...activeQuery() }).populate("personId", "name").sort({ date: -1 });
+  const tx = await Transaction.find({ userId: user._id, status: "pending", ...activeQuery() }).populate("personId", "name").sort({ date: -1 });
 
   const totalCredit = tx
     .filter((item) => item.type === "credit")
@@ -27,7 +27,7 @@ export async function GET() {
     .filter((item) => item.type === "debit")
     .reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const pendingCount = tx.filter((item) => item.status === "pending").length;
-  const remainingAmount = Math.abs(totalCredit - totalDebit);
+  const remainingAmount = Math.abs(totalDebit - totalCredit);
   const userNeedsToPay = totalDebit > totalCredit;
   const remainingLabel = userNeedsToPay
     ? "You need to pay"
@@ -171,8 +171,8 @@ export async function GET() {
   });
   y -= 18;
 
-  drawCard(margin, "TOTAL CREDIT", money(totalCredit), "green");
-  drawCard(margin + 177, "TOTAL DEBIT", money(totalDebit), "neutral");
+  drawCard(margin, "TOTAL GIVEN", money(totalCredit), "green");
+  drawCard(margin + 177, "TOTAL RECEIVED BACK", money(totalDebit), "neutral");
   drawCard(margin + 354, "PENDING ENTRIES", String(pendingCount), "neutral");
   y -= 70;
 
@@ -187,8 +187,9 @@ export async function GET() {
     }
 
     page.drawText(short(item.personId?.name || "Unknown", 26), { x: margin + 8, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
+    const signedAmountText = `${item.type === "credit" ? "-" : "+"}${money(item.amount)} ${item.currency}`;
     page.drawText(item.type.toUpperCase(), { x: margin + 210, y: y - 15, size: 8.5, font: bold, color: rgb(0.15, 0.15, 0.15) });
-    page.drawText(`${money(item.amount)} ${item.currency}`, { x: margin + 265, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
+    page.drawText(signedAmountText, { x: margin + 265, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
     page.drawText(item.status.toUpperCase(), { x: margin + 355, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
     page.drawText(new Date(item.date).toLocaleDateString(), { x: margin + 430, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
     y -= rowHeight;

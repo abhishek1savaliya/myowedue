@@ -35,7 +35,7 @@ export async function POST(_request, { params }) {
   await Transaction.updateOne(
     { _id: tx._id, userId: user._id, isDeleted: true, deletionSource: "transaction_bin" },
     {
-      $set: { isDeleted: false, lastRestoredAt: eventAt },
+      $set: { isDeleted: false, lastRestoredAt: eventAt, status: "pending", paidAt: null },
       $unset: { deletedAt: 1, restoreUntil: 1, deletionSource: 1 },
       $push: {
         changeLogs: {

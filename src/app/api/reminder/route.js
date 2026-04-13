@@ -30,14 +30,17 @@ export async function GET() {
 
   await connectDB();
   const pending = await Transaction.find({ userId: user._id, status: "pending", ...activeQuery() });
-  const pendingAmount = pending.reduce((sum, tx) => sum + tx.amount, 0);
+  const pendingAmount = pending.reduce(
+    (sum, tx) => sum + (tx.type === "credit" ? -Number(tx.amount || 0) : Number(tx.amount || 0)),
+    0
+  );
 
   if (user.email) {
     await sendMail({
       to: user.email,
       subject: "Your pending dues summary",
       headline: "Pending dues overview",
-      message: `You currently have ${pending.length} pending entries totaling ${pendingAmount.toFixed(2)} across all currencies.`,
+      message: `You currently have ${pending.length} pending entries with net pending due ${pendingAmount.toFixed(2)} across all currencies.`,
     });
   }
 

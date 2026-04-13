@@ -7,7 +7,6 @@ const txInitial = {
   personId: "",
   amount: "",
   type: "credit",
-  status: "pending",
   currency: "USD",
   notes: "",
   date: new Date().toISOString().slice(0, 10),
@@ -62,15 +61,6 @@ export default function TransactionsPage() {
     }
   }
 
-  async function markPaid(id) {
-    const res = await fetch(`/api/transaction/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "paid" }),
-    });
-    if (res.ok) loadTransactions();
-  }
-
   async function removeTx(id) {
     const res = await fetch(`/api/transaction/${id}`, { method: "DELETE" });
     if (res.ok) loadTransactions();
@@ -82,29 +72,20 @@ export default function TransactionsPage() {
   );
 
   function getEntryStyle(tx) {
-    if (tx.status === "paid") {
-      return {
-        amountClass: "text-blue-700 bg-blue-50 border-blue-200",
-        labelClass: "text-blue-700 bg-blue-50 border-blue-200",
-        amountText: `${Number(tx.amount).toFixed(2)} ${tx.currency}`,
-        label: "PAID",
-      };
-    }
-
     if (tx.type === "credit") {
       return {
-        amountClass: "text-emerald-700 bg-emerald-50 border-emerald-200",
-        labelClass: "text-emerald-700 bg-emerald-50 border-emerald-200",
-        amountText: `+${Number(tx.amount).toFixed(2)} ${tx.currency}`,
-        label: "CREDIT PENDING",
+        amountClass: "text-rose-700 bg-rose-50 border-rose-200",
+        labelClass: "text-rose-700 bg-rose-50 border-rose-200",
+        amountText: `-${Number(tx.amount).toFixed(2)} ${tx.currency}`,
+        label: "YOU GAVE",
       };
     }
 
     return {
-      amountClass: "text-rose-700 bg-rose-50 border-rose-200",
-      labelClass: "text-rose-700 bg-rose-50 border-rose-200",
-      amountText: `-${Number(tx.amount).toFixed(2)} ${tx.currency}`,
-      label: "DEBIT PENDING",
+      amountClass: "text-emerald-700 bg-emerald-50 border-emerald-200",
+      labelClass: "text-emerald-700 bg-emerald-50 border-emerald-200",
+      amountText: `+${Number(tx.amount).toFixed(2)} ${tx.currency}`,
+      label: "YOU RECEIVED BACK",
     };
   }
 
@@ -112,7 +93,7 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">Transactions</h1>
-        <p className="text-sm text-zinc-600">Add, update, filter and settle credit/debit entries.</p>
+        <p className="text-sm text-zinc-600">Track money you gave and received back.</p>
       </header>
 
       <form onSubmit={saveTransaction} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-6">
@@ -138,25 +119,11 @@ export default function TransactionsPage() {
         />
         <select
           value={form.type}
-          onChange={(e) =>
-            setForm((v) => ({
-              ...v,
-              type: e.target.value,
-              status: "pending",
-            }))
-          }
+          onChange={(e) => setForm((v) => ({ ...v, type: e.target.value }))}
           className="rounded-xl border border-zinc-300 px-3 py-2"
         >
-          <option value="credit">CREDIT PENDING</option>
-          <option value="debit">DEBIT PENDING</option>
-        </select>
-        <select
-          value={form.status}
-          onChange={(e) => setForm((v) => ({ ...v, status: e.target.value }))}
-          className="rounded-xl border border-zinc-300 px-3 py-2"
-        >
-          <option value="pending">PENDING</option>
-          <option value="paid">PAID</option>
+          <option value="credit">I GAVE MONEY</option>
+          <option value="debit">I RECEIVED BACK</option>
         </select>
         <select
           value={form.currency}
@@ -199,9 +166,8 @@ export default function TransactionsPage() {
           className="rounded-xl border border-zinc-300 px-3 py-2"
         >
           <option value="">All</option>
-          <option value="credit_pending">Credit Pending</option>
-          <option value="debit_pending">Debit Pending</option>
-          <option value="paid">Paid</option>
+          <option value="credit_pending">I Gave</option>
+          <option value="debit_pending">Received Back</option>
         </select>
         <input type="date" value={query.start} onChange={(e) => setQuery((v) => ({ ...v, start: e.target.value }))} className="rounded-xl border border-zinc-300 px-3 py-2" />
         <input type="date" value={query.end} onChange={(e) => setQuery((v) => ({ ...v, end: e.target.value }))} className="rounded-xl border border-zinc-300 px-3 py-2" />
@@ -242,7 +208,6 @@ export default function TransactionsPage() {
                       personId: t.personId?._id || "",
                       amount: t.amount,
                       type: t.type,
-                      status: t.status,
                       currency: t.currency,
                       notes: t.notes || "",
                       date: new Date(t.date).toISOString().slice(0, 10),
@@ -252,11 +217,6 @@ export default function TransactionsPage() {
                 >
                   Edit
                 </button>
-                {t.status !== "paid" ? (
-                  <button onClick={() => markPaid(t._id)} className="w-full rounded-lg border border-black px-3 py-2 sm:w-auto">
-                    Mark Paid
-                  </button>
-                ) : null}
                 <button onClick={() => removeTx(t._id)} className="w-full rounded-lg border border-black px-3 py-2 sm:w-auto">
                   Delete
                 </button>
