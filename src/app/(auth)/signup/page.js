@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -39,14 +39,24 @@ export default function SignupPage() {
       <p className="mt-2 text-sm text-zinc-600">Start tracking who owes and what you owe.</p>
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
-        <input
-          type="text"
-          placeholder="Full name"
-          value={form.name}
-          onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))}
-          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none ring-black transition focus:ring-2"
-          required
-        />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <input
+            type="text"
+            placeholder="First name"
+            value={form.firstName}
+            onChange={(e) => setForm((v) => ({ ...v, firstName: e.target.value }))}
+            className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none ring-black transition focus:ring-2"
+            required
+          />
+          <input
+            type="text"
+            placeholder="Last name"
+            value={form.lastName}
+            onChange={(e) => setForm((v) => ({ ...v, lastName: e.target.value }))}
+            className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none ring-black transition focus:ring-2"
+            required
+          />
+        </div>
         <input
           type="email"
           placeholder="Email"
@@ -54,6 +64,13 @@ export default function SignupPage() {
           onChange={(e) => setForm((v) => ({ ...v, email: e.target.value }))}
           className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none ring-black transition focus:ring-2"
           required
+        />
+        <input
+          type="tel"
+          placeholder="Phone (optional)"
+          value={form.phone}
+          onChange={(e) => setForm((v) => ({ ...v, phone: e.target.value }))}
+          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none ring-black transition focus:ring-2"
         />
         <input
           type="password"

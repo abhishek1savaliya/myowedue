@@ -23,11 +23,27 @@ export function verifyToken(token) {
   }
 }
 
+function splitName(name = "") {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
+
 export function safeUser(user) {
+  const fromName = splitName(user.name);
+  const firstName = user.firstName || fromName.firstName;
+  const lastName = user.lastName || fromName.lastName;
+  const displayName = `${firstName} ${lastName}`.trim() || user.name || "User";
+
   return {
     id: user._id.toString(),
-    name: user.name,
+    firstName,
+    lastName,
+    name: displayName,
     email: user.email,
+    phone: user.phone || "",
+    joinDate: user.createdAt,
     reminderFrequency: user.reminderFrequency || "weekly",
     darkMode: Boolean(user.darkMode),
   };

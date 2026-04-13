@@ -5,10 +5,13 @@ import { fail, ok } from "@/lib/api";
 
 export async function POST(request) {
   try {
-    const { name, email, password } = await request.json();
+    const { firstName, lastName, email, password, phone } = await request.json();
+    const normalizedFirst = String(firstName || "").trim();
+    const normalizedLast = String(lastName || "").trim();
+    const fullName = `${normalizedFirst} ${normalizedLast}`.trim();
 
-    if (!name || !email || !password || password.length < 6) {
-      return fail("Name, email and password (min 6 chars) are required", 422);
+    if (!normalizedFirst || !normalizedLast || !email || !password || password.length < 6) {
+      return fail("First name, last name, email and password (min 6 chars) are required", 422);
     }
 
     await connectDB();
@@ -16,9 +19,12 @@ export async function POST(request) {
     if (exists) return fail("Email already registered", 409);
 
     const user = await User.create({
-      name: name.trim(),
+      firstName: normalizedFirst,
+      lastName: normalizedLast,
+      name: fullName,
       email: email.toLowerCase().trim(),
       password: await hashPassword(password),
+      phone: String(phone || "").trim(),
     });
 
     const token = signToken({ userId: user._id.toString() });
