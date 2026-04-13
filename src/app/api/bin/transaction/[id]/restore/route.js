@@ -16,7 +16,11 @@ export async function POST(_request, { params }) {
     _id: id,
     userId: user._id,
     isDeleted: true,
-    deletionSource: "transaction_bin",
+    $or: [
+      { deletionSource: "transaction_bin" },
+      { deletionSource: { $exists: false } },
+      { deletionSource: null },
+    ],
   });
   if (!tx) return fail("Transaction not found in bin", 404);
 
@@ -33,7 +37,16 @@ export async function POST(_request, { params }) {
   const restoredAtMessage = `Transaction restored at ${eventAt.toLocaleString()}`;
 
   await Transaction.updateOne(
-    { _id: tx._id, userId: user._id, isDeleted: true, deletionSource: "transaction_bin" },
+    {
+      _id: tx._id,
+      userId: user._id,
+      isDeleted: true,
+      $or: [
+        { deletionSource: "transaction_bin" },
+        { deletionSource: { $exists: false } },
+        { deletionSource: null },
+      ],
+    },
     {
       $set: { isDeleted: false, lastRestoredAt: eventAt, status: "pending", paidAt: null },
       $unset: { deletedAt: 1, restoreUntil: 1, deletionSource: 1 },

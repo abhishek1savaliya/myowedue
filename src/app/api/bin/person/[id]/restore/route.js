@@ -31,10 +31,8 @@ export async function POST(_request, { params }) {
       userId: user._id,
       personId: person._id,
       isDeleted: true,
-      deletionSource: "person_bin",
     },
     {
-      $set: { isDeleted: false, lastRestoredAt: eventAt },
       $set: { isDeleted: false, lastRestoredAt: eventAt, status: "pending", paidAt: null },
       $unset: { deletedAt: 1, restoreUntil: 1, deletionSource: 1 },
       $push: {
