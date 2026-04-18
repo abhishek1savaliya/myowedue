@@ -5,6 +5,8 @@ import { fail } from "@/lib/api";
 import Person from "@/models/Person";
 import Transaction from "@/models/Transaction";
 import { activeQuery } from "@/lib/bin";
+import { normalizeCurrency, convertFromUSD } from "@/lib/currency";
+import { getUsdRatesForUsage } from "@/lib/exchangeRates";
 
 export const runtime = "nodejs";
 
@@ -17,10 +19,42 @@ function short(text, max = 34) {
   return str.length > max ? `${str.slice(0, max - 1)}...` : str;
 }
 
+function firstName(fullName, fallback = "User") {
+  const cleaned = String(fullName || "").trim();
+  if (!cleaned) return fallback;
+  return cleaned.split(/\s+/)[0] || fallback;
+}
+
+const ALLOWED_CURRENCIES = new Set(["USD", "AUD", "INR", "EUR", "GBP"]);
+
 function getScope(searchParams) {
   const scope = (searchParams.get("scope") || "all").toLowerCase();
   if (["pending", "credit", "debit", "all"].includes(scope)) return scope;
   return "all";
+}
+
+function resolveCurrency(rawCurrency) {
+  const normalized = String(rawCurrency || "AUD").toUpperCase();
+  return ALLOWED_CURRENCIES.has(normalized) ? normalized : "AUD";
+}
+
+function getRate(currency, rates) {
+  return Number(rates?.[currency] || 1);
+}
+
+function convertCurrencyAmount(amount, fromCurrency, toCurrency, usdRates) {
+  const numericAmount = Number(amount || 0);
+  if (fromCurrency === toCurrency) return numericAmount;
+  const amountInUsd = normalizeCurrency(numericAmount, fromCurrency || "USD", usdRates);
+  return convertFromUSD(amountInUsd, toCurrency, usdRates);
+}
+
+function getConversionRate(fromCurrency, toCurrency, usdRates) {
+  if (fromCurrency === toCurrency) return null;
+  const fromRate = getRate(fromCurrency, usdRates);
+  const toRate = getRate(toCurrency, usdRates);
+  if (!fromRate || !toRate) return null;
+  return toRate / fromRate;
 }
 
 export async function GET(request, { params }) {
@@ -31,6 +65,9 @@ export async function GET(request, { params }) {
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const scope = getScope(searchParams);
+    const targetCurrency = resolveCurrency(searchParams.get("currency"));
+    const usdRates = await getUsdRatesForUsage();
+    const conversionTimestamp = new Date().toLocaleString();
 
     await connectDB();
 
@@ -55,25 +92,54 @@ export async function GET(request, { params }) {
       Transaction.find({ userId: user._id, personId: person._id, ...activeQuery() }).lean(),
     ]);
 
-    const scopeTotal = transactions.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-    const signedScopeTotal = transactions.reduce(
-      (sum, tx) => sum + (tx.type === "credit" ? -Number(tx.amount || 0) : Number(tx.amount || 0)),
+    const convertedTransactions = transactions.map((tx) => {
+      const originalAmount = Number(tx.amount || 0);
+      const convertedAmount = convertCurrencyAmount(originalAmount, tx.currency || "USD", targetCurrency, usdRates);
+      const conversionRate = getConversionRate(tx.currency || "USD", targetCurrency, usdRates);
+      return { ...tx, originalAmount, convertedAmount, conversionRate };
+    });
+
+    const convertedAllTransactions = allTransactions.map((tx) => {
+      const originalAmount = Number(tx.amount || 0);
+      const convertedAmount = convertCurrencyAmount(originalAmount, tx.currency || "USD", targetCurrency, usdRates);
+      return { ...tx, originalAmount, convertedAmount };
+    });
+
+    const scopeTotal = convertedTransactions.reduce((sum, tx) => sum + tx.convertedAmount, 0);
+    const signedScopeTotal = convertedTransactions.reduce(
+      (sum, tx) => sum + (tx.type === "credit" ? -tx.convertedAmount : tx.convertedAmount),
       0
     );
-    const creditTotal = allTransactions
+    const creditTotal = convertedAllTransactions
       .filter((tx) => tx.type === "credit")
-      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-    const debitTotal = allTransactions
+      .reduce((sum, tx) => sum + tx.convertedAmount, 0);
+    const debitTotal = convertedAllTransactions
       .filter((tx) => tx.type === "debit")
-      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      .reduce((sum, tx) => sum + tx.convertedAmount, 0);
     const remainingAmount = Math.abs(creditTotal - debitTotal);
     const userNeedsToPay = debitTotal > creditTotal;
-    const remainingLabel = userNeedsToPay ? "You need to pay" : `${person.name} needs to pay you`;
+    const userFirstName = firstName(user.name, "User");
+    const remainingLabel = userNeedsToPay
+      ? `${userFirstName} needs to pay ${person.name}`
+      : `${person.name} needs to pay ${userFirstName}`;
     const pendingCount = allTransactions.filter((tx) => tx.status === "pending").length;
+    const conversionNotes = [];
+    const conversionNoteMap = new Map();
+    convertedTransactions.forEach((tx) => {
+      if (tx.conversionRate && tx.currency !== targetCurrency) {
+        conversionNoteMap.set(
+          tx.currency,
+          `1 ${targetCurrency} = ${money(tx.conversionRate)} ${tx.currency}`
+        );
+      }
+    });
+    for (const note of conversionNoteMap.values()) {
+      conversionNotes.push(note);
+    }
 
     const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+    const bold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
     const width = 595;
     const height = 842;
@@ -162,7 +228,7 @@ export async function GET(request, { params }) {
         color: titleColor,
       });
 
-      page.drawText(`${remainingLabel}: ${money(remainingAmount)}`, {
+      page.drawText(`${remainingLabel}: ${money(remainingAmount)} ${targetCurrency}`, {
         x: margin + 12,
         y: y - 42,
         size: 14,
@@ -177,9 +243,10 @@ export async function GET(request, { params }) {
       page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: rgb(0.08, 0.08, 0.08) });
       page.drawText("Type", { x: margin + 8, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
       page.drawText("Amount", { x: margin + 92, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
-      page.drawText("Status", { x: margin + 190, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
-      page.drawText("Date", { x: margin + 270, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
-      page.drawText("Notes", { x: margin + 350, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
+      page.drawText("Total", { x: margin + 220, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
+      page.drawText("Status", { x: margin + 310, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
+      page.drawText("Date", { x: margin + 380, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
+      page.drawText("Notes", { x: margin + 460, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
       y -= rowHeight;
     };
 
@@ -193,19 +260,33 @@ export async function GET(request, { params }) {
 
     drawHeader();
 
-    page.drawText(`Billed by: ${user.name} (${user.email})`, {
+    page.drawText("Billed by:", {
       x: margin,
       y,
       size: 9,
       font,
       color: rgb(0.35, 0.35, 0.35),
     });
-    page.drawText(`Invoice To: ${person.name}`, {
+    page.drawText(`${user.name} (${user.email})`, {
+      x: margin + 38,
+      y,
+      size: 9,
+      font: bold,
+      color: rgb(0.08, 0.38, 0.72),
+    });
+    page.drawText("Invoice To:", {
       x: margin + 300,
       y,
       size: 9,
       font,
       color: rgb(0.35, 0.35, 0.35),
+    });
+    page.drawText(person.name, {
+      x: margin + 346,
+      y,
+      size: 9,
+      font: bold,
+      color: rgb(0.63, 0.1, 0.1),
     });
     y -= 18;
 
@@ -225,6 +306,15 @@ export async function GET(request, { params }) {
     });
     y -= 16;
 
+    page.drawText(`Invoice currency: ${targetCurrency}`, {
+      x: margin,
+      y,
+      size: 8.5,
+      font,
+      color: rgb(0.35, 0.35, 0.35),
+    });
+    y -= 14;
+
     page.drawText(
       scope === "all"
         ? "Scope detail: All entries (credit + debit, all statuses)"
@@ -239,7 +329,7 @@ export async function GET(request, { params }) {
     );
     y -= 16;
 
-    drawCard(margin, "SCOPE TOTAL", money(scopeTotal), "green");
+    drawCard(margin, "SCOPE TOTAL", `${money(scopeTotal)} ${targetCurrency}`, "green");
     drawCard(margin + 177, "ENTRY COUNT", String(transactions.length), "neutral");
     drawCard(margin + 354, "PENDING ENTRIES", String(pendingCount), "neutral");
     y -= 70;
@@ -260,7 +350,7 @@ export async function GET(request, { params }) {
       });
       y -= rowHeight;
     } else {
-      transactions.forEach((tx, idx) => {
+      convertedTransactions.forEach((tx, idx) => {
         ensureSpace();
         if (idx % 2 === 0) {
           page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: rgb(0.98, 0.98, 0.98) });
@@ -268,24 +358,31 @@ export async function GET(request, { params }) {
 
         const isCredit = tx.type === "credit";
         const typeColor = isCredit ? rgb(0.06, 0.47, 0.22) : rgb(0.6, 0.1, 0.1);
-        const signedAmountText = `${isCredit ? "-" : "+"}${money(tx.amount)} ${tx.currency}`;
+        const amountLabel =
+          tx.currency === targetCurrency
+            ? `${money(tx.originalAmount)} ${tx.currency}`
+            : `${money(tx.originalAmount)} ${tx.currency} × ${money(tx.conversionRate)}`;
+        const totalLabel = `${money(tx.convertedAmount)} ${targetCurrency}`;
 
         page.drawText(tx.type.toUpperCase(), { x: margin + 8, y: y - 15, size: 8.5, font: bold, color: typeColor });
-        page.drawText(signedAmountText, { x: margin + 92, y: y - 15, size: 8.5, font: bold, color: typeColor });
-        page.drawText(tx.status.toUpperCase(), { x: margin + 190, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
-        page.drawText(new Date(tx.date).toLocaleDateString(), { x: margin + 270, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
-        page.drawText(short(tx.notes || "-", 34), { x: margin + 350, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
+        page.drawText(amountLabel, { x: margin + 92, y: y - 15, size: 8.5, font: bold, color: typeColor });
+        page.drawText(totalLabel, { x: margin + 220, y: y - 15, size: 8.5, font: bold, color: typeColor });
+        page.drawText(tx.status.toUpperCase(), { x: margin + 310, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
+        page.drawText(new Date(tx.date).toLocaleDateString(), { x: margin + 380, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
+        page.drawText(short(tx.notes || "-", 28), { x: margin + 460, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
         y -= rowHeight;
       });
     }
 
-    ensureSpace(54);
-    const signedText = `${signedScopeTotal >= 0 ? "+" : "-"}${money(Math.abs(signedScopeTotal))}`;
+    const signedText = `${signedScopeTotal >= 0 ? "+" : "-"}${money(Math.abs(signedScopeTotal))} ${targetCurrency}`;
     const isNegative = signedScopeTotal < 0;
     const summaryColor = isNegative ? rgb(0.65, 0.1, 0.1) : rgb(0.06, 0.47, 0.22);
     const summaryMessage = isNegative
-      ? "Please send me this amount ASAP"
-      : "I will pay you ASAP";
+      ? `${person.name}, please send ${userFirstName} this amount ASAP`
+      : `${userFirstName} will pay ${person.name} ASAP`;
+
+    const conversionAreaHeight = conversionNotes.length ? 18 + conversionNotes.length * 14 + 14 : 0;
+    ensureSpace(54 + conversionAreaHeight);
 
     page.drawRectangle({
       x: margin,
@@ -311,6 +408,36 @@ export async function GET(request, { params }) {
       color: summaryColor,
     });
     y -= 48;
+
+    if (conversionNotes.length) {
+      const noteX = margin + contentWidth - 180;
+      page.drawText("Currency conversion rates:", {
+        x: noteX,
+        y: y - 15,
+        size: 8,
+        font: bold,
+        color: rgb(0.25, 0.25, 0.25),
+      });
+      y -= 18;
+      conversionNotes.forEach((note) => {
+        page.drawText(note, {
+          x: noteX,
+          y: y - 12,
+          size: 8,
+          font,
+          color: rgb(0.35, 0.35, 0.35),
+        });
+        y -= 14;
+      });
+      page.drawText(`As of ${conversionTimestamp}`, {
+        x: noteX,
+        y: y - 10,
+        size: 7.5,
+        font,
+        color: rgb(0.45, 0.45, 0.45),
+      });
+      y -= 18;
+    }
 
     page.drawText("Generated by MYOWEDUE", {
       x: margin,

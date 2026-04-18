@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Loader from "@/components/Loader";
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState({
@@ -103,7 +104,7 @@ export default function SettingsPage() {
         </p>
 
         {loadingProfile ? (
-          <p className="mt-4 text-sm text-zinc-600">Loading profile...</p>
+          <Loader className="mt-4" />
         ) : (
           <form onSubmit={saveProfile} className="mt-4 grid gap-3 md:grid-cols-2">
             <input

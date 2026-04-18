@@ -72,30 +72,62 @@ export async function delRedisKey(key) {
   }
 }
 
+function encodeKeyPart(value) {
+  const raw = String(value || "default");
+  return Buffer.from(raw).toString("base64url");
+}
+
 export function dashboardCacheKey(userId, currency = "AUD") {
   return `dashboard:${String(userId)}:${String(currency || "AUD").toUpperCase()}`;
 }
 
-export async function clearDashboardCache(userId) {
+export function peopleCacheKey(userId) {
+  return `people:${String(userId)}:list`;
+}
+
+export function transactionListCacheKey(userId, queryString = "") {
+  return `transactions:list:${String(userId)}:${encodeKeyPart(queryString)}`;
+}
+
+export function transactionDataCacheKey(userId, queryString = "") {
+  return `transactions:data:${String(userId)}:${encodeKeyPart(queryString)}`;
+}
+
+export async function clearUserApiCache(userId) {
   try {
     const client = await getRedisClient();
     if (!client) return false;
 
-    const pattern = `dashboard:${String(userId)}:*`;
+    const userIdText = String(userId);
+    const patterns = [
+      `dashboard:${userIdText}:*`,
+      `people:${userIdText}:*`,
+      `transactions:list:${userIdText}:*`,
+      `transactions:data:${userIdText}:*`,
+    ];
+
     const keys = [];
-    for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
-      keys.push(key);
+    for (const pattern of patterns) {
+      for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+        keys.push(String(key));
+      }
     }
 
     if (keys.length > 0) {
-      await client.del(keys);
+      await client.del(...keys);
     }
 
-    // Cleanup legacy single-key cache if present.
-    await client.del(`dashboard:${String(userId)}`);
+    // Cleanup legacy single-key cache formats if present.
+    await client.del(`dashboard:${userIdText}`);
+    await client.del(`people:${userIdText}`);
+    await client.del(`transactions:${userIdText}`);
     return true;
   } catch (error) {
-    console.error("Redis dashboard cache clear failed:", error?.message || error);
+    console.error("Redis user cache clear failed:", error?.message || error);
     return false;
   }
+}
+
+export async function clearDashboardCache(userId) {
+  return clearUserApiCache(userId);
 }

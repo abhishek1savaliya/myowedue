@@ -1,15 +1,10 @@
 import { connectDB } from "@/lib/db";
-import { fail, logActivity, ok } from "@/lib/api";
+import { fail, ok } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import Transaction from "@/models/Transaction";
 import Person from "@/models/Person";
 import { activeQuery } from "@/lib/bin";
-import {
-  clearDashboardCache,
-  getRedisJSON,
-  setRedisJSON,
-  transactionListCacheKey,
-} from "@/lib/redis";
+import { getRedisJSON, setRedisJSON, transactionDataCacheKey } from "@/lib/redis";
 
 export async function GET(request) {
   const { user, error } = await requireUser();
@@ -17,7 +12,7 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const queryString = searchParams.toString();
-  const cacheKey = transactionListCacheKey(user._id, queryString);
+  const cacheKey = transactionDataCacheKey(user._id, queryString);
   const cached = await getRedisJSON(cacheKey);
   if (cached) {
     return ok(cached);
@@ -64,9 +59,13 @@ export async function GET(request) {
     query.personId = { $in: people.map((p) => p._id) };
   }
 
-  const transactions = await Transaction.find(query)
-    .populate("personId", "name email phone")
-    .sort({ date: -1, createdAt: -1 });
+  // Fetch both people and transactions in parallel
+  const [allPeople, transactions] = await Promise.all([
+    Person.find({ userId: user._id, ...activeQuery() }).sort({ createdAt: -1 }).lean(),
+    Transaction.find(query)
+      .populate("personId", "name email phone")
+      .sort({ date: -1, createdAt: -1 }),
+  ]);
 
   const hydratedTransactions = transactions.map((tx) => {
     const plain = tx.toObject();
@@ -115,54 +114,31 @@ export async function GET(request) {
       },
     ];
 
+    if (plain.lastDeletedAt) {
+      fallbackLogs.push({
+        action: "deleted",
+        message: `Transaction deleted at ${new Date(plain.lastDeletedAt).toLocaleString()}`,
+        at: plain.lastDeletedAt,
+      });
+    }
+
+    if (plain.lastRestoredAt) {
+      fallbackLogs.push({
+        action: "restored",
+        message: `Transaction restored at ${new Date(plain.lastRestoredAt).toLocaleString()}`,
+        at: plain.lastRestoredAt,
+      });
+    }
+
     plain.changeLogs = fallbackLogs;
     return plain;
   });
 
-  const payload = { transactions: hydratedTransactions };
+  const payload = {
+    people: allPeople,
+    transactions: hydratedTransactions,
+  };
+
   await setRedisJSON(cacheKey, payload, 60);
   return ok(payload);
-}
-
-export async function POST(request) {
-  const { user, error } = await requireUser();
-  if (error) return error;
-
-  try {
-    const body = await request.json();
-    const { personId, amount, type, notes, date, currency } = body;
-
-    if (!personId || !amount || !type || !date) {
-      return fail("personId, amount, type and date are required", 422);
-    }
-    if (!["credit", "debit"].includes(type)) return fail("Invalid type", 422);
-
-    await connectDB();
-    const person = await Person.findOne({ _id: personId, userId: user._id, ...activeQuery() });
-    if (!person) return fail("Person not found", 404);
-
-    const tx = await Transaction.create({
-      userId: user._id,
-      personId,
-      amount: Number(amount),
-      type,
-      notes: notes || "",
-      date: new Date(date),
-      currency: currency || "USD",
-      status: "pending",
-      changeLogs: [
-        {
-          action: "created",
-          message: `Transaction created at ${new Date().toLocaleString()}`,
-          at: new Date(),
-        },
-      ],
-    });
-
-    await clearDashboardCache(user._id);
-    await logActivity(user._id, "transaction_created", `${type} ${amount} ${currency || "USD"}`);
-    return ok({ transaction: tx }, 201);
-  } catch {
-    return fail("Failed to create transaction", 500);
-  }
 }

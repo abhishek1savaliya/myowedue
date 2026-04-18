@@ -4,11 +4,17 @@ import { requireUser } from "@/lib/session";
 import Person from "@/models/Person";
 import Transaction from "@/models/Transaction";
 import { activeQuery } from "@/lib/bin";
-import { clearDashboardCache } from "@/lib/redis";
+import { clearDashboardCache, getRedisJSON, peopleCacheKey, setRedisJSON } from "@/lib/redis";
 
-export async function GET() {
+export async function GET(request) {
   const { user, error } = await requireUser();
   if (error) return error;
+
+  const cacheKey = peopleCacheKey(user._id);
+  const cached = await getRedisJSON(cacheKey);
+  if (cached) {
+    return ok(cached);
+  }
 
   await connectDB();
   const people = await Person.find({ userId: user._id, ...activeQuery() }).sort({ createdAt: -1 }).lean();
@@ -23,6 +29,10 @@ export async function GET() {
       totalDebit: 0,
       pendingCredit: 0,
       pendingDebit: 0,
+      totalCreditByCurrency: {},
+      totalDebitByCurrency: {},
+      pendingCreditByCurrency: {},
+      pendingDebitByCurrency: {},
       netDue: 0,
       dueAmount: 0,
       dueDirection: "settled",
@@ -32,12 +42,26 @@ export async function GET() {
   for (const item of tx) {
     const bucket = balanceMap.get(item.personId.toString());
     if (!bucket) continue;
-    if (item.type === "credit") bucket.totalCredit += item.amount;
-    if (item.type === "debit") bucket.totalDebit += item.amount;
+    const currency = item.currency || "USD";
+
+    if (item.type === "credit") {
+      bucket.totalCredit += item.amount;
+      bucket.totalCreditByCurrency[currency] = (bucket.totalCreditByCurrency[currency] || 0) + item.amount;
+    }
+    if (item.type === "debit") {
+      bucket.totalDebit += item.amount;
+      bucket.totalDebitByCurrency[currency] = (bucket.totalDebitByCurrency[currency] || 0) + item.amount;
+    }
 
     if (item.status === "pending") {
-      if (item.type === "credit") bucket.pendingCredit += item.amount;
-      if (item.type === "debit") bucket.pendingDebit += item.amount;
+      if (item.type === "credit") {
+        bucket.pendingCredit += item.amount;
+        bucket.pendingCreditByCurrency[currency] = (bucket.pendingCreditByCurrency[currency] || 0) + item.amount;
+      }
+      if (item.type === "debit") {
+        bucket.pendingDebit += item.amount;
+        bucket.pendingDebitByCurrency[currency] = (bucket.pendingDebitByCurrency[currency] || 0) + item.amount;
+      }
     }
   }
 
@@ -48,7 +72,9 @@ export async function GET() {
   }
 
   const data = people.map((p) => ({ ...p, ...balanceMap.get(p._id.toString()) }));
-  return ok({ people: data });
+  const payload = { people: data };
+  await setRedisJSON(cacheKey, payload, 90);
+  return ok(payload);
 }
 
 export async function POST(request) {

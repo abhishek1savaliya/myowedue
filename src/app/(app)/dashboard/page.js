@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/currency";
 import StatCard from "@/components/StatCard";
 import MiniBarChart from "@/components/MiniBarChart";
 import EmptyState from "@/components/EmptyState";
+import Loader from "@/components/Loader";
 
 export default function DashboardPage() {
   const [data, setData] = useState(null);
@@ -38,7 +39,7 @@ export default function DashboardPage() {
 
   const netBalance = (data?.totals?.totalReceivedBack || 0) - (data?.totals?.totalGiven || 0);
 
-  if (loading) return <p className="text-sm text-zinc-600">Loading dashboard...</p>;
+  if (loading) return <Loader />;
 
   return (
     <div className="space-y-6">

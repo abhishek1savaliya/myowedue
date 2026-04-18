@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
+import Loader from "@/components/Loader";
+import { normalizeCurrency, convertFromUSD, formatCurrency, DEFAULT_FX } from "@/lib/currency";
 
 const initial = { name: "", email: "", phone: "" };
 
@@ -11,12 +13,54 @@ export default function PeoplePage() {
   const [loading, setLoading] = useState(true);
   const [editingPersonId, setEditingPersonId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [invoiceCurrencies, setInvoiceCurrencies] = useState({});
+  const [rates, setRates] = useState(null);
+  const invoiceOptions = ["AUD", "INR", "USD", "EUR", "GBP"];
+
+  function getInvoiceCurrency(personId) {
+    return invoiceCurrencies[personId] || "AUD";
+  }
+
+  function getRates() {
+    return rates || DEFAULT_FX;
+  }
+
+  function convertAmount(amount, fromCurrency, toCurrency) {
+    const currencyRates = getRates();
+    if (!amount || fromCurrency === toCurrency) return Number(amount || 0);
+    const amountInUsd = normalizeCurrency(Number(amount || 0), fromCurrency || "USD", currencyRates);
+    return convertFromUSD(amountInUsd, toCurrency, currencyRates);
+  }
+
+  function getConvertedTotal(byCurrency, targetCurrency) {
+    return Object.entries(byCurrency || {}).reduce((sum, [currency, value]) => {
+      return sum + convertAmount(value, currency, targetCurrency);
+    }, 0);
+  }
+
+  function getPersonTotals(person) {
+    const currency = getInvoiceCurrency(person._id);
+    const pendingCreditByCurrency = person.pendingCreditByCurrency || { AUD: person.pendingCredit || 0 };
+    const pendingDebitByCurrency = person.pendingDebitByCurrency || { AUD: person.pendingDebit || 0 };
+    const pendingCredit = getConvertedTotal(pendingCreditByCurrency, currency);
+    const pendingDebit = getConvertedTotal(pendingDebitByCurrency, currency);
+    const dueAmount = Math.abs(pendingDebit - pendingCredit);
+    const dueDirection = pendingDebit > pendingCredit ? "you_owe_person" : pendingDebit < pendingCredit ? "person_owes_you" : "settled";
+    return { currency, pendingCredit, pendingDebit, dueAmount, dueDirection };
+  }
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/person", { cache: "no-store" });
-    const data = await res.json();
-    if (res.ok) setPeople(data.people || []);
+    const [peopleRes, ratesRes] = await Promise.all([
+      fetch("/api/person", { cache: "no-store" }),
+      fetch("/api/exchange-rates", { cache: "no-store" }),
+    ]);
+
+    const peopleData = await peopleRes.json().catch(() => ({}));
+    const ratesData = await ratesRes.json().catch(() => ({}));
+
+    if (peopleRes.ok) setPeople(peopleData.people || []);
+    if (ratesRes.ok) setRates(ratesData.rates || DEFAULT_FX);
     setLoading(false);
   }
 
@@ -67,9 +111,9 @@ export default function PeoplePage() {
   }
 
   function shareOnWhatsApp(person) {
-    const dueDirection = person.dueDirection || "settled";
-    const remaining = Number(person.dueAmount || 0).toFixed(2);
-    const invoiceUrl = `${window.location.origin}/api/export/person/${person._id}/invoice?scope=all`;
+    const { currency, dueAmount, dueDirection } = getPersonTotals(person);
+    const remaining = Number(dueAmount || 0).toFixed(2);
+    const invoiceUrl = `${window.location.origin}/api/export/person/${person._id}/invoice?scope=all&currency=${currency}`;
 
     let message = "";
     if (dueDirection === "you_owe_person") {
@@ -116,37 +160,39 @@ export default function PeoplePage() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-zinc-600">Loading people...</p>
+        <Loader />
       ) : people.length === 0 ? (
         <EmptyState text="No people added yet." />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {people.map((p) => (
-            <article key={p._id} className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <h3 className="text-lg font-semibold text-black">{p.name}</h3>
-              {p.email ? <p className="mt-1 text-sm text-zinc-600">{p.email}</p> : null}
-              {p.phone ? <p className="text-sm text-zinc-600">{p.phone}</p> : null}
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg bg-zinc-100 p-2">
-                  <p className="text-zinc-500">Total Given</p>
-                  <p className="font-semibold text-black">{Number(p.pendingCredit || 0).toFixed(2)}</p>
+          {people.map((p) => {
+            const totals = getPersonTotals(p);
+            return (
+              <article key={p._id} className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <h3 className="text-lg font-semibold text-black">{p.name}</h3>
+                {p.email ? <p className="mt-1 text-sm text-zinc-600">{p.email}</p> : null}
+                {p.phone ? <p className="text-sm text-zinc-600">{p.phone}</p> : null}
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg bg-zinc-100 p-2">
+                    <p className="text-zinc-500">Total Given</p>
+                    <p className="font-semibold text-black">{formatCurrency(totals.pendingCredit, totals.currency)}</p>
+                  </div>
+                  <div className="rounded-lg bg-zinc-100 p-2">
+                    <p className="text-zinc-500">Total Received Back</p>
+                    <p className="font-semibold text-black">{formatCurrency(totals.pendingDebit, totals.currency)}</p>
+                  </div>
+                  <div className="col-span-2 rounded-lg bg-zinc-100 p-2">
+                    <p className="text-zinc-500">Current Due</p>
+                    <p className="font-semibold text-black">{formatCurrency(totals.dueAmount, totals.currency)}</p>
+                    <p className="mt-1 text-zinc-600">
+                      {totals.dueDirection === "person_owes_you"
+                        ? `${p.name} owes you`
+                        : totals.dueDirection === "you_owe_person"
+                          ? `You owe ${p.name}`
+                          : "No due"}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-lg bg-zinc-100 p-2">
-                  <p className="text-zinc-500">Total Received Back</p>
-                  <p className="font-semibold text-black">{Number(p.pendingDebit || 0).toFixed(2)}</p>
-                </div>
-                <div className="col-span-2 rounded-lg bg-zinc-100 p-2">
-                  <p className="text-zinc-500">Current Due</p>
-                  <p className="font-semibold text-black">{Number(p.dueAmount || 0).toFixed(2)}</p>
-                  <p className="mt-1 text-zinc-600">
-                    {p.dueDirection === "person_owes_you"
-                      ? `${p.name} owes you`
-                      : p.dueDirection === "you_owe_person"
-                        ? `You owe ${p.name}`
-                        : "No due"}
-                  </p>
-                </div>
-              </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -162,12 +208,32 @@ export default function PeoplePage() {
                 >
                   Edit
                 </button>
-                <a
-                  href={`/api/export/person/${p._id}/invoice?scope=all`}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
-                >
-                  Full Invoice
-                </a>
+                <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <select
+                    value={getInvoiceCurrency(p._id)}
+                    onChange={(e) =>
+                      setInvoiceCurrencies((prev) => ({
+                        ...prev,
+                        [p._id]: e.target.value,
+                      }))
+                    }
+                    className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-2 text-xs"
+                  >
+                    {invoiceOptions.map((currency) => (
+                      <option key={currency} value={currency}>
+                        {currency}
+                      </option>
+                    ))}
+                  </select>
+                  <a
+                    href={`/api/export/person/${p._id}/invoice?scope=all&currency=${getInvoiceCurrency(p._id)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
+                  >
+                    Full Invoice
+                  </a>
+                </div>
                 <button
                   type="button"
                   onClick={() => shareOnWhatsApp(p)}
@@ -184,7 +250,8 @@ export default function PeoplePage() {
                 </button>
               </div>
             </article>
-          ))}
+            );
+            })}
         </div>
       )}
 

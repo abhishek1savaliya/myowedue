@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
+import Loader from "@/components/Loader";
 
 export default function BinPage() {
   const [personBin, setPersonBin] = useState([]);
@@ -47,7 +48,7 @@ export default function BinPage() {
         <p className="text-xs text-zinc-500">Deleting a person moves the person and all linked transactions here.</p>
         <div className="mt-4 space-y-3">
           {loading ? (
-            <p className="text-sm text-zinc-600">Loading...</p>
+            <Loader />
           ) : personBin.length === 0 ? (
             <EmptyState text="Person bin is empty." />
           ) : (
@@ -74,7 +75,7 @@ export default function BinPage() {
         <p className="text-xs text-zinc-500">Only individually deleted transactions appear here.</p>
         <div className="mt-4 space-y-3">
           {loading ? (
-            <p className="text-sm text-zinc-600">Loading...</p>
+            <Loader />
           ) : transactionBin.length === 0 ? (
             <EmptyState text="Transaction bin is empty." />
           ) : (
