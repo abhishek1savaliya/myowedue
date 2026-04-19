@@ -101,8 +101,8 @@ export async function GET(request) {
 
     const payload = {
       totals: { totalGiven, totalReceivedBack },
-      recent: pending.slice(0, 8),
-      pending: pending.slice(0, 12),
+      recent: pending.slice(0, 5),
+      pending: pending.slice(0, 5),
       paid: [],
       monthlyInsights: Array.from(monthlyMap.entries()).map(([month, value]) => ({ month, ...value })),
       personInsights: Array.from(personMap.entries()).map(([person, value]) => ({ person, ...value })),
