@@ -42,10 +42,23 @@ async function fetchRatesFromProvider() {
     symbols: TARGET_SYMBOLS.join(","),
   });
 
-  const response = await fetch(`${EXCHANGE_RATE_URL}?${params.toString()}`, {
-    method: "GET",
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  let response;
+  try {
+    response = await fetch(`${EXCHANGE_RATE_URL}?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Exchange API request timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     throw new Error(`Exchange API request failed (${response.status})`);

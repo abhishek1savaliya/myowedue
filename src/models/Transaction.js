@@ -31,6 +31,10 @@ const TransactionSchema = new Schema(
   { timestamps: true }
 );
 
+TransactionSchema.index({ userId: 1, isDeleted: 1, date: -1, createdAt: -1 });
+TransactionSchema.index({ userId: 1, personId: 1, isDeleted: 1, date: -1 });
+TransactionSchema.index({ userId: 1, status: 1, type: 1, isDeleted: 1, date: -1 });
+
 let Transaction;
 
 if (mongoose.models.Transaction) {

@@ -1,16 +1,38 @@
 import { createClient } from "redis";
 
 let clientPromise = null;
+let redisDisabledUntil = 0;
+
+function isRedisTemporarilyDisabled() {
+  return Date.now() < redisDisabledUntil;
+}
+
+function disableRedisFor(ms = 30000) {
+  redisDisabledUntil = Date.now() + ms;
+}
 
 function hasRedisUrl() {
   return Boolean(process.env.REDIS_URL);
 }
 
 async function createRedisClient() {
-  const client = createClient({ url: process.env.REDIS_URL });
+  const client = createClient({
+    url: process.env.REDIS_URL,
+    socket: {
+      connectTimeout: 2000,
+      reconnectStrategy: (retries) => {
+        if (retries > 2) return new Error("Redis reconnect aborted");
+        return Math.min((retries + 1) * 200, 600);
+      },
+    },
+  });
 
   client.on("error", (error) => {
     console.error("Redis error:", error?.message || error);
+    const text = String(error?.message || "").toLowerCase();
+    if (text.includes("max number of clients") || text.includes("econnrefused") || text.includes("timeout")) {
+      disableRedisFor(30000);
+    }
   });
 
   await client.connect();
@@ -19,11 +41,13 @@ async function createRedisClient() {
 
 export async function getRedisClient() {
   if (!hasRedisUrl()) return null;
+  if (isRedisTemporarilyDisabled()) return null;
 
   if (!clientPromise) {
     clientPromise = createRedisClient().catch((error) => {
       clientPromise = null;
       console.error("Redis connect failed:", error?.message || error);
+      disableRedisFor(30000);
       return null;
     });
   }
@@ -123,6 +147,22 @@ export async function clearUserApiCache(userId) {
     if (!client) return false;
 
     const userIdText = String(userId);
+    // Fast path: clear known hot keys immediately to reduce write latency.
+    const quickKeys = [
+      `dashboard:${userIdText}`,
+      `people:${userIdText}`,
+      `transactions:${userIdText}`,
+      `notifications:${userIdText}`,
+      `people:${userIdText}:list`,
+      `notifications:${userIdText}:list`,
+      `dashboard:${userIdText}:AUD`,
+      `dashboard:${userIdText}:USD`,
+      `dashboard:${userIdText}:INR`,
+      `dashboard:${userIdText}:EUR`,
+      `dashboard:${userIdText}:GBP`,
+    ];
+    await client.del(...quickKeys);
+
     const patterns = [
       `dashboard:${userIdText}:*`,
       `people:${userIdText}:*`,
@@ -131,22 +171,23 @@ export async function clearUserApiCache(userId) {
       `notifications:${userIdText}:*`,
     ];
 
-    const keys = [];
-    for (const pattern of patterns) {
-      for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
-        keys.push(String(key));
+    // Slow path: sweep query-variant keys in background so CRUD responses don't block on SCAN.
+    (async () => {
+      try {
+        const keys = [];
+        for (const pattern of patterns) {
+          for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+            keys.push(String(key));
+          }
+        }
+        if (keys.length > 0) {
+          await client.del(...keys);
+        }
+      } catch (error) {
+        console.error("Redis background cache sweep failed:", error?.message || error);
       }
-    }
+    })();
 
-    if (keys.length > 0) {
-      await client.del(...keys);
-    }
-
-    // Cleanup legacy single-key cache formats if present.
-    await client.del(`dashboard:${userIdText}`);
-    await client.del(`people:${userIdText}`);
-    await client.del(`transactions:${userIdText}`);
-    await client.del(`notifications:${userIdText}`);
     return true;
   } catch (error) {
     console.error("Redis user cache clear failed:", error?.message || error);

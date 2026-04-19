@@ -10,16 +10,38 @@ import Loader from "@/components/Loader";
 export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [selectedCurrency, setSelectedCurrency] = useState("AUD");
   const dashboardCurrency = data?.currency || "AUD";
   const usdToSelectedRate = Number(data?.usdToSelectedRate || 1);
 
   async function load() {
     setLoading(true);
-    const res = await fetch(`/api/dashboard?currency=${selectedCurrency}`, { cache: "no-store" });
-    const json = await res.json();
-    if (res.ok) setData(json);
-    setLoading(false);
+    setError("");
+    let timeoutId;
+    try {
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(`/api/dashboard?currency=${selectedCurrency}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.message || "Failed to load dashboard");
+      }
+      setData(json);
+    } catch (caughtError) {
+      const message =
+        caughtError?.name === "AbortError"
+          ? "Dashboard request timed out. Please try again."
+          : caughtError?.message || "Failed to load dashboard";
+      setError(message);
+      setData(null);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -40,6 +62,9 @@ export default function DashboardPage() {
   const netBalance = (data?.totals?.totalReceivedBack || 0) - (data?.totals?.totalGiven || 0);
 
   if (loading) return <Loader />;
+  if (error) {
+    return <EmptyState text={`Dashboard failed to load: ${error}`} />;
+  }
 
   return (
     <div className="space-y-6">

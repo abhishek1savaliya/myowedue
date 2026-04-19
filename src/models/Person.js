@@ -13,5 +13,8 @@ const PersonSchema = new Schema(
   { timestamps: true }
 );
 
+PersonSchema.index({ userId: 1, isDeleted: 1, createdAt: -1 });
+PersonSchema.index({ userId: 1, isDeleted: 1, name: 1 });
+
 const Person = mongoose.models.Person || mongoose.model("Person", PersonSchema);
 export default Person;
