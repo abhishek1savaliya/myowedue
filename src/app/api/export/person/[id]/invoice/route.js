@@ -105,7 +105,6 @@ export async function GET(request, { params }) {
       return { ...tx, originalAmount, convertedAmount };
     });
 
-    const scopeTotal = convertedTransactions.reduce((sum, tx) => sum + tx.convertedAmount, 0);
     const signedScopeTotal = convertedTransactions.reduce(
       (sum, tx) => sum + (tx.type === "credit" ? -tx.convertedAmount : tx.convertedAmount),
       0
@@ -138,8 +137,8 @@ export async function GET(request, { params }) {
     }
 
     const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-    const bold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     const width = 595;
     const height = 842;
@@ -161,14 +160,14 @@ export async function GET(request, { params }) {
         font: bold,
         color: rgb(1, 1, 1),
       });
-      page.drawText("Premium Person Invoice", {
+      page.drawText("All in one solution myowedue", {
         x: margin + 14,
         y: y - 40,
         size: 11,
         font,
         color: rgb(0.95, 0.95, 0.95),
       });
-      page.drawText(`Scope: ${scope.toUpperCase()}  |  Generated: ${new Date().toLocaleString()}`, {
+      page.drawText(`Generated: ${new Date().toLocaleString()}`, {
         x: margin + 14,
         y: y - 56,
         size: 9,
@@ -329,9 +328,8 @@ export async function GET(request, { params }) {
     );
     y -= 16;
 
-    drawCard(margin, "SCOPE TOTAL", `${money(scopeTotal)} ${targetCurrency}`, "green");
-    drawCard(margin + 177, "ENTRY COUNT", String(transactions.length), "neutral");
-    drawCard(margin + 354, "PENDING ENTRIES", String(pendingCount), "neutral");
+    drawCard(margin, "ENTRY COUNT", String(transactions.length), "neutral");
+    drawCard(margin + 177, "PENDING ENTRIES", String(pendingCount), "neutral");
     y -= 70;
 
     drawRemainingBanner();
@@ -445,6 +443,18 @@ export async function GET(request, { params }) {
       size: 8,
       font,
       color: rgb(0.45, 0.45, 0.45),
+    });
+
+    const pages = pdfDoc.getPages();
+    const totalPages = pages.length;
+    pages.forEach((pdfPage, index) => {
+      pdfPage.drawText(`Page ${index + 1} of ${totalPages}`, {
+        x: pdfPage.getWidth() - margin - 70,
+        y: 18,
+        size: 8,
+        font,
+        color: rgb(0.45, 0.45, 0.45),
+      });
     });
 
     const pdfBuffer = Buffer.from(await pdfDoc.save());

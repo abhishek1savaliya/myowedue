@@ -232,7 +232,7 @@ export default function PeoplePage() {
                     rel="noreferrer"
                     className="rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
                   >
-                    Full Invoice
+                    Invoice
                   </a>
                 </div>
                 <button
