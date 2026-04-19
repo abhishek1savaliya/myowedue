@@ -3,6 +3,8 @@ import { fail, ok } from "@/lib/api";
 import { safeUser } from "@/lib/auth";
 import User from "@/models/User";
 import { connectDB } from "@/lib/db";
+import Notification from "@/models/Notification";
+import { clearDashboardCache, publishNotificationEvent } from "@/lib/redis";
 
 export async function GET() {
   const { user, error } = await requireUser();
@@ -15,7 +17,7 @@ export async function PUT(request) {
   if (error) return error;
 
   try {
-    const { firstName, lastName, email, phone } = await request.json();
+    const { firstName, lastName, email, phone, notificationsEnabled } = await request.json();
 
     const nextFirst = String(firstName || "").trim();
     const nextLast = String(lastName || "").trim();
@@ -45,12 +47,20 @@ export async function PUT(request) {
           name: `${nextFirst} ${nextLast}`.trim(),
           email: nextEmail,
           phone: nextPhone,
+          ...(typeof notificationsEnabled === "boolean" ? { notificationsEnabled } : {}),
         },
       },
       { new: true }
     );
 
     if (!updated) return fail("User not found", 404);
+
+    if (typeof notificationsEnabled === "boolean" && notificationsEnabled === false) {
+      await Notification.deleteMany({ userId: user._id });
+      await publishNotificationEvent(user._id, "cleared");
+    }
+
+    await clearDashboardCache(user._id);
 
     return ok({ user: safeUser(updated), message: "Profile updated" });
   } catch {

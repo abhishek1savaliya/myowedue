@@ -13,6 +13,7 @@ export default function SettingsPage() {
   });
   const [frequency, setFrequency] = useState("weekly");
   const [darkMode, setDarkMode] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileMessage, setProfileMessage] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
@@ -33,6 +34,7 @@ export default function SettingsPage() {
       });
       setFrequency(user.reminderFrequency || "weekly");
       setDarkMode(Boolean(user.darkMode));
+      setNotificationsEnabled(user.notificationsEnabled !== false);
     }
 
     setLoadingProfile(false);
@@ -54,6 +56,7 @@ export default function SettingsPage() {
         lastName: profile.lastName,
         email: profile.email,
         phone: profile.phone,
+        notificationsEnabled,
       }),
     });
 
@@ -136,6 +139,15 @@ export default function SettingsPage() {
               placeholder="Phone"
               className="rounded-xl border border-zinc-300 px-3 py-2"
             />
+
+            <label className="md:col-span-2 flex items-center gap-2 text-sm text-zinc-700">
+              <input
+                type="checkbox"
+                checked={notificationsEnabled}
+                onChange={(e) => setNotificationsEnabled(e.target.checked)}
+              />
+              Enable in-app notifications
+            </label>
 
             <button type="submit" className="rounded-xl bg-black px-4 py-2 text-sm text-white md:col-span-2 md:justify-self-start">
               Save Profile

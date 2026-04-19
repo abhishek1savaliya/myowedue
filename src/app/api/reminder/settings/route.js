@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/db";
 import { fail, ok } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import User from "@/models/User";
+import { clearDashboardCache } from "@/lib/redis";
 
 export async function PUT(request) {
   const { user, error } = await requireUser();
@@ -23,6 +24,8 @@ export async function PUT(request) {
       },
       { new: true }
     );
+
+    await clearDashboardCache(user._id);
 
     return ok({
       message: "Settings updated",

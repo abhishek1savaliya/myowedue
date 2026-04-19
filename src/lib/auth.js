@@ -45,6 +45,7 @@ export function safeUser(user) {
     phone: user.phone || "",
     joinDate: user.createdAt,
     reminderFrequency: user.reminderFrequency || "weekly",
+    notificationsEnabled: user.notificationsEnabled !== false,
     darkMode: Boolean(user.darkMode),
   };
 }

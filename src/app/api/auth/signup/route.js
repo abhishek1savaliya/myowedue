@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";
+import Notification from "@/models/Notification";
 import { hashPassword, safeUser, signToken } from "@/lib/auth";
 import { fail, ok } from "@/lib/api";
 
@@ -25,6 +26,16 @@ export async function POST(request) {
       email: email.toLowerCase().trim(),
       password: await hashPassword(password),
       phone: String(phone || "").trim(),
+    });
+
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await Notification.create({
+      userId: user._id,
+      type: "welcome",
+      title: "Welcome to MYOWEDUE",
+      message: "Welcome to MYOWEDUE! I hope you will love this app.",
+      meta: {},
+      expiresAt,
     });
 
     const token = signToken({ userId: user._id.toString() });

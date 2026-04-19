@@ -6,6 +6,7 @@ import Transaction from "@/models/Transaction";
 import { sendMail } from "@/lib/mailer";
 import { activeQuery } from "@/lib/bin";
 import { refreshExchangeRatesIfNeeded } from "@/lib/exchangeRates";
+import { generateDailyNotificationsForUser } from "@/lib/notifications";
 
 let started = false;
 
@@ -27,6 +28,10 @@ export function startReminderCron() {
     const users = await User.find({});
 
     for (const user of users) {
+      if (user.notificationsEnabled !== false) {
+        await generateDailyNotificationsForUser(user._id);
+      }
+
       const shouldSend =
         user.reminderFrequency === "daily" ||
         (user.reminderFrequency === "weekly" && new Date().getDay() === 1) ||

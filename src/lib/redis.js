@@ -93,6 +93,30 @@ export function transactionDataCacheKey(userId, queryString = "") {
   return `transactions:data:${String(userId)}:${encodeKeyPart(queryString)}`;
 }
 
+export function notificationsCacheKey(userId) {
+  return `notifications:${String(userId)}:list`;
+}
+
+export async function publishNotificationEvent(userId, type = "changed") {
+  try {
+    const client = await getRedisClient();
+    if (!client) return false;
+
+    await client.publish(
+      "notifications:events",
+      JSON.stringify({
+        userId: String(userId),
+        type,
+        at: new Date().toISOString(),
+      })
+    );
+    return true;
+  } catch (error) {
+    console.error("Redis publish notification event failed:", error?.message || error);
+    return false;
+  }
+}
+
 export async function clearUserApiCache(userId) {
   try {
     const client = await getRedisClient();
@@ -104,6 +128,7 @@ export async function clearUserApiCache(userId) {
       `people:${userIdText}:*`,
       `transactions:list:${userIdText}:*`,
       `transactions:data:${userIdText}:*`,
+      `notifications:${userIdText}:*`,
     ];
 
     const keys = [];
@@ -121,6 +146,7 @@ export async function clearUserApiCache(userId) {
     await client.del(`dashboard:${userIdText}`);
     await client.del(`people:${userIdText}`);
     await client.del(`transactions:${userIdText}`);
+    await client.del(`notifications:${userIdText}`);
     return true;
   } catch (error) {
     console.error("Redis user cache clear failed:", error?.message || error);
