@@ -7,6 +7,7 @@ import Transaction from "@/models/Transaction";
 import { activeQuery } from "@/lib/bin";
 import { normalizeCurrency, convertFromUSD } from "@/lib/currency";
 import { getUsdRatesForUsage } from "@/lib/exchangeRates";
+import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 
 export const runtime = "nodejs";
 
@@ -92,14 +93,48 @@ export async function GET(request, { params }) {
       Transaction.find({ userId: user._id, personId: person._id, ...activeQuery() }).lean(),
     ]);
 
-    const convertedTransactions = transactions.map((tx) => {
+    // Derive encryption key for decryption
+    const userKey = await deriveUserKey(user._id.toString(), user.email);
+
+    // Decrypt transactions
+    const decryptedTransactions = await Promise.all(
+      transactions.map(async (tx) => {
+        try {
+          if (tx.encryptedAmount) {
+            const decrypted = await decryptTransaction(tx, userKey);
+            return { ...tx, amount: decrypted.amount, notes: decrypted.notes };
+          }
+          return tx;
+        } catch (err) {
+          console.error(`Failed to decrypt transaction ${tx._id}:`, err.message);
+          return tx;
+        }
+      })
+    );
+
+    const decryptedAllTransactions = await Promise.all(
+      allTransactions.map(async (tx) => {
+        try {
+          if (tx.encryptedAmount) {
+            const decrypted = await decryptTransaction(tx, userKey);
+            return { ...tx, amount: decrypted.amount, notes: decrypted.notes };
+          }
+          return tx;
+        } catch (err) {
+          console.error(`Failed to decrypt transaction ${tx._id}:`, err.message);
+          return tx;
+        }
+      })
+    );
+
+    const convertedTransactions = decryptedTransactions.map((tx) => {
       const originalAmount = Number(tx.amount || 0);
       const convertedAmount = convertCurrencyAmount(originalAmount, tx.currency || "USD", targetCurrency, usdRates);
       const conversionRate = getConversionRate(tx.currency || "USD", targetCurrency, usdRates);
       return { ...tx, originalAmount, convertedAmount, conversionRate };
     });
 
-    const convertedAllTransactions = allTransactions.map((tx) => {
+    const convertedAllTransactions = decryptedAllTransactions.map((tx) => {
       const originalAmount = Number(tx.amount || 0);
       const convertedAmount = convertCurrencyAmount(originalAmount, tx.currency || "USD", targetCurrency, usdRates);
       return { ...tx, originalAmount, convertedAmount };

@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import Transaction from "@/models/Transaction";
 import { activeQuery } from "@/lib/bin";
+import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 
 function money(value) {
   return Number(value || 0).toFixed(2);
@@ -20,13 +21,32 @@ export async function GET() {
   await connectDB();
   const tx = await Transaction.find({ userId: user._id, status: "pending", ...activeQuery() }).populate("personId", "name").sort({ date: -1 });
 
-  const totalCredit = tx
+  // Derive encryption key for decryption
+  const userKey = await deriveUserKey(user._id.toString(), user.email);
+
+  // Decrypt all transactions
+  const decryptedTx = await Promise.all(
+    tx.map(async (item) => {
+      try {
+        if (item.encryptedAmount) {
+          const decrypted = await decryptTransaction(item.toObject(), userKey);
+          return { ...item.toObject(), amount: decrypted.amount, notes: decrypted.notes };
+        }
+        return item.toObject();
+      } catch (err) {
+        console.error(`Failed to decrypt transaction ${item._id}:`, err.message);
+        return item.toObject();
+      }
+    })
+  );
+
+  const totalCredit = decryptedTx
     .filter((item) => item.type === "credit")
     .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const totalDebit = tx
+  const totalDebit = decryptedTx
     .filter((item) => item.type === "debit")
     .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const pendingCount = tx.filter((item) => item.status === "pending").length;
+  const pendingCount = decryptedTx.filter((item) => item.status === "pending").length;
   const remainingAmount = Math.abs(totalDebit - totalCredit);
   const userNeedsToPay = totalDebit > totalCredit;
   const remainingLabel = userNeedsToPay
@@ -180,7 +200,7 @@ export async function GET() {
 
   drawTableHeader();
 
-  tx.forEach((item, idx) => {
+  decryptedTx.forEach((item, idx) => {
     ensureSpace();
     if (idx % 2 === 0) {
       page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: rgb(0.98, 0.98, 0.98) });
