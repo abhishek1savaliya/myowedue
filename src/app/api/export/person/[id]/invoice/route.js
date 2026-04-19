@@ -67,6 +67,8 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url);
     const scope = getScope(searchParams);
     const targetCurrency = resolveCurrency(searchParams.get("currency"));
+    const startDateStr = searchParams.get("start"); // YYYY-MM-DD
+    const endDateStr = searchParams.get("end"); // YYYY-MM-DD
     const usdRates = await getUsdRatesForUsage();
     const conversionTimestamp = new Date().toLocaleString();
 
@@ -76,6 +78,21 @@ export async function GET(request, { params }) {
     if (!person) return fail("Person not found", 404);
 
     const query = { userId: user._id, personId: person._id, ...activeQuery() };
+    
+    // Add date range filter if provided
+    if (startDateStr || endDateStr) {
+      query.date = {};
+      if (startDateStr) {
+        query.date.$gte = new Date(startDateStr);
+      }
+      if (endDateStr) {
+        // Add 1 day to endDate to include the entire end date
+        const endDate = new Date(endDateStr);
+        endDate.setDate(endDate.getDate() + 1);
+        query.date.$lt = endDate;
+      }
+    }
+    
     if (scope === "pending") {
       query.status = "pending";
     }
@@ -88,9 +105,23 @@ export async function GET(request, { params }) {
       query.type = "debit";
     }
 
+    // For allTransactions, also apply date range
+    const allTransactionsQuery = { userId: user._id, personId: person._id, ...activeQuery() };
+    if (startDateStr || endDateStr) {
+      allTransactionsQuery.date = {};
+      if (startDateStr) {
+        allTransactionsQuery.date.$gte = new Date(startDateStr);
+      }
+      if (endDateStr) {
+        const endDate = new Date(endDateStr);
+        endDate.setDate(endDate.getDate() + 1);
+        allTransactionsQuery.date.$lt = endDate;
+      }
+    }
+
     const [transactions, allTransactions] = await Promise.all([
       Transaction.find(query).sort({ date: -1 }).lean(),
-      Transaction.find({ userId: user._id, personId: person._id, ...activeQuery() }).lean(),
+      Transaction.find(allTransactionsQuery).lean(),
     ]);
 
     // Derive encryption key for decryption

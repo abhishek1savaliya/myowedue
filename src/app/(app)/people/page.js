@@ -15,6 +15,7 @@ export default function PeoplePage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [invoiceCurrencies, setInvoiceCurrencies] = useState({});
   const [rates, setRates] = useState(null);
+  const [invoiceModal, setInvoiceModal] = useState(null); // { personId, personName, startDate, endDate }
   const invoiceOptions = ["AUD", "INR", "USD", "EUR", "GBP"];
 
   function getInvoiceCurrency(personId) {
@@ -128,6 +129,28 @@ export default function PeoplePage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   }
 
+  function openInvoiceModal(person) {
+    // Set default date range: last 30 days
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    setInvoiceModal({
+      personId: person._id,
+      personName: person.name,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+    });
+  }
+
+  function generateInvoice() {
+    if (!invoiceModal) return;
+    
+    const currency = getInvoiceCurrency(invoiceModal.personId);
+    const url = `/api/export/person/${invoiceModal.personId}/invoice?scope=all&currency=${currency}&start=${invoiceModal.startDate}&end=${invoiceModal.endDate}`;
+    window.open(url, '_blank');
+    setInvoiceModal(null);
+  }
+
   return (
     <div className="space-y-6">
       <header>
@@ -226,14 +249,13 @@ export default function PeoplePage() {
                       </option>
                     ))}
                   </select>
-                  <a
-                    href={`/api/export/person/${p._id}/invoice?scope=all&currency=${getInvoiceCurrency(p._id)}`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => openInvoiceModal(p)}
                     className="rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
                   >
                     Invoice
-                  </a>
+                  </button>
                 </div>
                 <button
                   type="button"
@@ -277,6 +299,63 @@ export default function PeoplePage() {
                 className="rounded-lg bg-black px-4 py-2 text-sm text-white"
               >
                 Yes, Move to Bin
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {invoiceModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+            <h2 className="text-lg font-semibold text-black">Generate Invoice</h2>
+            <p className="mt-2 text-sm text-zinc-600">For: <span className="font-semibold">{invoiceModal.personName}</span></p>
+            
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-black">From Date</label>
+                <input
+                  type="date"
+                  value={invoiceModal.startDate}
+                  onChange={(e) =>
+                    setInvoiceModal((prev) => ({
+                      ...prev,
+                      startDate: e.target.value,
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-black">To Date</label>
+                <input
+                  type="date"
+                  value={invoiceModal.endDate}
+                  onChange={(e) =>
+                    setInvoiceModal((prev) => ({
+                      ...prev,
+                      endDate: e.target.value,
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setInvoiceModal(null)}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={generateInvoice}
+                className="rounded-lg bg-black px-4 py-2 text-sm text-white"
+              >
+                Generate Invoice
               </button>
             </div>
           </div>
