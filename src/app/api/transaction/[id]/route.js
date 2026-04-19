@@ -49,10 +49,39 @@ export async function PUT(request, { params }) {
     const existingDate = new Date(existing.date).toISOString().slice(0, 10);
     const updatedDate = new Date(setFields.date).toISOString().slice(0, 10);
 
-    if (Number(existing.amount) !== Number(body.amount ?? existing.amount)) {
+    // Derive user's encryption key early (needed for decryption comparisons)
+    const userKey = await deriveUserKey(user._id.toString(), user.email);
+
+    // Get existing amount for comparison (could be plain or encrypted)
+    let existingAmount = existing.amount;
+    if (existingAmount === undefined && existing.encryptedAmount) {
+      try {
+        const decrypted = await decryptTransaction(existing.toObject(), userKey);
+        existingAmount = decrypted.amount;
+      } catch (err) {
+        console.error("Failed to decrypt existing amount:", err.message);
+      }
+    }
+
+    // Get existing notes for comparison (could be plain or encrypted)
+    let existingNotes = existing.notes || "";
+    if (!existingNotes && existing.encryptedNotes) {
+      try {
+        const decrypted = await decryptTransaction(existing.toObject(), userKey);
+        existingNotes = decrypted.notes || "";
+      } catch (err) {
+        console.error("Failed to decrypt existing notes:", err.message);
+      }
+    }
+
+    // Check for changes
+    const newAmount = body.amount != null ? Number(body.amount) : existingAmount;
+    const newNotes = body.notes !== undefined ? (body.notes || "") : existingNotes;
+
+    if (Number(existingAmount || 0) !== Number(newAmount || 0)) {
       history.push({
         action: "amount_changed",
-        message: `Amount changed from ${Number(existing.amount).toFixed(2)} to ${Number(body.amount ?? existing.amount).toFixed(2)} on ${eventAtText}`,
+        message: `Amount changed from ${Number(existingAmount || 0).toFixed(2)} to ${Number(newAmount || 0).toFixed(2)} on ${eventAtText}`,
         at: eventAt,
       });
     }
@@ -84,7 +113,7 @@ export async function PUT(request, { params }) {
         at: eventAt,
       });
     }
-    if ((existing.notes || "") !== (setFields.notes || "")) {
+    if (existingNotes !== newNotes) {
       history.push({
         action: "notes_changed",
         message: `Notes updated on ${eventAtText}`,
@@ -105,17 +134,20 @@ export async function PUT(request, { params }) {
       at: eventAt,
     });
 
-    // Derive user's encryption key
-    const userKey = await deriveUserKey(user._id.toString(), user.email);
-
     const updateDoc = { $set: setFields };
 
     // Encrypt sensitive fields - ONLY store encrypted versions
-    const amountToEncrypt = body.amount != null ? Number(body.amount) : existing.amount;
-    const notesToEncrypt = body.notes !== undefined ? (body.notes || "") : (existing.notes || "");
+    const amountToEncrypt = body.amount != null ? Number(body.amount) : existingAmount;
+    const notesToEncrypt = body.notes !== undefined ? (body.notes || "") : existingNotes;
 
     setFields.encryptedAmount = await encryptField(amountToEncrypt.toString(), userKey);
     setFields.encryptedNotes = await encryptField(notesToEncrypt, userKey);
+    
+    // Remove plain text fields from update
+    updateDoc.$unset = {
+      amount: "",
+      notes: "",
+    };
 
     if (history.length) {
       updateDoc.$push = { changeLogs: { $each: history } };
