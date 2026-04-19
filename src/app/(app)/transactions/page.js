@@ -18,6 +18,7 @@ export default function TransactionsPage() {
   const [form, setForm] = useState(txInitial);
   const [query, setQuery] = useState({ q: "", view: "", start: "", end: "" });
   const [editingId, setEditingId] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   async function loadPeople() {
     const res = await fetch("/api/person", { cache: "no-store" });
@@ -25,11 +26,14 @@ export default function TransactionsPage() {
     if (res.ok) setPeople(data.people || []);
   }
 
-  async function loadTransactions() {
+  async function loadTransactions(forceFresh = false) {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([k, v]) => {
       if (v) params.set(k, v);
     });
+    if (forceFresh) {
+      params.set("_r", String(Date.now()));
+    }
     const res = await fetch(`/api/transaction?${params.toString()}`, { cache: "no-store" });
     const data = await res.json();
     if (res.ok) setTransactions(data.transactions || []);
@@ -45,19 +49,26 @@ export default function TransactionsPage() {
 
   async function saveTransaction(e) {
     e.preventDefault();
+    if (isSaving) return;
+
+    setIsSaving(true);
     const method = editingId ? "PUT" : "POST";
     const url = editingId ? `/api/transaction/${editingId}` : "/api/transaction";
 
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
 
-    if (res.ok) {
-      setForm(txInitial);
-      setEditingId("");
-      loadTransactions();
+      if (res.ok) {
+        setForm(txInitial);
+        setEditingId("");
+        await loadTransactions(true);
+      }
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -148,8 +159,22 @@ export default function TransactionsPage() {
           onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))}
           className="rounded-xl border border-zinc-300 px-3 py-2"
         />
-        <button className="rounded-xl bg-black px-3 py-2 text-sm text-white md:col-span-2 xl:col-span-6">
-          {editingId ? "Update Transaction" : "Add Transaction"}
+        <button
+          disabled={isSaving}
+          className="rounded-xl bg-black px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed disabled:opacity-70 md:col-span-2 xl:col-span-6"
+        >
+          <span className="inline-flex items-center gap-2">
+            {isSaving ? (
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+            ) : null}
+            {isSaving
+              ? editingId
+                ? "Updating transaction..."
+                : "Adding transaction..."
+              : editingId
+                ? "Update Transaction"
+                : "Add Transaction"}
+          </span>
         </button>
       </form>
 
