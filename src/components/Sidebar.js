@@ -109,7 +109,7 @@ export default function Sidebar({ notificationCount = 0 }) {
 
       <button
         onClick={logout}
-        className="mt-4 w-full rounded-xl border border-black px-3 py-2.5 text-sm font-medium text-black transition hover:bg-black hover:text-white md:mt-8 md:py-3"
+        className="mt-4 hidden w-full rounded-xl border border-black px-3 py-2.5 text-sm font-medium text-black transition hover:bg-black hover:text-white md:mt-8 md:block md:py-3"
       >
         Logout
       </button>

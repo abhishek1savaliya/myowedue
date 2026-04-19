@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Loader from "@/components/Loader";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [profile, setProfile] = useState({
     firstName: "",
     lastName: "",
@@ -93,6 +95,12 @@ export default function SettingsPage() {
     setSettingsMessage(res.ok ? "Summary sent" : data.message || "Failed");
   }
 
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <div className="space-y-6">
       <header>
@@ -151,6 +159,14 @@ export default function SettingsPage() {
 
             <button type="submit" className="rounded-xl bg-black px-4 py-2 text-sm text-white md:col-span-2 md:justify-self-start">
               Save Profile
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-xl border border-black px-4 py-2 text-sm text-black transition hover:bg-black hover:text-white md:hidden"
+            >
+              Logout
             </button>
           </form>
         )}
