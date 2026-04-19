@@ -11,11 +11,20 @@ export async function GET(request) {
   if (error) return error;
 
   const { searchParams } = new URL(request.url);
+  const cacheControl = String(request.headers.get("cache-control") || "").toLowerCase();
+  const pragma = String(request.headers.get("pragma") || "").toLowerCase();
+  const forceFresh =
+    searchParams.has("_r") ||
+    cacheControl.includes("no-store") ||
+    cacheControl.includes("no-cache") ||
+    pragma.includes("no-cache");
   const queryString = searchParams.toString();
   const cacheKey = transactionDataCacheKey(user._id, queryString);
-  const cached = await getRedisJSON(cacheKey);
-  if (cached) {
-    return ok(cached);
+  if (!forceFresh) {
+    const cached = await getRedisJSON(cacheKey);
+    if (cached) {
+      return ok(cached);
+    }
   }
 
   await connectDB();

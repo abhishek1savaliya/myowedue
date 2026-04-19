@@ -49,10 +49,11 @@ export default function PeoplePage() {
     return { currency, pendingCredit, pendingDebit, dueAmount, dueDirection };
   }
 
-  async function load() {
+  async function load(forceFresh = false) {
     setLoading(true);
+    const peopleUrl = forceFresh ? `/api/person?_r=${Date.now()}` : "/api/person";
     const [peopleRes, ratesRes] = await Promise.all([
-      fetch("/api/person", { cache: "no-store" }),
+      fetch(peopleUrl, { cache: "no-store" }),
       fetch("/api/exchange-rates", { cache: "no-store" }),
     ]);
 
@@ -65,7 +66,7 @@ export default function PeoplePage() {
   }
 
   useEffect(() => {
-    load();
+    load(true);
   }, []);
 
   async function addPerson(e) {
@@ -77,7 +78,7 @@ export default function PeoplePage() {
     });
     if (res.ok) {
       setForm(initial);
-      load();
+      load(true);
     }
   }
 
@@ -87,7 +88,7 @@ export default function PeoplePage() {
     if (res.ok) {
       setPeople((prev) => prev.filter((person) => person._id !== id));
       setDeleteTarget(null);
-      await load();
+      await load(true);
     } else {
       window.alert(data.message || "Failed to delete person");
     }
@@ -106,7 +107,7 @@ export default function PeoplePage() {
     if (res.ok) {
       setEditingPersonId("");
       setForm(initial);
-      load();
+      load(true);
     }
   }
 

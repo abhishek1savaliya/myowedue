@@ -44,7 +44,7 @@ export default function TransactionsPage() {
   }, []);
 
   useEffect(() => {
-    loadTransactions();
+    loadTransactions(true);
   }, [query]);
 
   async function saveTransaction(e) {
@@ -74,7 +74,7 @@ export default function TransactionsPage() {
 
   async function removeTx(id) {
     const res = await fetch(`/api/transaction/${id}`, { method: "DELETE" });
-    if (res.ok) loadTransactions();
+    if (res.ok) loadTransactions(true);
   }
 
   const pendingCount = useMemo(
@@ -196,7 +196,7 @@ export default function TransactionsPage() {
         </select>
         <input type="date" value={query.start} onChange={(e) => setQuery((v) => ({ ...v, start: e.target.value }))} className="rounded-xl border border-zinc-300 px-3 py-2" />
         <input type="date" value={query.end} onChange={(e) => setQuery((v) => ({ ...v, end: e.target.value }))} className="rounded-xl border border-zinc-300 px-3 py-2" />
-        <button type="button" onClick={loadTransactions} className="rounded-xl border border-black px-3 py-2 text-sm md:col-span-2 xl:col-span-1">Apply</button>
+        <button type="button" onClick={() => loadTransactions(true)} className="rounded-xl border border-black px-3 py-2 text-sm md:col-span-2 xl:col-span-1">Apply</button>
       </section>
 
       <p className="text-sm text-zinc-600">Pending dues: {pendingCount}</p>
