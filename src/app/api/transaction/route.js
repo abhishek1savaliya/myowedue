@@ -10,6 +10,7 @@ import {
   setRedisJSON,
   transactionListCacheKey,
 } from "@/lib/redis";
+import { deriveUserKey, decryptTransaction, encryptTransaction } from "@/lib/crypto";
 
 export async function GET(request) {
   const { user, error } = await requireUser();
@@ -77,56 +78,74 @@ export async function GET(request) {
     .populate("personId", "name email phone")
     .sort({ date: -1, createdAt: -1 });
 
-  const hydratedTransactions = transactions.map((tx) => {
-    const plain = tx.toObject();
-    const existingLogs = Array.isArray(plain.changeLogs)
-      ? plain.changeLogs.filter((log) => log?.message && log?.at)
-      : [];
+  // Derive user's encryption key for decryption
+  const userKey = await deriveUserKey(user._id.toString(), user.email);
 
-    if (existingLogs.length > 0) {
-      const hasCreatedLog = existingLogs.some((log) => log.action === "created");
-      const hasDeletedLog = existingLogs.some((log) => log.action === "deleted");
-      const hasRestoredLog = existingLogs.some((log) => log.action === "restored");
+  const hydratedTransactions = await Promise.all(
+    transactions.map(async (tx) => {
+      const plain = tx.toObject();
+      
+      // Decrypt encrypted fields
+      try {
+        if (plain.encryptedAmount) {
+          const decrypted = await decryptTransaction(plain, userKey);
+          plain.amount = decrypted.amount;
+          if (decrypted.notes) plain.notes = decrypted.notes;
+        }
+      } catch (decryptError) {
+        console.error("Failed to decrypt transaction:", decryptError);
+        // Fall back to unencrypted amount if decryption fails
+      }
+      
+      const existingLogs = Array.isArray(plain.changeLogs)
+        ? plain.changeLogs.filter((log) => log?.message && log?.at)
+        : [];
 
-      if (!hasCreatedLog) {
-        existingLogs.push({
+      if (existingLogs.length > 0) {
+        const hasCreatedLog = existingLogs.some((log) => log.action === "created");
+        const hasDeletedLog = existingLogs.some((log) => log.action === "deleted");
+        const hasRestoredLog = existingLogs.some((log) => log.action === "restored");
+
+        if (!hasCreatedLog) {
+          existingLogs.push({
+            action: "created",
+            message: `Transaction created at ${new Date(plain.createdAt || plain.date || new Date()).toLocaleString()}`,
+            at: plain.createdAt || plain.date || new Date(),
+          });
+        }
+
+        if (!hasDeletedLog && plain.lastDeletedAt) {
+          existingLogs.push({
+            action: "deleted",
+            message: `Transaction deleted at ${new Date(plain.lastDeletedAt).toLocaleString()}`,
+            at: plain.lastDeletedAt,
+          });
+        }
+
+        if (!hasRestoredLog && plain.lastRestoredAt) {
+          existingLogs.push({
+            action: "restored",
+            message: `Transaction restored at ${new Date(plain.lastRestoredAt).toLocaleString()}`,
+            at: plain.lastRestoredAt,
+          });
+        }
+
+        plain.changeLogs = existingLogs;
+        return plain;
+      }
+
+      const fallbackLogs = [
+        {
           action: "created",
           message: `Transaction created at ${new Date(plain.createdAt || plain.date || new Date()).toLocaleString()}`,
           at: plain.createdAt || plain.date || new Date(),
-        });
-      }
+        },
+      ];
 
-      if (!hasDeletedLog && plain.lastDeletedAt) {
-        existingLogs.push({
-          action: "deleted",
-          message: `Transaction deleted at ${new Date(plain.lastDeletedAt).toLocaleString()}`,
-          at: plain.lastDeletedAt,
-        });
-      }
-
-      if (!hasRestoredLog && plain.lastRestoredAt) {
-        existingLogs.push({
-          action: "restored",
-          message: `Transaction restored at ${new Date(plain.lastRestoredAt).toLocaleString()}`,
-          at: plain.lastRestoredAt,
-        });
-      }
-
-      plain.changeLogs = existingLogs;
+      plain.changeLogs = fallbackLogs;
       return plain;
-    }
-
-    const fallbackLogs = [
-      {
-        action: "created",
-        message: `Transaction created at ${new Date(plain.createdAt || plain.date || new Date()).toLocaleString()}`,
-        at: plain.createdAt || plain.date || new Date(),
-      },
-    ];
-
-    plain.changeLogs = fallbackLogs;
-    return plain;
-  });
+    })
+  );
 
   const payload = { transactions: hydratedTransactions };
   await setRedisJSON(cacheKey, payload, 60);
@@ -150,12 +169,15 @@ export async function POST(request) {
     const person = await Person.findOne({ _id: personId, userId: user._id, ...activeQuery() });
     if (!person) return fail("Person not found", 404);
 
-    const tx = await Transaction.create({
+    // Derive user's encryption key
+    const userKey = await deriveUserKey(user._id.toString(), user.email);
+
+    const txData = {
       userId: user._id,
       personId,
-      amount: Number(amount),
+      // Don't store plain amount - only encrypted version
       type,
-      notes: notes || "",
+      // Don't store plain notes - only encrypted version
       date: new Date(date),
       currency: currency || "USD",
       status: "pending",
@@ -166,12 +188,24 @@ export async function POST(request) {
           at: new Date(),
         },
       ],
-    });
+    };
+
+    // Encrypt sensitive fields ONLY - these will be the only versions stored
+    const encrypted = await encryptTransaction(
+      { ...txData, amount, notes: notes || "" },
+      userKey
+    );
+    
+    const tx = await Transaction.create(encrypted);
 
     await clearDashboardCache(user._id);
-    await logActivity(user._id, "transaction_created", `${type} ${amount} ${currency || "USD"}`);
-    return ok({ transaction: tx }, 201);
-  } catch {
+    await logActivity(user._id, "transaction_created", `${type} transaction created`);
+    
+    // Return decrypted version to client
+    const decrypted = await decryptTransaction(tx.toObject(), userKey);
+    return ok({ transaction: decrypted }, 201);
+  } catch (error) {
+    console.error("Transaction creation error:", error);
     return fail("Failed to create transaction", 500);
   }
 }

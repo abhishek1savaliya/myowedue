@@ -5,7 +5,7 @@ import { fail, ok } from "@/lib/api";
 
 export async function POST(request) {
   try {
-    const { email, password } = await request.json();
+    const { email, password, rememberMe } = await request.json();
     if (!email || !password) return fail("Email and password are required", 422);
 
     await connectDB();
@@ -15,14 +15,19 @@ export async function POST(request) {
     const valid = await comparePassword(password, user.password);
     if (!valid) return fail("Invalid credentials", 401);
 
-    const token = signToken({ userId: user._id.toString() });
+    // Set expiration based on rememberMe checkbox
+    // 7 days if rememberMe is true, 4 hours if false
+    const expiresIn = rememberMe ? "7d" : "4h";
+    const maxAge = rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 4;
+
+    const token = signToken({ userId: user._id.toString() }, expiresIn);
     const res = ok({ user: safeUser(user), message: "Login successful" });
     res.cookies.set("session_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge,
     });
 
     return res;

@@ -5,6 +5,7 @@ import Transaction from "@/models/Transaction";
 import Person from "@/models/Person";
 import { activeQuery, buildBinMeta } from "@/lib/bin";
 import { clearDashboardCache } from "@/lib/redis";
+import { deriveUserKey, encryptField, decryptTransaction } from "@/lib/crypto";
 
 export async function PUT(request, { params }) {
   const { user, error } = await requireUser();
@@ -35,9 +36,9 @@ export async function PUT(request, { params }) {
 
     const setFields = {
       personId: nextPersonId,
-      amount: body.amount != null ? Number(body.amount) : existing.amount,
+      // Don't store plain amount - will be encrypted
       type: body.type || existing.type,
-      notes: body.notes ?? existing.notes,
+      // Don't store plain notes - will be encrypted
       currency: body.currency || existing.currency,
       date: body.date ? new Date(body.date) : existing.date,
       status: "pending",
@@ -48,10 +49,10 @@ export async function PUT(request, { params }) {
     const existingDate = new Date(existing.date).toISOString().slice(0, 10);
     const updatedDate = new Date(setFields.date).toISOString().slice(0, 10);
 
-    if (Number(existing.amount) !== Number(setFields.amount)) {
+    if (Number(existing.amount) !== Number(body.amount ?? existing.amount)) {
       history.push({
         action: "amount_changed",
-        message: `Amount changed from ${Number(existing.amount).toFixed(2)} to ${Number(setFields.amount).toFixed(2)} on ${eventAtText}`,
+        message: `Amount changed from ${Number(existing.amount).toFixed(2)} to ${Number(body.amount ?? existing.amount).toFixed(2)} on ${eventAtText}`,
         at: eventAt,
       });
     }
@@ -104,7 +105,18 @@ export async function PUT(request, { params }) {
       at: eventAt,
     });
 
+    // Derive user's encryption key
+    const userKey = await deriveUserKey(user._id.toString(), user.email);
+
     const updateDoc = { $set: setFields };
+
+    // Encrypt sensitive fields - ONLY store encrypted versions
+    const amountToEncrypt = body.amount != null ? Number(body.amount) : existing.amount;
+    const notesToEncrypt = body.notes !== undefined ? (body.notes || "") : (existing.notes || "");
+
+    setFields.encryptedAmount = await encryptField(amountToEncrypt.toString(), userKey);
+    setFields.encryptedNotes = await encryptField(notesToEncrypt, userKey);
+
     if (history.length) {
       updateDoc.$push = { changeLogs: { $each: history } };
     }
@@ -116,10 +128,13 @@ export async function PUT(request, { params }) {
     ).populate("personId", "name email");
 
     if (!tx) return fail("Transaction not found", 404);
+    
+    // Return decrypted transaction
+    const decrypted = await decryptTransaction(tx.toObject(), userKey);
 
     await clearDashboardCache(user._id);
     await logActivity(user._id, "transaction_updated", `Updated ${tx._id}`);
-    return ok({ transaction: tx });
+    return ok({ transaction: decrypted });
   } catch {
     return fail("Failed to update transaction", 500);
   }
