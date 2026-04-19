@@ -85,16 +85,27 @@ export async function GET(request) {
     transactions.map(async (tx) => {
       const plain = tx.toObject();
       
-      // Decrypt encrypted fields
+      // Decrypt encrypted fields if they exist
       try {
         if (plain.encryptedAmount) {
           const decrypted = await decryptTransaction(plain, userKey);
           plain.amount = decrypted.amount;
-          if (decrypted.notes) plain.notes = decrypted.notes;
+          if (decrypted.notes !== undefined) plain.notes = decrypted.notes;
+        } else if (!plain.amount && plain.encryptedAmount) {
+          // Fallback: if amount is missing but encrypted version exists
+          const decrypted = await decryptTransaction(plain, userKey);
+          plain.amount = decrypted.amount;
+        }
+        // If neither encryptedAmount nor amount exists, something is wrong
+        if (plain.amount === undefined) {
+          console.warn(`Transaction ${plain._id} has no amount or encryptedAmount`);
         }
       } catch (decryptError) {
-        console.error("Failed to decrypt transaction:", decryptError);
-        // Fall back to unencrypted amount if decryption fails
+        console.error(`Failed to decrypt transaction ${plain._id}:`, decryptError.message);
+        // If decryption fails and we have plain amount, keep it
+        if (plain.amount === undefined) {
+          console.error(`Transaction ${plain._id} cannot be decrypted and has no plain amount`);
+        }
       }
       
       const existingLogs = Array.isArray(plain.changeLogs)

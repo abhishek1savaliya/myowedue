@@ -5,6 +5,7 @@ import Person from "@/models/Person";
 import Transaction from "@/models/Transaction";
 import { activeQuery } from "@/lib/bin";
 import { clearDashboardCache, getRedisJSON, peopleCacheKey, setRedisJSON } from "@/lib/redis";
+import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 
 export async function GET(request) {
   const { user, error } = await requireUser();
@@ -33,6 +34,9 @@ export async function GET(request) {
   const personIds = people.map((p) => p._id);
   const tx = await Transaction.find({ userId: user._id, personId: { $in: personIds }, ...activeQuery() }).lean();
 
+  // Derive encryption key for decryption
+  const userKey = await deriveUserKey(user._id.toString(), user.email);
+
   const balanceMap = new Map();
   for (const p of people) {
     balanceMap.set(p._id.toString(), {
@@ -55,23 +59,35 @@ export async function GET(request) {
     if (!bucket) continue;
     const currency = item.currency || "USD";
 
+    // Decrypt transaction to get actual amount
+    let decryptedAmount = item.amount;
+    if (item.encryptedAmount && !item.amount) {
+      try {
+        const decrypted = await decryptTransaction(item, userKey);
+        decryptedAmount = decrypted.amount;
+      } catch (err) {
+        console.error(`Failed to decrypt transaction ${item._id}:`, err.message);
+        continue; // Skip if decryption fails
+      }
+    }
+
     if (item.type === "credit") {
-      bucket.totalCredit += item.amount;
-      bucket.totalCreditByCurrency[currency] = (bucket.totalCreditByCurrency[currency] || 0) + item.amount;
+      bucket.totalCredit += decryptedAmount;
+      bucket.totalCreditByCurrency[currency] = (bucket.totalCreditByCurrency[currency] || 0) + decryptedAmount;
     }
     if (item.type === "debit") {
-      bucket.totalDebit += item.amount;
-      bucket.totalDebitByCurrency[currency] = (bucket.totalDebitByCurrency[currency] || 0) + item.amount;
+      bucket.totalDebit += decryptedAmount;
+      bucket.totalDebitByCurrency[currency] = (bucket.totalDebitByCurrency[currency] || 0) + decryptedAmount;
     }
 
     if (item.status === "pending") {
       if (item.type === "credit") {
-        bucket.pendingCredit += item.amount;
-        bucket.pendingCreditByCurrency[currency] = (bucket.pendingCreditByCurrency[currency] || 0) + item.amount;
+        bucket.pendingCredit += decryptedAmount;
+        bucket.pendingCreditByCurrency[currency] = (bucket.pendingCreditByCurrency[currency] || 0) + decryptedAmount;
       }
       if (item.type === "debit") {
-        bucket.pendingDebit += item.amount;
-        bucket.pendingDebitByCurrency[currency] = (bucket.pendingDebitByCurrency[currency] || 0) + item.amount;
+        bucket.pendingDebit += decryptedAmount;
+        bucket.pendingDebitByCurrency[currency] = (bucket.pendingDebitByCurrency[currency] || 0) + decryptedAmount;
       }
     }
   }
