@@ -46,6 +46,9 @@ export function safeUser(user) {
     joinDate: user.createdAt,
     reminderFrequency: user.reminderFrequency || "weekly",
     notificationsEnabled: user.notificationsEnabled !== false,
+    cmsRole: user.cmsRole || "manager",
+    contentEditPermission: Boolean(user.contentEditPermission),
+    contentManagerId: user.contentManagerId?.toString?.() || null,
     darkMode: Boolean(user.darkMode),
   };
 }

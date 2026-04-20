@@ -28,6 +28,7 @@ const ADMIN_NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/admin/tickets", label: "Support Tickets", icon: "🎫" },
   { href: "/admin/team", label: "Team", icon: "👥" },
+  { href: "/admin/content", label: "Content Editor", icon: "✏️" },
   { href: "/admin/profile", label: "Profile", icon: "🧾" },
 ];
 

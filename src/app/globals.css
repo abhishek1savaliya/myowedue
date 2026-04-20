@@ -49,3 +49,50 @@ h3 {
 main > * {
   animation: rise 340ms ease-out;
 }
+
+/* Render CMS HTML content (from Quill) */
+.cms-html strong { font-weight: 700; }
+.cms-html em { font-style: italic; }
+.cms-html u { text-decoration: underline; }
+.cms-html s { text-decoration: line-through; }
+.cms-html a { text-decoration: underline; opacity: 0.85; }
+.cms-html h1 { font-size: 1.5rem; font-weight: 700; margin-top: 0.5rem; }
+.cms-html h2 { font-size: 1.25rem; font-weight: 700; margin-top: 0.5rem; }
+.cms-html h3 { font-size: 1.125rem; font-weight: 600; margin-top: 0.5rem; }
+.cms-html ul { list-style: disc; padding-left: 1.25rem; }
+.cms-html ol { list-style: decimal; padding-left: 1.25rem; }
+.cms-html li { margin-top: 0.25rem; }
+.cms-html p { margin-top: 0; }
+
+/* Quill dark theme overrides (used in admin CMS editor) */
+.cms-quill-dark .ql-toolbar {
+  background-color: #1e293b;
+  border-color: #475569;
+}
+.cms-quill-dark .ql-toolbar .ql-stroke {
+  stroke: #94a3b8;
+}
+.cms-quill-dark .ql-toolbar .ql-fill {
+  fill: #94a3b8;
+}
+.cms-quill-dark .ql-toolbar .ql-picker-label {
+  color: #94a3b8;
+}
+.cms-quill-dark .ql-toolbar button:hover .ql-stroke,
+.cms-quill-dark .ql-toolbar button.ql-active .ql-stroke {
+  stroke: #e2e8f0;
+}
+.cms-quill-dark .ql-toolbar button:hover .ql-fill,
+.cms-quill-dark .ql-toolbar button.ql-active .ql-fill {
+  fill: #e2e8f0;
+}
+.cms-quill-dark .ql-container {
+  background-color: #0f172a;
+  border-color: #475569;
+  color: #f1f5f9;
+  font-size: 0.875rem;
+  min-height: 120px;
+}
+.cms-quill-dark .ql-editor.ql-blank::before {
+  color: #64748b;
+}

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2 } from "lucide-react";
+import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine } from "lucide-react";
 
-const links = [
+const baseLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/people", label: "People", icon: Users },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
@@ -20,6 +20,7 @@ export default function Sidebar({ notificationCount = 0 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [liveNotificationCount, setLiveNotificationCount] = useState(notificationCount);
+  const [canAccessContentEditor, setCanAccessContentEditor] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,7 +42,13 @@ export default function Sidebar({ notificationCount = 0 }) {
       try {
         const meRes = await fetch("/api/auth/me", { cache: "no-store" });
         const meData = await meRes.json().catch(() => ({}));
-        const userId = meData?.user?.id;
+        const meUser = meData?.user || {};
+        const userId = meUser?.id;
+        const role = String(meUser?.cmsRole || "manager");
+        const hasPermission = role === "super_admin" || role === "manager" || Boolean(meUser?.contentEditPermission);
+        if (!cancelled) {
+          setCanAccessContentEditor(hasPermission);
+        }
         if (!userId || cancelled) return;
 
         const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4001";
@@ -72,6 +79,10 @@ export default function Sidebar({ notificationCount = 0 }) {
     router.push("/login");
     router.refresh();
   }
+
+  const links = canAccessContentEditor
+    ? [...baseLinks, { href: "/content-editor", label: "Content Editor", icon: FilePenLine }]
+    : baseLinks;
 
   return (
     <aside className="sticky top-0 z-30 w-full border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur md:h-screen md:w-72 md:border-b-0 md:border-r md:px-6 md:py-8">

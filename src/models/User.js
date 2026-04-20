@@ -14,6 +14,14 @@ const UserSchema = new Schema(
       default: "weekly",
     },
     notificationsEnabled: { type: Boolean, default: true },
+    cmsRole: {
+      type: String,
+      enum: ["super_admin", "manager", "team_member"],
+      default: "manager",
+      index: true,
+    },
+    contentEditPermission: { type: Boolean, default: false },
+    contentManagerId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
     notificationGeneration: {
       day: { type: String, default: "" },
       count: { type: Number, default: 0 },
@@ -34,6 +42,18 @@ if (mongoose.models.User) {
   if (!User.schema.path("lastName")) missingPaths.lastName = { type: String, trim: true };
   if (!User.schema.path("phone")) missingPaths.phone = { type: String, trim: true, default: "" };
   if (!User.schema.path("notificationsEnabled")) missingPaths.notificationsEnabled = { type: Boolean, default: true };
+  if (!User.schema.path("cmsRole")) {
+    missingPaths.cmsRole = {
+      type: String,
+      enum: ["super_admin", "manager", "team_member"],
+      default: "manager",
+      index: true,
+    };
+  }
+  if (!User.schema.path("contentEditPermission")) missingPaths.contentEditPermission = { type: Boolean, default: false };
+  if (!User.schema.path("contentManagerId")) {
+    missingPaths.contentManagerId = { type: Schema.Types.ObjectId, ref: "User", default: null, index: true };
+  }
   if (!User.schema.path("notificationGeneration")) {
     missingPaths.notificationGeneration = {
       day: { type: String, default: "" },
