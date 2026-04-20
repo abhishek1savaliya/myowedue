@@ -1,22 +1,66 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toJpeg } from "html-to-image";
+import { formatCurrency } from "@/lib/currency";
 
 export default function ReportsPage() {
   const cardRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSnapshot() {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/dashboard?currency=AUD", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!ignore && res.ok) {
+          setSnapshot(data);
+        }
+      } catch (error) {
+        console.error("Failed to load report snapshot:", error);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadSnapshot();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   async function downloadJpg() {
     if (!cardRef.current) return;
     setDownloading(true);
-    const dataUrl = await toJpeg(cardRef.current, { quality: 0.95, backgroundColor: "#ffffff" });
-    const link = document.createElement("a");
-    link.download = "dues-share.jpg";
-    link.href = dataUrl;
-    link.click();
-    setDownloading(false);
+    try {
+      const dataUrl = await toJpeg(cardRef.current, {
+        quality: 0.95,
+        backgroundColor: "#ffffff",
+        pixelRatio: 2,
+        cacheBust: true,
+      });
+      const link = document.createElement("a");
+      link.download = "dues-share.jpg";
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error("JPG export failed:", error);
+      window.alert("Could not generate JPG right now. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
   }
+
+  const currency = snapshot?.currency || "AUD";
+  const totalGiven = Number(snapshot?.totals?.totalGiven || 0);
+  const totalReceived = Number(snapshot?.totals?.totalReceivedBack || 0);
+  const net = totalReceived - totalGiven;
+  const recent = snapshot?.recent || [];
 
   return (
     <div className="space-y-6">
@@ -52,11 +96,44 @@ export default function ReportsPage() {
       >
         <h2 className="text-2xl font-semibold tracking-[0.08em]">Dues Snapshot</h2>
         <p className="mt-2 text-sm text-zinc-600">Personal Credit/Debit Manager</p>
-        <ul className="mt-6 space-y-2 text-sm text-zinc-700">
-          <li>- Includes person, amount, date and status.</li>
-          <li>- Use this snapshot for WhatsApp or quick updates.</li>
-          <li>- Generate latest PDF for complete breakdown.</li>
-        </ul>
+
+        <div className="mt-5 grid gap-2 sm:grid-cols-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-emerald-700">Total Given</p>
+            <p className="mt-1 text-sm font-semibold text-emerald-900">{formatCurrency(totalGiven, currency)}</p>
+          </div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-rose-700">Total Received</p>
+            <p className="mt-1 text-sm font-semibold text-rose-900">{formatCurrency(totalReceived, currency)}</p>
+          </div>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-sky-700">Net Balance</p>
+            <p className="mt-1 text-sm font-semibold text-sky-900">{`${net >= 0 ? "+" : ""}${formatCurrency(net, currency)}`}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+          <p>Pending entries: <span className="font-semibold">{loading ? "..." : String(snapshot?.notificationCount || 0)}</span></p>
+          <p>People tracked: <span className="font-semibold">{loading ? "..." : String(snapshot?.peopleCount || 0)}</span></p>
+          <p>Generated: <span className="font-semibold">{new Date().toLocaleString()}</span></p>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-600">Recent Transactions</p>
+          <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+            {loading ? (
+              <li>Loading latest entries...</li>
+            ) : recent.length ? (
+              recent.slice(0, 3).map((item) => (
+                <li key={item._id || `${item.personId?.name || "unknown"}-${item.date}`}>
+                  {item.personId?.name || "Unknown"} - {formatCurrency(item.signedAmountInDashboardCurrency || 0, currency)} - {new Date(item.date).toLocaleDateString()}
+                </li>
+              ))
+            ) : (
+              <li>No recent entries.</li>
+            )}
+          </ul>
+        </div>
       </div>
     </div>
   );

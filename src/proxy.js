@@ -4,12 +4,11 @@ const protectedRoutes = ["/dashboard", "/people", "/transactions", "/bin", "/rep
 const authRoutes = ["/login", "/signup"];
 const adminProtectedRoutes = ["/admin/dashboard", "/admin/team", "/admin/tickets"];
 
-export function middleware(request) {
+export function proxy(request) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("session_token")?.value;
   const adminToken = request.cookies.get("admin_session_token")?.value;
 
-  // Admin route protection
   const isAdminProtected = adminProtectedRoutes.some((route) => pathname.startsWith(route));
   if (isAdminProtected && !adminToken) {
     return NextResponse.redirect(new URL("/admin/login", request.url));

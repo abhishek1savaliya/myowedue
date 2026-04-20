@@ -12,6 +12,17 @@ function money(value) {
   return Number(value || 0).toFixed(2);
 }
 
+function toCsvCell(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export async function GET(request) {
   const { user, error } = await requireUser();
   if (error) return error;
@@ -65,14 +76,16 @@ export async function GET(request) {
     if (type === "csv") {
       const rows = ["person,amount,type,currency,date,notes"];
       for (const t of decryptedTx) {
+        const personName = toCsvCell(t.personId?.name || "Unknown");
+        const notes = toCsvCell(t.notes);
         rows.push(
           [
-            `"${(t.personId?.name || "Unknown").replace(/"/g, '""')}"`,
+            `"${personName.replace(/"/g, '""')}"`,
             t.amount || "",
             t.type,
             t.currency,
             new Date(t.date).toISOString(),
-            `"${(t.notes || "").replace(/"/g, '""')}"`,
+            `"${notes.replace(/"/g, '""')}"`,
           ].join(",")
         );
       }
