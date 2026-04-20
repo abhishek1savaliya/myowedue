@@ -93,15 +93,10 @@ export async function GET(request, { params }) {
       }
     }
     
-    if (scope === "pending") {
-      query.status = "pending";
-    }
     if (scope === "credit") {
-      query.status = "pending";
       query.type = "credit";
     }
     if (scope === "debit") {
-      query.status = "pending";
       query.type = "debit";
     }
 

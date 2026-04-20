@@ -36,34 +36,27 @@ export async function GET(request) {
   await connectDB();
   const q = searchParams.get("q")?.trim();
   const view = searchParams.get("view");
-  const status = searchParams.get("status");
   const type = searchParams.get("type");
   const start = searchParams.get("start");
   const end = searchParams.get("end");
   const minAmount = Number(searchParams.get("minAmount") || 0);
   const maxAmount = Number(searchParams.get("maxAmount") || 0);
 
-  const query = { userId: user._id, status: "pending", ...activeQuery() };
-  if (view === "credit_pending") {
-    query.status = "pending";
+  const query = { userId: user._id, ...activeQuery() };
+  if (view === "credit") {
     query.type = "credit";
-  } else if (view === "debit_pending") {
-    query.status = "pending";
+  } else if (view === "debit") {
     query.type = "debit";
   }
 
-  if (status === "pending") query.status = "pending";
   if (type && ["credit", "debit"].includes(type)) query.type = type;
   if (start || end) {
     query.date = {};
     if (start) query.date.$gte = new Date(start);
     if (end) query.date.$lte = new Date(end);
   }
-  if (minAmount > 0 || maxAmount > 0) {
-    query.amount = {};
-    if (minAmount > 0) query.amount.$gte = minAmount;
-    if (maxAmount > 0) query.amount.$lte = maxAmount;
-  }
+  // Note: amount range filter is applied in-memory after decryption
+  // because encrypted transactions don't have a plain `amount` field in DB
 
   if (q) {
     const people = await Person.find({
@@ -91,10 +84,6 @@ export async function GET(request) {
           const decrypted = await decryptTransaction(plain, userKey);
           plain.amount = decrypted.amount;
           if (decrypted.notes !== undefined) plain.notes = decrypted.notes;
-        } else if (!plain.amount && plain.encryptedAmount) {
-          // Fallback: if amount is missing but encrypted version exists
-          const decrypted = await decryptTransaction(plain, userKey);
-          plain.amount = decrypted.amount;
         }
         // If neither encryptedAmount nor amount exists, something is wrong
         if (plain.amount === undefined) {
@@ -158,7 +147,18 @@ export async function GET(request) {
     })
   );
 
-  const payload = { transactions: hydratedTransactions };
+  // Apply amount range filter in-memory after decryption
+  const filtered =
+    minAmount > 0 || maxAmount > 0
+      ? hydratedTransactions.filter((tx) => {
+          const amt = Number(tx.amount || 0);
+          if (minAmount > 0 && amt < minAmount) return false;
+          if (maxAmount > 0 && amt > maxAmount) return false;
+          return true;
+        })
+      : hydratedTransactions;
+
+  const payload = { transactions: filtered };
   await setRedisJSON(cacheKey, payload, 60);
   return ok(payload);
 }

@@ -5,6 +5,7 @@ import Transaction from "@/models/Transaction";
 import Person from "@/models/Person";
 import { activeQuery } from "@/lib/bin";
 import { getRedisJSON, setRedisJSON, transactionDataCacheKey } from "@/lib/redis";
+import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 
 export async function GET(request) {
   const { user, error } = await requireUser();
@@ -30,34 +31,26 @@ export async function GET(request) {
   await connectDB();
   const q = searchParams.get("q")?.trim();
   const view = searchParams.get("view");
-  const status = searchParams.get("status");
   const type = searchParams.get("type");
   const start = searchParams.get("start");
   const end = searchParams.get("end");
   const minAmount = Number(searchParams.get("minAmount") || 0);
   const maxAmount = Number(searchParams.get("maxAmount") || 0);
 
-  const query = { userId: user._id, status: "pending", ...activeQuery() };
-  if (view === "credit_pending") {
-    query.status = "pending";
+  const query = { userId: user._id, ...activeQuery() };
+  if (view === "credit") {
     query.type = "credit";
-  } else if (view === "debit_pending") {
-    query.status = "pending";
+  } else if (view === "debit") {
     query.type = "debit";
   }
 
-  if (status === "pending") query.status = "pending";
   if (type && ["credit", "debit"].includes(type)) query.type = type;
   if (start || end) {
     query.date = {};
     if (start) query.date.$gte = new Date(start);
     if (end) query.date.$lte = new Date(end);
   }
-  if (minAmount > 0 || maxAmount > 0) {
-    query.amount = {};
-    if (minAmount > 0) query.amount.$gte = minAmount;
-    if (maxAmount > 0) query.amount.$lte = maxAmount;
-  }
+  // Note: amount range filter applied in-memory after decryption
 
   if (q) {
     const people = await Person.find({
@@ -76,8 +69,21 @@ export async function GET(request) {
       .sort({ date: -1, createdAt: -1 }),
   ]);
 
-  const hydratedTransactions = transactions.map((tx) => {
+  const userKey = await deriveUserKey(user._id.toString(), user.email);
+
+  const hydratedTransactions = await Promise.all(transactions.map(async (tx) => {
     const plain = tx.toObject();
+
+    if (plain.encryptedAmount) {
+      try {
+        const decrypted = await decryptTransaction(plain, userKey);
+        plain.amount = decrypted.amount;
+        if (decrypted.notes !== undefined) plain.notes = decrypted.notes;
+      } catch (err) {
+        console.error(`Failed to decrypt transaction ${plain._id}:`, err.message);
+      }
+    }
+
     const existingLogs = Array.isArray(plain.changeLogs)
       ? plain.changeLogs.filter((log) => log?.message && log?.at)
       : [];
@@ -141,11 +147,22 @@ export async function GET(request) {
 
     plain.changeLogs = fallbackLogs;
     return plain;
-  });
+  }));
+
+  // Apply amount range filter in-memory after decryption
+  const filtered =
+    minAmount > 0 || maxAmount > 0
+      ? hydratedTransactions.filter((tx) => {
+          const amt = Number(tx.amount || 0);
+          if (minAmount > 0 && amt < minAmount) return false;
+          if (maxAmount > 0 && amt > maxAmount) return false;
+          return true;
+        })
+      : hydratedTransactions;
 
   const payload = {
     people: allPeople,
-    transactions: hydratedTransactions,
+    transactions: filtered,
   };
 
   await setRedisJSON(cacheKey, payload, 60);

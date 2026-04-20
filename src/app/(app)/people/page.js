@@ -130,15 +130,11 @@ export default function PeoplePage() {
   }
 
   function openInvoiceModal(person) {
-    // Set default date range: last 30 days
-    const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-    
     setInvoiceModal({
       personId: person._id,
       personName: person.name,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      startDate: "",
+      endDate: "",
     });
   }
 
@@ -146,7 +142,10 @@ export default function PeoplePage() {
     if (!invoiceModal) return;
     
     const currency = getInvoiceCurrency(invoiceModal.personId);
-    const url = `/api/export/person/${invoiceModal.personId}/invoice?scope=all&currency=${currency}&start=${invoiceModal.startDate}&end=${invoiceModal.endDate}`;
+    const params = new URLSearchParams({ scope: "all", currency });
+    if (invoiceModal.startDate) params.set("start", invoiceModal.startDate);
+    if (invoiceModal.endDate) params.set("end", invoiceModal.endDate);
+    const url = `/api/export/person/${invoiceModal.personId}/invoice?${params.toString()}`;
     window.open(url, '_blank');
     setInvoiceModal(null);
   }

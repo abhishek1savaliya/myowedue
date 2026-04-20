@@ -19,6 +19,7 @@ export default function TransactionsPage() {
   const [query, setQuery] = useState({ q: "", view: "", start: "", end: "" });
   const [editingId, setEditingId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [exportModal, setExportModal] = useState(null);
 
   async function loadPeople() {
     const res = await fetch("/api/person", { cache: "no-store" });
@@ -26,9 +27,10 @@ export default function TransactionsPage() {
     if (res.ok) setPeople(data.people || []);
   }
 
-  async function loadTransactions(forceFresh = false) {
+  async function loadTransactions(forceFresh = false, overrideQuery) {
+    const q = overrideQuery ?? query;
     const params = new URLSearchParams();
-    Object.entries(query).forEach(([k, v]) => {
+    Object.entries(q).forEach(([k, v]) => {
       if (v) params.set(k, v);
     });
     if (forceFresh) {
@@ -44,7 +46,7 @@ export default function TransactionsPage() {
   }, []);
 
   useEffect(() => {
-    loadTransactions(true);
+    loadTransactions(true, query);
   }, [query]);
 
   async function saveTransaction(e) {
@@ -77,8 +79,26 @@ export default function TransactionsPage() {
     if (res.ok) loadTransactions(true);
   }
 
-  const pendingCount = useMemo(
-    () => transactions.filter((t) => t.status === "pending").length,
+  function openExportModal() {
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    setExportModal({
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+    });
+  }
+
+  function exportPDF() {
+    if (!exportModal) return;
+    const params = new URLSearchParams({ format: "pdf" });
+    if (exportModal.startDate) params.set("start", exportModal.startDate);
+    if (exportModal.endDate) params.set("end", exportModal.endDate);
+    window.open(`/api/export?${params}`, '_blank');
+    setExportModal(null);
+  }
+
+  const transactionCount = useMemo(
+    () => transactions.length,
     [transactions]
   );
 
@@ -190,16 +210,70 @@ export default function TransactionsPage() {
           onChange={(e) => setQuery((v) => ({ ...v, view: e.target.value }))}
           className="rounded-xl border border-zinc-300 px-3 py-2"
         >
-          <option value="">All</option>
-          <option value="credit_pending">I Gave</option>
-          <option value="debit_pending">Received Back</option>
+          <option value="">All Types</option>
+          <option value="credit">I Gave</option>
+          <option value="debit">Received Back</option>
         </select>
         <input type="date" value={query.start} onChange={(e) => setQuery((v) => ({ ...v, start: e.target.value }))} className="rounded-xl border border-zinc-300 px-3 py-2" />
         <input type="date" value={query.end} onChange={(e) => setQuery((v) => ({ ...v, end: e.target.value }))} className="rounded-xl border border-zinc-300 px-3 py-2" />
         <button type="button" onClick={() => loadTransactions(true)} className="rounded-xl border border-black px-3 py-2 text-sm md:col-span-2 xl:col-span-1">Apply</button>
       </section>
 
-      <p className="text-sm text-zinc-600">Pending dues: {pendingCount}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-zinc-600\">Total transactions: {transactionCount}</p>
+        <button
+          onClick={openExportModal}
+          className="flex items-center gap-2 rounded-lg bg-black px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
+          title="Export to PDF"
+        >
+          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1 4.5 4.5 0 1-3.364 6.78M9 13h.01M9 16H8a2 2 0 01-2-2v-6a2 2 0 012-2h8a2 2 0 012 2v6a2 2 0 01-2 2h-1M4 5h16" stroke="currentColor" strokeWidth="2" fill="none" />
+          </svg>
+          Export PDF
+        </button>
+      </div>
+
+      {exportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6">
+            <h3 className="text-lg font-semibold text-black mb-4">Export Transactions to PDF</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={exportModal.startDate}
+                  onChange={(e) => setExportModal(v => ({ ...v, startDate: e.target.value }))}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={exportModal.endDate}
+                  onChange={(e) => setExportModal(v => ({ ...v, endDate: e.target.value }))}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                />
+              </div>
+              <div className="flex gap-2 pt-4">
+                <button
+                  onClick={() => setExportModal(null)}
+                  className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={exportPDF}
+                  className="flex-1 rounded-lg bg-black px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+                >
+                  Generate PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {transactions.length === 0 ? (
         <EmptyState text="No transactions found." />

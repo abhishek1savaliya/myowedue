@@ -61,13 +61,13 @@ export async function GET(request) {
 
     // Decrypt transaction to get actual amount
     let decryptedAmount = item.amount;
-    if (item.encryptedAmount && !item.amount) {
+    if (item.encryptedAmount) {
       try {
         const decrypted = await decryptTransaction(item, userKey);
         decryptedAmount = decrypted.amount;
       } catch (err) {
         console.error(`Failed to decrypt transaction ${item._id}:`, err.message);
-        continue; // Skip if decryption fails
+        if (!decryptedAmount) continue; // Skip if decryption fails and no plain amount
       }
     }
 
@@ -80,15 +80,13 @@ export async function GET(request) {
       bucket.totalDebitByCurrency[currency] = (bucket.totalDebitByCurrency[currency] || 0) + decryptedAmount;
     }
 
-    if (item.status === "pending") {
-      if (item.type === "credit") {
-        bucket.pendingCredit += decryptedAmount;
-        bucket.pendingCreditByCurrency[currency] = (bucket.pendingCreditByCurrency[currency] || 0) + decryptedAmount;
-      }
-      if (item.type === "debit") {
-        bucket.pendingDebit += decryptedAmount;
-        bucket.pendingDebitByCurrency[currency] = (bucket.pendingDebitByCurrency[currency] || 0) + decryptedAmount;
-      }
+    if (item.type === "credit") {
+      bucket.pendingCredit += decryptedAmount;
+      bucket.pendingCreditByCurrency[currency] = (bucket.pendingCreditByCurrency[currency] || 0) + decryptedAmount;
+    }
+    if (item.type === "debit") {
+      bucket.pendingDebit += decryptedAmount;
+      bucket.pendingDebitByCurrency[currency] = (bucket.pendingDebitByCurrency[currency] || 0) + decryptedAmount;
     }
   }
 

@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/db";
 import { ok } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import Transaction from "@/models/Transaction";
+import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 
 export async function GET() {
   const { user, error } = await requireUser();
@@ -16,8 +17,21 @@ export async function GET() {
     .populate("personId", "name")
     .sort({ deletedAt: -1 });
 
-  const hydratedTransactions = transactions.map((tx) => {
+  const userKey = await deriveUserKey(user._id.toString(), user.email);
+
+  const hydratedTransactions = await Promise.all(transactions.map(async (tx) => {
     const plain = tx.toObject();
+
+    if (plain.encryptedAmount) {
+      try {
+        const decrypted = await decryptTransaction(plain, userKey);
+        plain.amount = decrypted.amount;
+        if (decrypted.notes !== undefined) plain.notes = decrypted.notes;
+      } catch (err) {
+        console.error(`Failed to decrypt bin transaction ${plain._id}:`, err.message);
+      }
+    }
+
     const logs = Array.isArray(plain.changeLogs)
       ? plain.changeLogs.filter((log) => log?.message && log?.at)
       : [];
@@ -51,7 +65,7 @@ export async function GET() {
 
     plain.changeLogs = logs;
     return plain;
-  });
+  }));
 
   return ok({ transactions: hydratedTransactions });
 }
