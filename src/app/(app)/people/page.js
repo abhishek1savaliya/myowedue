@@ -150,6 +150,13 @@ export default function PeoplePage() {
     setInvoiceModal(null);
   }
 
+  const sortedPeople = [...people].sort((a, b) => {
+    const aDue = getPersonTotals(a).dueAmount;
+    const bDue = getPersonTotals(b).dueAmount;
+    if (bDue !== aDue) return bDue - aDue;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+
   return (
     <div className="space-y-6">
       <header>
@@ -188,7 +195,7 @@ export default function PeoplePage() {
         <EmptyState text="No people added yet." />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {people.map((p) => {
+          {sortedPeople.map((p) => {
             const totals = getPersonTotals(p);
             return (
               <article key={p._id} className="rounded-2xl border border-zinc-200 bg-white p-4">
