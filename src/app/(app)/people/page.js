@@ -198,23 +198,23 @@ export default function PeoplePage() {
           {sortedPeople.map((p) => {
             const totals = getPersonTotals(p);
             return (
-              <article key={p._id} className="rounded-2xl border border-zinc-200 bg-white p-4">
-                <h3 className="text-lg font-semibold text-black">{p.name}</h3>
-                {p.email ? <p className="mt-1 text-sm text-zinc-600">{p.email}</p> : null}
-                {p.phone ? <p className="text-sm text-zinc-600">{p.phone}</p> : null}
+              <article key={p._id} className="people-card rounded-2xl border border-zinc-200 bg-white p-4">
+                <h3 className="people-card-title text-lg font-semibold text-black">{p.name}</h3>
+                {p.email ? <p className="people-card-sub mt-1 text-sm text-zinc-600">{p.email}</p> : null}
+                {p.phone ? <p className="people-card-sub text-sm text-zinc-600">{p.phone}</p> : null}
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-lg bg-zinc-100 p-2">
-                    <p className="text-zinc-500">Total Given</p>
-                    <p className="font-semibold text-black">{formatCurrency(totals.pendingCredit, totals.currency)}</p>
+                  <div className="people-card-metric rounded-lg bg-zinc-100 p-2">
+                    <p className="people-card-metric-label text-zinc-500">Total Given</p>
+                    <p className="people-card-metric-value font-semibold text-black">{formatCurrency(totals.pendingCredit, totals.currency)}</p>
                   </div>
-                  <div className="rounded-lg bg-zinc-100 p-2">
-                    <p className="text-zinc-500">Total Received Back</p>
-                    <p className="font-semibold text-black">{formatCurrency(totals.pendingDebit, totals.currency)}</p>
+                  <div className="people-card-metric rounded-lg bg-zinc-100 p-2">
+                    <p className="people-card-metric-label text-zinc-500">Total Received Back</p>
+                    <p className="people-card-metric-value font-semibold text-black">{formatCurrency(totals.pendingDebit, totals.currency)}</p>
                   </div>
-                  <div className="col-span-2 rounded-lg bg-zinc-100 p-2">
-                    <p className="text-zinc-500">Current Due</p>
-                    <p className="font-semibold text-black">{formatCurrency(totals.dueAmount, totals.currency)}</p>
-                    <p className="mt-1 text-zinc-600">
+                  <div className="people-card-metric col-span-2 rounded-lg bg-zinc-100 p-2">
+                    <p className="people-card-metric-label text-zinc-500">Current Due</p>
+                    <p className="people-card-metric-value font-semibold text-black">{formatCurrency(totals.dueAmount, totals.currency)}</p>
+                    <p className="people-card-sub mt-1 text-zinc-600">
                       {totals.dueDirection === "person_owes_you"
                         ? `${p.name} owes you`
                         : totals.dueDirection === "you_owe_person"
@@ -234,7 +234,7 @@ export default function PeoplePage() {
                       phone: p.phone || "",
                     });
                   }}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
+                  className="people-card-btn w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
                 >
                   Edit
                 </button>
@@ -247,7 +247,7 @@ export default function PeoplePage() {
                         [p._id]: e.target.value,
                       }))
                     }
-                    className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-2 text-xs"
+                    className="people-card-btn w-24 rounded-lg border border-zinc-300 bg-white px-2 py-2 text-xs"
                   >
                     {invoiceOptions.map((currency) => (
                       <option key={currency} value={currency}>
@@ -258,7 +258,7 @@ export default function PeoplePage() {
                   <button
                     type="button"
                     onClick={() => openInvoiceModal(p)}
-                    className="rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
+                    className="people-card-btn rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
                   >
                     Invoice
                   </button>
@@ -266,14 +266,14 @@ export default function PeoplePage() {
                 <button
                   type="button"
                   onClick={() => shareOnWhatsApp(p)}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
+                  className="people-card-btn w-full rounded-lg border border-zinc-300 px-3 py-2 text-center text-xs sm:w-auto"
                 >
                   Share on WhatsApp
                 </button>
                 <button
                   type="button"
                   onClick={() => setDeleteTarget({ id: p._id, name: p.name })}
-                  className="w-full rounded-lg border border-black px-3 py-2 text-center text-xs sm:w-auto"
+                  className="people-card-btn w-full rounded-lg border border-black px-3 py-2 text-center text-xs sm:w-auto"
                 >
                   Delete
                 </button>

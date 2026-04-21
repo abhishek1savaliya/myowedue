@@ -1,5 +1,6 @@
 import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "./globals.css";
+import ThemeSync from "@/components/ThemeSync";
 
 const display = Cormorant_Garamond({
   variable: "--font-display",
@@ -75,7 +76,10 @@ export default function RootLayout({ children }) {
       lang="en"
       className={`${display.variable} ${body.variable} h-full antialiased`}
     >
-      <body suppressHydrationWarning className="min-h-full flex flex-col">{children}</body>
+      <body suppressHydrationWarning className="min-h-full flex flex-col">
+        <ThemeSync />
+        {children}
+      </body>
     </html>
   );
 }

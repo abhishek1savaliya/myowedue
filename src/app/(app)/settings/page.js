@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Loader from "@/components/Loader";
+import { applyThemePreference } from "@/lib/theme-client";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -35,7 +36,9 @@ export default function SettingsPage() {
         joinDate: user.joinDate || "",
       });
       setFrequency(user.reminderFrequency || "weekly");
-      setDarkMode(Boolean(user.darkMode));
+      const userDarkMode = Boolean(user.darkMode);
+      setDarkMode(userDarkMode);
+      applyThemePreference(userDarkMode);
       setNotificationsEnabled(user.notificationsEnabled !== false);
     }
 
@@ -85,6 +88,7 @@ export default function SettingsPage() {
       body: JSON.stringify({ reminderFrequency: frequency, darkMode }),
     });
     const data = await res.json();
+    if (res.ok) applyThemePreference(darkMode);
     setSettingsMessage(res.ok ? "Saved" : data.message || "Failed");
   }
 
@@ -157,14 +161,17 @@ export default function SettingsPage() {
               Enable in-app notifications
             </label>
 
-            <button type="submit" className="rounded-xl bg-black px-4 py-2 text-sm text-white md:col-span-2 md:justify-self-start">
+            <button
+              type="submit"
+              className="rounded-xl border border-black bg-black px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 md:col-span-2 md:justify-self-start"
+            >
               Save Profile
             </button>
 
             <button
               type="button"
               onClick={logout}
-              className="rounded-xl border border-black px-4 py-2 text-sm text-black transition hover:bg-black hover:text-white md:hidden"
+              className="rounded-xl border border-zinc-400 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-black hover:bg-zinc-50 md:hidden"
             >
               Logout
             </button>
@@ -188,15 +195,29 @@ export default function SettingsPage() {
         </select>
 
         <label className="flex items-center gap-2 text-sm text-zinc-700">
-          <input type="checkbox" checked={darkMode} onChange={(e) => setDarkMode(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={darkMode}
+            onChange={(e) => {
+              const next = e.target.checked;
+              setDarkMode(next);
+              applyThemePreference(next);
+            }}
+          />
           Enable dark mode preference
         </label>
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          <button onClick={saveSettings} className="rounded-xl bg-black px-4 py-2 text-sm text-white sm:w-auto">
+          <button
+            onClick={saveSettings}
+            className="rounded-xl border border-black bg-black px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 sm:w-auto"
+          >
             Save Settings
           </button>
-          <button onClick={sendSummary} className="rounded-xl border border-black px-4 py-2 text-sm sm:w-auto">
+          <button
+            onClick={sendSummary}
+            className="rounded-xl border border-zinc-400 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-black hover:bg-zinc-50 sm:w-auto"
+          >
             Send Pending Summary
           </button>
         </div>

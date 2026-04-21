@@ -9,6 +9,15 @@
   --brand-ink: #1c1917;
 }
 
+:root[data-theme="dark"] {
+  --background: #0b1020;
+  --foreground: #e5e7eb;
+  --surface: #111827;
+  --brand-amber: #fbbf24;
+  --brand-emerald: #34d399;
+  --brand-ink: #f3f4f6;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -23,6 +32,124 @@ body {
     radial-gradient(circle at 12% 8%, rgba(245, 158, 11, 0.14), transparent 34%),
     radial-gradient(circle at 84% 84%, rgba(16, 185, 129, 0.12), transparent 34%),
     linear-gradient(180deg, #f7f6f0 0%, #f2f0e8 100%);
+}
+
+:root[data-theme="dark"] body {
+  background-image:
+    radial-gradient(circle at 12% 8%, rgba(245, 158, 11, 0.12), transparent 36%),
+    radial-gradient(circle at 84% 84%, rgba(16, 185, 129, 0.09), transparent 36%),
+    linear-gradient(180deg, #0b1020 0%, #0f172a 100%);
+}
+
+/* Global dark-mode overrides for existing Tailwind utility usage */
+:root[data-theme="dark"] .bg-stone-100 {
+  background-color: #0b1020 !important;
+}
+
+:root[data-theme="dark"] .bg-white,
+:root[data-theme="dark"] .bg-white\/95,
+:root[data-theme="dark"] .bg-white\/80,
+:root[data-theme="dark"] .bg-white\/50,
+:root[data-theme="dark"] .bg-zinc-50,
+:root[data-theme="dark"] .bg-zinc-100 {
+  background-color: #111827 !important;
+}
+
+:root[data-theme="dark"] button.bg-white {
+  background-color: #1f2937 !important;
+}
+
+:root[data-theme="dark"] button.text-zinc-800 {
+  color: #f3f4f6 !important;
+}
+
+:root[data-theme="dark"] .text-black {
+  color: #f3f4f6 !important;
+}
+
+:root[data-theme="dark"] .text-zinc-700,
+:root[data-theme="dark"] .text-zinc-600,
+:root[data-theme="dark"] .text-zinc-500,
+:root[data-theme="dark"] .text-zinc-400 {
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .border-zinc-100,
+:root[data-theme="dark"] .border-zinc-200,
+:root[data-theme="dark"] .border-zinc-300 {
+  border-color: #374151 !important;
+}
+
+:root[data-theme="dark"] .border-dashed {
+  border-color: #475569 !important;
+}
+
+/* Convert light gradient utility classes to dark-friendly gradients */
+:root[data-theme="dark"] .from-emerald-50,
+:root[data-theme="dark"] .from-rose-50,
+:root[data-theme="dark"] .from-sky-50,
+:root[data-theme="dark"] .from-cyan-50,
+:root[data-theme="dark"] .from-amber-50,
+:root[data-theme="dark"] .from-violet-50,
+:root[data-theme="dark"] .from-fuchsia-50,
+:root[data-theme="dark"] .from-blue-50 {
+  --tw-gradient-from: #111827 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(17 24 39 / 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from), var(--tw-gradient-to)) !important;
+}
+
+:root[data-theme="dark"] .via-cyan-50 {
+  --tw-gradient-via: #1f2937 var(--tw-gradient-via-position) !important;
+  --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important;
+}
+
+:root[data-theme="dark"] .to-white,
+:root[data-theme="dark"] .to-amber-50 {
+  --tw-gradient-to: #1f2937 var(--tw-gradient-to-position) !important;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+  background-color: #0f172a !important;
+  color: #e5e7eb !important;
+  border-color: #374151 !important;
+}
+
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* People cards: targeted dark-mode readability fixes */
+:root[data-theme="dark"] .people-card {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+:root[data-theme="dark"] .people-card-title,
+:root[data-theme="dark"] .people-card-metric-value {
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .people-card-sub,
+:root[data-theme="dark"] .people-card-metric-label {
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .people-card-metric {
+  background-color: #1e293b !important;
+}
+
+:root[data-theme="dark"] .people-card-btn {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-color: #475569 !important;
+}
+
+:root[data-theme="dark"] .people-card-btn:hover {
+  background-color: #1e293b !important;
+  border-color: #64748b !important;
 }
 
 h1,
