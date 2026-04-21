@@ -88,6 +88,42 @@ export const CMS_DEFAULT_CONTENT = {
         description: "Complete transparency on what changed and when, with full traceability.",
       },
     ],
+    plansEyebrow: "Plans",
+    plansTitle: "Choose the plan that fits your workflow",
+    plansDescription:
+      "Start free for everyday tracking, then move to Pro when you need unlimited records, premium exports, advanced reminders, and payment workflows.",
+    freePlan: {
+      badge: "Free Plan",
+      name: "Free",
+      price: "$0",
+      billing: "/forever",
+      description: "Best for getting started with personal due tracking and everyday reminders.",
+      features: [
+        "50 active people and 50 active transactions",
+        "Basic dashboard and reporting",
+        "CSV and JPG exports",
+        "Standard reminder workflow",
+      ],
+      ctaLabel: "Get started free",
+      ctaHref: "/signup",
+    },
+    paidPlan: {
+      badge: "Pro Plan",
+      name: "Pro",
+      price: "$7",
+      billing: "/month or $70/year",
+      description: "Built for users who need unlimited growth, premium exports, recurring dues, and better payment collection tools.",
+      features: [
+        "Unlimited people and transactions",
+        "Recurring dues and payment links",
+        "Premium PDF and Excel exports",
+        "Advanced reports, support, and appearance controls",
+      ],
+      ctaLabel: "View Pro options",
+      ctaHref: "/signup",
+    },
+    plansFootnote:
+      "Plan text on this front page can be updated anytime from the admin content editor by super admin and manager.",
     finalCtaTitle: "Join thousands of users tracking dues effortlessly.",
   },
   "contact-us": {

@@ -28,6 +28,7 @@ const ADMIN_NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/admin/tickets", label: "Support Tickets", icon: "🎫" },
   { href: "/admin/team", label: "Team", icon: "👥" },
+  { href: "/admin/vouchers", label: "Vouchers", icon: "🎟️" },
   { href: "/admin/content", label: "Content Editor", icon: "✏️" },
   { href: "/admin/profile", label: "Profile", icon: "🧾" },
 ];
@@ -63,7 +64,7 @@ export default function AdminLayout({ children }) {
   }
 
   const role = admin?.role || "support";
-  const isAdminSide = role === "superadmin";
+  const isAdminSide = role === "superadmin" || role === "manager";
   const navItems = isAdminSide ? ADMIN_NAV : EMPLOYEE_NAV;
   const badge = ROLE_BADGE[role] || ROLE_BADGE.support;
 

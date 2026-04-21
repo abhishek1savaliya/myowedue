@@ -4,6 +4,9 @@ import { requireUser } from "@/lib/session";
 import Transaction from "@/models/Transaction";
 import { activeQuery } from "@/lib/bin";
 import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
+import { fail } from "@/lib/api";
+import { getFontPreset, getFontSizePreset } from "@/lib/appearance";
+import { supportsPremiumExports } from "@/lib/subscription";
 
 function money(value) {
   return Number(value || 0).toFixed(2);
@@ -14,9 +17,30 @@ function short(text, max = 42) {
   return str.length > max ? `${str.slice(0, max - 1)}...` : str;
 }
 
+async function resolvePdfFonts(pdfDoc, user) {
+  const preset = getFontPreset(user.fontPreset);
+  if (preset.pdfFamily === "times") {
+    return {
+      font: await pdfDoc.embedFont(StandardFonts.TimesRoman),
+      bold: await pdfDoc.embedFont(StandardFonts.TimesRomanBold),
+    };
+  }
+  if (preset.pdfFamily === "courier") {
+    return {
+      font: await pdfDoc.embedFont(StandardFonts.Courier),
+      bold: await pdfDoc.embedFont(StandardFonts.CourierBold),
+    };
+  }
+  return {
+    font: await pdfDoc.embedFont(StandardFonts.Helvetica),
+    bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
+  };
+}
+
 export async function GET() {
   const { user, error } = await requireUser();
   if (error) return error;
+  if (!supportsPremiumExports(user)) return fail("Premium subscription required for PDF export", 403);
 
   await connectDB();
   const tx = await Transaction.find({ userId: user._id, status: "pending", ...activeQuery() }).populate("personId", "name").sort({ date: -1 });
@@ -54,8 +78,8 @@ export async function GET() {
     : "Person needs to pay you";
 
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { font, bold } = await resolvePdfFonts(pdfDoc, user);
+  const scale = getFontSizePreset(user.fontSizePreset).scale;
 
   const width = 595;
   const height = 842;
@@ -63,33 +87,60 @@ export async function GET() {
   const contentWidth = width - margin * 2;
   const rowHeight = 22;
 
+  const palette = {
+    ink: rgb(0.07, 0.07, 0.08),
+    accent: rgb(0.96, 0.68, 0.12),
+    accentSoft: rgb(1, 0.97, 0.86),
+    rowAlt: rgb(0.98, 0.98, 0.98),
+    muted: rgb(0.45, 0.45, 0.45),
+    success: rgb(0.06, 0.47, 0.22),
+    danger: rgb(0.6, 0.1, 0.1),
+  };
+
   let page = pdfDoc.addPage([width, height]);
   let y = height - margin;
 
   const drawHeader = () => {
-    page.drawRectangle({ x: margin, y: y - 76, width: contentWidth, height: 76, color: rgb(0.07, 0.07, 0.08) });
-    page.drawRectangle({ x: margin, y: y - 76, width: 8, height: 76, color: rgb(0.96, 0.68, 0.12) });
+    page.drawRectangle({ x: margin, y: y - 76, width: contentWidth, height: 76, color: palette.ink });
+    page.drawRectangle({ x: margin, y: y - 76, width: contentWidth, height: 4, color: palette.accent });
 
     page.drawText("MYOWEDUE", {
       x: margin + 14,
       y: y - 22,
-      size: 16,
+      size: 16 * scale,
       font: bold,
       color: rgb(1, 1, 1),
     });
     page.drawText("Premium Financial Report", {
       x: margin + 14,
       y: y - 40,
-      size: 11,
+      size: 11 * scale,
       font,
       color: rgb(0.95, 0.95, 0.95),
     });
     page.drawText("Personal credit and debit intelligence", {
       x: margin + 14,
       y: y - 56,
-      size: 9,
+      size: 9 * scale,
       font,
       color: rgb(0.8, 0.8, 0.8),
+    });
+
+    page.drawRectangle({
+      x: margin + contentWidth - 88,
+      y: y - 48,
+      width: 74,
+      height: 20,
+      color: palette.accentSoft,
+      borderColor: palette.accent,
+      borderWidth: 0.8,
+    });
+    page.drawText("PREMIUM", {
+      x: margin + contentWidth - 77,
+      y: y - 35,
+      size: 8 * scale,
+      font: bold,
+      color: rgb(0.45, 0.31, 0.04),
     });
 
     y -= 96;
@@ -108,14 +159,14 @@ export async function GET() {
     page.drawText(title, {
       x: x + 10,
       y: y - 20,
-      size: 8,
+      size: 8 * scale,
       font,
       color: style.title,
     });
     page.drawText(value, {
       x: x + 10,
       y: y - 42,
-      size: 13,
+      size: 13 * scale,
       font: bold,
       color: style.value,
     });
@@ -140,7 +191,7 @@ export async function GET() {
     page.drawText("TOTAL REMAINING AMOUNT", {
       x: margin + 12,
       y: y - 21,
-      size: 9,
+      size: 9 * scale,
       font: bold,
       color: titleColor,
     });
@@ -148,7 +199,7 @@ export async function GET() {
     page.drawText(`${remainingLabel}: ${money(remainingAmount)}`, {
       x: margin + 12,
       y: y - 42,
-      size: 14,
+      size: 14 * scale,
       font: bold,
       color: valueColor,
     });
@@ -157,12 +208,13 @@ export async function GET() {
   };
 
   const drawTableHeader = () => {
-    page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: rgb(0.08, 0.08, 0.08) });
-    page.drawText("Person", { x: margin + 8, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
-    page.drawText("Type", { x: margin + 210, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
-    page.drawText("Amount", { x: margin + 265, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
-    page.drawText("Status", { x: margin + 355, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
-    page.drawText("Date", { x: margin + 430, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
+    page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: palette.ink });
+    page.drawRectangle({ x: margin, y: y - rowHeight, width: 3, height: rowHeight, color: palette.accent });
+    page.drawText("Person", { x: margin + 8, y: y - 15, size: 9 * scale, font: bold, color: rgb(1, 1, 1) });
+    page.drawText("Type", { x: margin + 210, y: y - 15, size: 9 * scale, font: bold, color: rgb(1, 1, 1) });
+    page.drawText("Amount", { x: margin + 265, y: y - 15, size: 9 * scale, font: bold, color: rgb(1, 1, 1) });
+    page.drawText("Status", { x: margin + 355, y: y - 15, size: 9 * scale, font: bold, color: rgb(1, 1, 1) });
+    page.drawText("Date", { x: margin + 430, y: y - 15, size: 9 * scale, font: bold, color: rgb(1, 1, 1) });
     y -= rowHeight;
   };
 
@@ -178,14 +230,14 @@ export async function GET() {
   page.drawText(`Prepared for ${user.name} (${user.email})`, {
     x: margin,
     y,
-    size: 9,
+    size: 9 * scale,
     font,
-    color: rgb(0.35, 0.35, 0.35),
+    color: rgb(0.3, 0.3, 0.3),
   });
   page.drawText(`Generated ${new Date().toLocaleString()}`, {
     x: margin + 290,
     y,
-    size: 9,
+    size: 9 * scale,
     font,
     color: rgb(0.35, 0.35, 0.35),
   });
@@ -203,24 +255,25 @@ export async function GET() {
   decryptedTx.forEach((item, idx) => {
     ensureSpace();
     if (idx % 2 === 0) {
-      page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: rgb(0.98, 0.98, 0.98) });
+      page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: palette.rowAlt });
     }
 
-    page.drawText(short(item.personId?.name || "Unknown", 26), { x: margin + 8, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
+    const typeColor = item.type === "credit" ? palette.danger : palette.success;
+    page.drawText(short(item.personId?.name || "Unknown", 26), { x: margin + 8, y: y - 15, size: 8.5 * scale, font, color: rgb(0.15, 0.15, 0.15) });
     const signedAmountText = `${item.type === "credit" ? "-" : "+"}${money(item.amount)} ${item.currency}`;
-    page.drawText(item.type.toUpperCase(), { x: margin + 210, y: y - 15, size: 8.5, font: bold, color: rgb(0.15, 0.15, 0.15) });
-    page.drawText(signedAmountText, { x: margin + 265, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
-    page.drawText(item.status.toUpperCase(), { x: margin + 355, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
-    page.drawText(new Date(item.date).toLocaleDateString(), { x: margin + 430, y: y - 15, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
+    page.drawText(item.type.toUpperCase(), { x: margin + 210, y: y - 15, size: 8.5 * scale, font: bold, color: typeColor });
+    page.drawText(signedAmountText, { x: margin + 265, y: y - 15, size: 8.5 * scale, font: bold, color: typeColor });
+    page.drawText(item.status.toUpperCase(), { x: margin + 355, y: y - 15, size: 8.5 * scale, font, color: rgb(0.15, 0.15, 0.15) });
+    page.drawText(new Date(item.date).toLocaleDateString(), { x: margin + 430, y: y - 15, size: 8.5 * scale, font, color: rgb(0.15, 0.15, 0.15) });
     y -= rowHeight;
   });
 
-  page.drawText("Generated by MYOWEDUE", {
+  page.drawText("Generated by MYOWEDUE PREMIUM EXPORT", {
     x: margin,
     y: 18,
-    size: 8,
+    size: 8 * scale,
     font,
-    color: rgb(0.45, 0.45, 0.45),
+    color: palette.muted,
   });
 
   const pdfBuffer = Buffer.from(await pdfDoc.save());

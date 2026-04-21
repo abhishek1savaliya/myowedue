@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { BellRing, Gem, Link2, Lock, Pencil, Repeat, Trash2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { recurringLabel } from "@/lib/recurring";
 
 const txInitial = {
   personId: "",
@@ -10,6 +12,10 @@ const txInitial = {
   currency: "USD",
   notes: "",
   date: new Date().toISOString().slice(0, 10),
+  recurringEnabled: false,
+  recurringFrequency: "monthly",
+  recurringInterval: "1",
+  recurringEndDate: "",
 };
 
 export default function TransactionsPage() {
@@ -20,11 +26,22 @@ export default function TransactionsPage() {
   const [editingId, setEditingId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [exportModal, setExportModal] = useState(null);
+  const [user, setUser] = useState(null);
+  const [feedback, setFeedback] = useState("");
+  const [paymentLinks, setPaymentLinks] = useState({});
+  const [linkVisibility, setLinkVisibility] = useState({});
+  const [origin, setOrigin] = useState("");
 
   async function loadPeople() {
     const res = await fetch("/api/person", { cache: "no-store" });
     const data = await res.json();
     if (res.ok) setPeople(data.people || []);
+  }
+
+  async function loadUser() {
+    const res = await fetch("/api/auth/me", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) setUser(data.user || null);
   }
 
   async function loadTransactions(forceFresh = false, overrideQuery) {
@@ -43,6 +60,10 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     loadPeople();
+    loadUser();
+    if (typeof window !== "undefined") {
+      setOrigin(window.location.origin);
+    }
   }, []);
 
   useEffect(() => {
@@ -64,10 +85,15 @@ export default function TransactionsPage() {
         body: JSON.stringify(form),
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
         setForm(txInitial);
         setEditingId("");
+        setFeedback(editingId ? "Transaction updated." : "Transaction created.");
         await loadTransactions(true);
+      } else {
+        setFeedback(data.message || "Failed to save transaction.");
       }
     } finally {
       setIsSaving(false);
@@ -97,10 +123,51 @@ export default function TransactionsPage() {
     setExportModal(null);
   }
 
+  function getPaymentLinkUrl(transaction) {
+    if (paymentLinks[transaction._id]) return paymentLinks[transaction._id];
+    if (transaction.paymentLinkToken && origin) return `${origin}/pay/${transaction.paymentLinkToken}`;
+    return "";
+  }
+
+  async function copyPaymentLink(linkUrl) {
+    if (!linkUrl) return;
+    setFeedback("");
+    if (typeof window !== "undefined" && window.navigator?.clipboard?.writeText) {
+      await window.navigator.clipboard.writeText(linkUrl);
+      setFeedback("Payment link copied to clipboard.");
+    } else {
+      setFeedback("Payment link is ready to copy.");
+    }
+  }
+
+  async function generatePaymentLink(transactionId, visibility = "public") {
+    setFeedback("");
+    const res = await fetch(`/api/transaction/${transactionId}/payment-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visibility }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFeedback(data.message || "Failed to generate payment link.");
+      return;
+    }
+
+    setPaymentLinks((prev) => ({ ...prev, [transactionId]: data.paymentLinkUrl }));
+    setLinkVisibility((prev) => ({ ...prev, [transactionId]: data.paymentLinkVisibility || visibility }));
+    if (typeof window !== "undefined" && window.navigator?.clipboard?.writeText) {
+      await window.navigator.clipboard.writeText(data.paymentLinkUrl);
+      setFeedback(`Payment link copied (${(data.paymentLinkVisibility || visibility).toUpperCase()}).`);
+    } else {
+      setFeedback("Payment link ready.");
+    }
+  }
+
   const transactionCount = useMemo(
     () => transactions.length,
     [transactions]
   );
+  const isPremium = Boolean(user?.isPremium);
 
   function getEntryStyle(tx) {
     if (tx.type === "credit") {
@@ -126,6 +193,20 @@ export default function TransactionsPage() {
         <h1 className="text-3xl font-semibold tracking-tight">Transactions</h1>
         <p className="text-sm text-zinc-600">Track money you gave and received back.</p>
       </header>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${isPremium ? "border border-amber-300 bg-amber-50 text-amber-700" : "border border-zinc-300 bg-zinc-50 text-zinc-600"}`}>
+            {isPremium ? <Gem className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+            {isPremium ? user?.subscriptionLabel || "Pro" : "Free Plan"}
+          </span>
+          <p className="text-sm text-zinc-600">
+            {isPremium
+              ? "Recurring dues and payment-link generation are active on your account."
+              : "Upgrade to Pro to unlock recurring dues and shareable payment links."}
+          </p>
+        </div>
+      </div>
 
       <form onSubmit={saveTransaction} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-6">
         <select
@@ -179,13 +260,49 @@ export default function TransactionsPage() {
           onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))}
           className="rounded-xl border border-zinc-300 px-3 py-2"
         />
+        <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${isPremium ? "border-zinc-300 text-zinc-700" : "border-zinc-200 bg-zinc-50 text-zinc-400"}`}>
+          <input
+            type="checkbox"
+            checked={form.recurringEnabled}
+            disabled={!isPremium}
+            onChange={(e) => setForm((v) => ({ ...v, recurringEnabled: e.target.checked }))}
+          />
+          Recurring due
+        </label>
+        <select
+          value={form.recurringFrequency}
+          disabled={!isPremium || !form.recurringEnabled}
+          onChange={(e) => setForm((v) => ({ ...v, recurringFrequency: e.target.value }))}
+          className="rounded-xl border border-zinc-300 px-3 py-2 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400"
+        >
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+        <input
+          type="number"
+          min="1"
+          placeholder="Interval"
+          value={form.recurringInterval}
+          disabled={!isPremium || !form.recurringEnabled}
+          onChange={(e) => setForm((v) => ({ ...v, recurringInterval: e.target.value }))}
+          className="rounded-xl border border-zinc-300 px-3 py-2 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400"
+        />
+        <input
+          type="date"
+          value={form.recurringEndDate}
+          disabled={!isPremium || !form.recurringEnabled}
+          onChange={(e) => setForm((v) => ({ ...v, recurringEndDate: e.target.value }))}
+          className="rounded-xl border border-zinc-300 px-3 py-2 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400"
+        />
         <button
           disabled={isSaving}
           className="rounded-xl bg-black px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed disabled:opacity-70 md:col-span-2 xl:col-span-6"
         >
           <span className="inline-flex items-center gap-2">
             {isSaving ? (
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+              <span className="premium-spinner-core inline-block h-4 w-4 animate-spin" aria-hidden="true" />
             ) : null}
             {isSaving
               ? editingId
@@ -196,6 +313,7 @@ export default function TransactionsPage() {
                 : "Add Transaction"}
           </span>
         </button>
+        {feedback ? <p className="text-sm text-zinc-600 md:col-span-2 xl:col-span-6">{feedback}</p> : null}
       </form>
 
       <section className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-5">
@@ -296,11 +414,36 @@ export default function TransactionsPage() {
                   {style.label}
                 </span>
                 <span className="text-sm text-zinc-600">{new Date(t.date).toLocaleDateString()}</span>
+                {t.recurringEnabled ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                    <Repeat className="h-3 w-3" />
+                    {recurringLabel(t)}
+                  </span>
+                ) : null}
               </div>
               {t.notes ? <p className="mt-1 text-sm text-zinc-500">{t.notes}</p> : null}
+              {getPaymentLinkUrl(t) ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <p className="break-all text-xs text-zinc-500">
+                    Payment link: {getPaymentLinkUrl(t)}
+                  </p>
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                    (linkVisibility[t._id] || t.paymentLinkVisibility || "public") === "private"
+                      ? "border-zinc-400 bg-zinc-100 text-zinc-600"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}>
+                    {(linkVisibility[t._id] || t.paymentLinkVisibility || "public") === "private" ? (
+                      <><Lock className="h-2.5 w-2.5" /> Private</>
+                    ) : (
+                      <>&#x1F30D; Public</>
+                    )}
+                  </span>
+                </div>
+              ) : null}
 
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <button
+                  type="button"
                   onClick={() => {
                     setEditingId(t._id);
                     setForm({
@@ -310,25 +453,85 @@ export default function TransactionsPage() {
                       currency: t.currency,
                       notes: t.notes || "",
                       date: new Date(t.date).toISOString().slice(0, 10),
+                      recurringEnabled: Boolean(t.recurringEnabled),
+                      recurringFrequency: t.recurringFrequency || "monthly",
+                      recurringInterval: String(t.recurringInterval || 1),
+                      recurringEndDate: t.recurringEndDate ? new Date(t.recurringEndDate).toISOString().slice(0, 10) : "",
                     });
                   }}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 sm:w-auto"
+                  aria-label="Edit transaction"
+                  title="Edit transaction"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 text-zinc-700 transition hover:border-black hover:text-black"
                 >
-                  Edit
-                </button>
-                <button onClick={() => removeTx(t._id)} className="w-full rounded-lg border border-black px-3 py-2 sm:w-auto">
-                  Delete
+                  <Pencil className="h-4 w-4" />
                 </button>
                 <button
+                  type="button"
+                  onClick={() => removeTx(t._id)}
+                  aria-label="Delete transaction"
+                  title="Delete transaction"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-black text-black transition hover:bg-black hover:text-white"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => fetch("/api/reminder", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ personId: t.personId?._id }),
                   })}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 sm:w-auto"
+                  aria-label="Send reminder"
+                  title="Send reminder"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 text-zinc-700 transition hover:border-black hover:text-black"
                 >
-                  Send Reminder
+                  <BellRing className="h-4 w-4" />
                 </button>
+                {isPremium ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const existingLink = getPaymentLinkUrl(t);
+                        if (existingLink) {
+                          copyPaymentLink(existingLink);
+                          return;
+                        }
+                        generatePaymentLink(t._id, "public");
+                      }}
+                      aria-label={t.paymentLinkToken || paymentLinks[t._id] ? "Copy payment link" : "Generate public link"}
+                      title={t.paymentLinkToken || paymentLinks[t._id] ? "Copy payment link" : "Generate public link"}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-amber-300 bg-amber-50 text-amber-700 transition hover:border-amber-400 hover:bg-amber-100"
+                    >
+                      <Link2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        generatePaymentLink(
+                          t._id,
+                          (linkVisibility[t._id] || t.paymentLinkVisibility || "public") === "private"
+                            ? "public"
+                            : "private"
+                        )
+                      }
+                      aria-label="Toggle link visibility"
+                      title={(linkVisibility[t._id] || t.paymentLinkVisibility || "public") === "private" ? "Set link public" : "Set link private"}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-zinc-600 transition hover:border-zinc-500 hover:bg-zinc-100"
+                    >
+                      <Lock className="h-4 w-4" />
+                    </button>
+                    <span
+                      className={`inline-flex h-10 items-center rounded-lg border px-3 text-[11px] font-semibold uppercase tracking-[0.12em] ${
+                        (linkVisibility[t._id] || t.paymentLinkVisibility || "public") === "private"
+                          ? "border-zinc-400 bg-zinc-100 text-zinc-700"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {(linkVisibility[t._id] || t.paymentLinkVisibility || "public")}
+                    </span>
+                  </>
+                ) : null}
               </div>
 
               <details className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">

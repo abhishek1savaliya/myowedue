@@ -52,10 +52,14 @@ function ManagerDashboard({ admin }) {
   useEffect(() => {
     fetch("/api/admin/tickets?page=1")
       .then((r) => {
-        if (r.status === 401) router.push("/admin/login");
+        if (r.status === 401) {
+          router.push("/admin/login");
+          return null;
+        }
         return r.json();
       })
       .then((j) => {
+        if (!j) return;
         setTickets(j.tickets || []);
         setLoading(false);
       })
@@ -113,10 +117,14 @@ function SupportDashboard({ admin }) {
   useEffect(() => {
     fetch("/api/admin/tickets?page=1")
       .then((r) => {
-        if (r.status === 401) router.push("/admin/login");
+        if (r.status === 401) {
+          router.push("/admin/login");
+          return null;
+        }
         return r.json();
       })
       .then((j) => {
+        if (!j) return;
         setTickets(j.tickets || []);
         setLoading(false);
       })
@@ -165,15 +173,19 @@ function SupportDashboard({ admin }) {
 }
 
 // ── Superadmin Dashboard ────────────────────────────────────────────────────
-function SuperAdminDashboard() {
+function SuperAdminDashboard({ admin }) {
   const router = useRouter();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const res = await fetch("/api/admin/stats");
-      if (res.status === 401) { router.push("/admin/login"); return; }
+      const res = await fetch("/api/admin/stats", { cache: "no-store" });
+      if (res.status === 401) {
+        setLoading(false);
+        router.push("/admin/login");
+        return;
+      }
       const json = await res.json();
       setData(json);
       setLoading(false);
@@ -195,7 +207,7 @@ function SuperAdminDashboard() {
     <div className="p-6 space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Platform overview</p>
+        <p className="text-sm text-gray-400 mt-0.5">Platform overview for {admin?.name || "super admin"}</p>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard label="Total Users" value={stats?.totalUsers} accent="text-blue-300" />
@@ -260,11 +272,24 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [admin, setAdmin] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [unauthorized, setUnauthorized] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/me")
-      .then((r) => { if (r.status === 401) { router.push("/admin/login"); } return r.json(); })
-      .then((d) => { setAdmin(d); setLoading(false); })
+      .then((r) => {
+        if (r.status === 401) {
+          setUnauthorized(true);
+          setLoading(false);
+          router.push("/admin/login");
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => {
+        if (!d) return;
+        setAdmin(d);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, [router]);
 
@@ -276,7 +301,15 @@ export default function AdminDashboardPage() {
     );
   }
 
+  if (unauthorized || !admin?.role) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-gray-400">Redirecting to admin login...</p>
+      </div>
+    );
+  }
+
   if (admin?.role === "manager")    return <ManagerDashboard admin={admin} />;
   if (admin?.role === "support")    return <SupportDashboard admin={admin} />;
-  return <SuperAdminDashboard />;
+  return <SuperAdminDashboard admin={admin} />;
 }

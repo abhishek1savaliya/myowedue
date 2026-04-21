@@ -28,6 +28,13 @@ const TransactionSchema = new Schema(
     deletedAt: { type: Date },
     restoreUntil: { type: Date },
     deletionSource: { type: String, enum: ["person_bin", "transaction_bin"], default: "transaction_bin" },
+    recurringEnabled: { type: Boolean, default: false },
+    recurringFrequency: { type: String, enum: ["weekly", "monthly", "quarterly", "yearly"], default: null },
+    recurringInterval: { type: Number, min: 1, default: 1 },
+    recurringEndDate: { type: Date, default: null },
+    paymentLinkToken: { type: String, trim: true, default: null, index: true },
+    paymentLinkCreatedAt: { type: Date, default: null },
+    paymentLinkVisibility: { type: String, enum: ["public", "private"], default: "public" },
     changeLogs: { type: [TransactionChangeLogSchema], default: [] },
   },
   { timestamps: true }
@@ -57,6 +64,27 @@ if (mongoose.models.Transaction) {
   }
   if (!Transaction.schema.path("encryptedNotes")) {
     missingPaths.encryptedNotes = { type: String, trim: true };
+  }
+  if (!Transaction.schema.path("recurringEnabled")) {
+    missingPaths.recurringEnabled = { type: Boolean, default: false };
+  }
+  if (!Transaction.schema.path("recurringFrequency")) {
+    missingPaths.recurringFrequency = { type: String, enum: ["weekly", "monthly", "quarterly", "yearly"], default: null };
+  }
+  if (!Transaction.schema.path("recurringInterval")) {
+    missingPaths.recurringInterval = { type: Number, min: 1, default: 1 };
+  }
+  if (!Transaction.schema.path("recurringEndDate")) {
+    missingPaths.recurringEndDate = { type: Date, default: null };
+  }
+  if (!Transaction.schema.path("paymentLinkToken")) {
+    missingPaths.paymentLinkToken = { type: String, trim: true, default: null, index: true };
+  }
+  if (!Transaction.schema.path("paymentLinkCreatedAt")) {
+    missingPaths.paymentLinkCreatedAt = { type: Date, default: null };
+  }
+  if (!Transaction.schema.path("paymentLinkVisibility")) {
+    missingPaths.paymentLinkVisibility = { type: String, enum: ["public", "private"], default: "public" };
   }
 
   if (Object.keys(missingPaths).length > 0) {

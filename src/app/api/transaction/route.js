@@ -11,6 +11,8 @@ import {
   transactionListCacheKey,
 } from "@/lib/redis";
 import { deriveUserKey, decryptTransaction, encryptTransaction } from "@/lib/crypto";
+import { FREE_RECORD_LIMIT, FREE_TRANSACTION_LIMIT, hasActivePremium } from "@/lib/subscription";
+import { normalizeRecurringConfig } from "@/lib/recurring";
 
 export async function GET(request) {
   const { user, error } = await requireUser();
@@ -170,6 +172,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { personId, amount, type, notes, date, currency } = body;
+    const recurringConfig = normalizeRecurringConfig(body);
 
     if (!personId || !amount || !type || !date) {
       return fail("personId, amount, type and date are required", 422);
@@ -179,6 +182,16 @@ export async function POST(request) {
     await connectDB();
     const person = await Person.findOne({ _id: personId, userId: user._id, ...activeQuery() });
     if (!person) return fail("Person not found", 404);
+    const premiumUser = hasActivePremium(user);
+    if (!premiumUser) {
+      const activeCount = await Transaction.countDocuments({ userId: user._id, ...activeQuery() });
+      if (activeCount >= FREE_TRANSACTION_LIMIT) {
+        return fail(`Free plan supports up to ${FREE_TRANSACTION_LIMIT} active transactions. Upgrade to Pro for unlimited records and advanced exports.`, 403);
+      }
+    }
+    if (recurringConfig.recurringEnabled && !premiumUser) {
+      return fail("Recurring dues are available on the Pro plan", 403);
+    }
 
     // Derive user's encryption key
     const userKey = await deriveUserKey(user._id.toString(), user.email);
@@ -192,12 +205,23 @@ export async function POST(request) {
       date: new Date(date),
       currency: currency || "USD",
       status: "pending",
+      recurringEnabled: recurringConfig.recurringEnabled,
+      recurringFrequency: recurringConfig.recurringFrequency,
+      recurringInterval: recurringConfig.recurringInterval,
+      recurringEndDate: recurringConfig.recurringEndDate,
       changeLogs: [
         {
           action: "created",
           message: `Transaction created at ${new Date().toLocaleString()}`,
           at: new Date(),
         },
+        ...(recurringConfig.recurringEnabled
+          ? [{
+              action: "recurring_enabled",
+              message: `Recurring due created (${recurringConfig.recurringFrequency}, every ${recurringConfig.recurringInterval}) at ${new Date().toLocaleString()}`,
+              at: new Date(),
+            }]
+          : []),
       ],
     };
 

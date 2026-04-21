@@ -9,6 +9,7 @@ export default function ReportsPage() {
   const [downloading, setDownloading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     let ignore = false;
@@ -16,10 +17,19 @@ export default function ReportsPage() {
     async function loadSnapshot() {
       setLoading(true);
       try {
-        const res = await fetch("/api/dashboard?currency=AUD", { cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        if (!ignore && res.ok) {
-          setSnapshot(data);
+        const [dashboardRes, meRes] = await Promise.all([
+          fetch("/api/dashboard?currency=AUD", { cache: "no-store" }),
+          fetch("/api/auth/me", { cache: "no-store" }),
+        ]);
+        const [dashboardData, meData] = await Promise.all([
+          dashboardRes.json().catch(() => ({})),
+          meRes.json().catch(() => ({})),
+        ]);
+        if (!ignore && dashboardRes.ok) {
+          setSnapshot(dashboardData);
+        }
+        if (!ignore && meRes.ok) {
+          setUser(meData.user || null);
         }
       } catch (error) {
         console.error("Failed to load report snapshot:", error);
@@ -61,6 +71,12 @@ export default function ReportsPage() {
   const totalReceived = Number(snapshot?.totals?.totalReceivedBack || 0);
   const net = totalReceived - totalGiven;
   const recent = snapshot?.recent || [];
+  const isPremium = Boolean(user?.isPremium);
+  const averageTransaction = recent.length
+    ? recent.reduce((sum, item) => sum + Math.abs(Number(item.signedAmountInDashboardCurrency || 0)), 0) / recent.length
+    : 0;
+  const collectionEfficiency = totalGiven > 0 ? Math.min(100, Math.round((totalReceived / totalGiven) * 100)) : 0;
+  const openExposure = Math.abs(net);
 
   return (
     <div className="space-y-6">
@@ -71,16 +87,18 @@ export default function ReportsPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <a
-          href="/api/export/pdf"
-          className="rounded-2xl border border-black bg-black p-4 text-center text-sm font-medium text-white"
+          href={isPremium ? "/api/export/pdf" : "#"}
+          className={`rounded-2xl p-4 text-center text-sm font-medium ${
+            isPremium ? "border border-black bg-black text-white" : "border border-zinc-200 bg-zinc-100 text-zinc-400"
+          }`}
         >
-          Download PDF
+          {isPremium ? "Download Premium PDF" : "Premium PDF Export"}
         </a>
         <a
-          href="/api/export?type=csv"
+          href={isPremium ? "/api/export?type=excel" : "/api/export?type=csv"}
           className="rounded-2xl border border-zinc-300 bg-white p-4 text-center text-sm font-medium text-black"
         >
-          Download CSV
+          {isPremium ? "Download Premium Excel" : "Download CSV"}
         </a>
         <button
           onClick={downloadJpg}
@@ -89,6 +107,27 @@ export default function ReportsPage() {
           {downloading ? "Generating JPG..." : "Export as JPG"}
         </button>
       </div>
+
+      {!isPremium ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Free plan includes a basic report snapshot. Upgrade in Settings to unlock advanced insights, premium PDF export, Excel export, recurring-dues intelligence, and priority support.
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Collection Efficiency</p>
+            <p className="mt-2 text-2xl font-semibold text-black">{collectionEfficiency}%</p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Average Recent Transaction</p>
+            <p className="mt-2 text-2xl font-semibold text-black">{formatCurrency(averageTransaction, currency)}</p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Open Exposure</p>
+            <p className="mt-2 text-2xl font-semibold text-black">{formatCurrency(openExposure, currency)}</p>
+          </div>
+        </div>
+      )}
 
       <div
         ref={cardRef}

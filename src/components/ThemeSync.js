@@ -2,7 +2,12 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { applyThemePreference, getStoredThemePreference } from "@/lib/theme-client";
+import {
+  applyAppearancePreference,
+  applyThemePreference,
+  getStoredThemePreference,
+  resetAppearancePreference,
+} from "@/lib/theme-client";
 
 export default function ThemeSync() {
   const pathname = usePathname();
@@ -22,6 +27,7 @@ export default function ThemeSync() {
       // Public pages should immediately respect the visitor preference.
       if (storedPublic !== null && isPublicPath) {
         applyThemePreference(storedPublic, "public");
+        resetAppearancePreference();
       }
 
       try {
@@ -29,6 +35,11 @@ export default function ThemeSync() {
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok && data?.user) {
           applyThemePreference(Boolean(data.user.darkMode), "auth");
+          applyAppearancePreference({
+            fontPreset: data.user.fontPreset,
+            fontSizePreset: data.user.fontSizePreset,
+            isPremium: Boolean(data.user.isPremium),
+          });
           return;
         }
       } catch {
@@ -37,6 +48,12 @@ export default function ThemeSync() {
 
       if (!cancelled && storedPublic !== null && isPublicPath) {
         applyThemePreference(storedPublic, "public");
+        resetAppearancePreference();
+        return;
+      }
+
+      if (!cancelled) {
+        resetAppearancePreference();
       }
     }
 

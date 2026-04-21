@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Moon, Sun } from "lucide-react";
+import { Lock, Moon, Sun } from "lucide-react";
 import Loader from "@/components/Loader";
-import { applyThemePreference } from "@/lib/theme-client";
+import { FONT_PRESETS, FONT_SIZE_PRESETS } from "@/lib/appearance";
+import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -17,6 +18,9 @@ export default function SettingsPage() {
   });
   const [frequency, setFrequency] = useState("weekly");
   const [darkMode, setDarkMode] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [fontPreset, setFontPreset] = useState("manrope");
+  const [fontSizePreset, setFontSizePreset] = useState("size-4");
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileMessage, setProfileMessage] = useState("");
@@ -40,6 +44,14 @@ export default function SettingsPage() {
       const userDarkMode = Boolean(user.darkMode);
       setDarkMode(userDarkMode);
       applyThemePreference(userDarkMode);
+      setIsPremium(Boolean(user.isPremium));
+      setFontPreset(user.fontPreset || "manrope");
+      setFontSizePreset(user.fontSizePreset || "size-4");
+      applyAppearancePreference({
+        fontPreset: user.fontPreset || "manrope",
+        fontSizePreset: user.fontSizePreset || "size-4",
+        isPremium: Boolean(user.isPremium),
+      });
       setNotificationsEnabled(user.notificationsEnabled !== false);
     }
 
@@ -86,10 +98,17 @@ export default function SettingsPage() {
     const res = await fetch("/api/reminder/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reminderFrequency: frequency, darkMode }),
+      body: JSON.stringify({
+        reminderFrequency: frequency,
+        darkMode,
+        ...(isPremium ? { fontPreset, fontSizePreset } : {}),
+      }),
     });
-    const data = await res.json();
-    if (res.ok) applyThemePreference(darkMode);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      applyThemePreference(darkMode);
+      applyAppearancePreference({ fontPreset, fontSizePreset, isPremium });
+    }
     setSettingsMessage(res.ok ? "Saved" : data.message || "Failed");
   }
 
@@ -210,6 +229,74 @@ export default function SettingsPage() {
             {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             {darkMode ? "Light mode" : "Dark mode"}
           </button>
+        </div>
+
+        <div className="space-y-3 rounded-2xl border border-zinc-200 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-black">Premium Typography</p>
+              <p className="text-xs text-zinc-500">Choose from 10 font families and 10 size presets. Export styling follows your selection.</p>
+            </div>
+            {!isPremium ? <Lock className="h-4 w-4 text-zinc-400" /> : null}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Font Family</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {FONT_PRESETS.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  disabled={!isPremium}
+                  onClick={() => {
+                    if (!isPremium) return;
+                    setFontPreset(option.key);
+                    applyAppearancePreference({ fontPreset: option.key, fontSizePreset, isPremium });
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                    fontPreset === option.key
+                      ? "border-black bg-black text-white"
+                      : "border-zinc-300 bg-white text-zinc-700"
+                  } ${!isPremium ? "cursor-not-allowed opacity-50" : "hover:border-black"}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Font Size</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {FONT_SIZE_PRESETS.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  disabled={!isPremium}
+                  onClick={() => {
+                    if (!isPremium) return;
+                    setFontSizePreset(option.key);
+                    applyAppearancePreference({ fontPreset, fontSizePreset: option.key, isPremium });
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                    fontSizePreset === option.key
+                      ? "border-black bg-black text-white"
+                      : "border-zinc-300 bg-white text-zinc-700"
+                  } ${!isPremium ? "cursor-not-allowed opacity-50" : "hover:border-black"}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Live Preview</p>
+            <p className="mt-3 text-sm text-zinc-600">This preview should change immediately when you pick a different premium font size.</p>
+            <h3 className="mt-4 text-3xl font-semibold text-black">OWE DUE Preview</h3>
+            <p className="mt-2 text-base text-zinc-700">Track dues, reminders, reports, and payment links with your selected typography.</p>
+            <p className="mt-2 text-xs uppercase tracking-[0.16em] text-zinc-500">Sample label at xs size</p>
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">

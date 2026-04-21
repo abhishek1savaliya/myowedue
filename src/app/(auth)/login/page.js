@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
-import { applyThemePreference } from "@/lib/theme-client";
+import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,6 +33,11 @@ export default function LoginPage() {
 
     if (data?.user && typeof data.user.darkMode === "boolean") {
       applyThemePreference(data.user.darkMode);
+      applyAppearancePreference({
+        fontPreset: data.user.fontPreset,
+        fontSizePreset: data.user.fontSizePreset,
+        isPremium: Boolean(data.user.isPremium),
+      });
     }
 
     router.push("/dashboard");

@@ -6,6 +6,7 @@ import Transaction from "@/models/Transaction";
 import { activeQuery } from "@/lib/bin";
 import { clearDashboardCache, getRedisJSON, peopleCacheKey, setRedisJSON } from "@/lib/redis";
 import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
+import { FREE_RECORD_LIMIT, hasActivePremium } from "@/lib/subscription";
 
 export async function GET(request) {
   const { user, error } = await requireUser();
@@ -111,6 +112,13 @@ export async function POST(request) {
     if (!name) return fail("Person name is required", 422);
 
     await connectDB();
+    if (!hasActivePremium(user)) {
+      const activeCount = await Person.countDocuments({ userId: user._id, ...activeQuery() });
+      if (activeCount >= FREE_RECORD_LIMIT) {
+        return fail(`Free plan supports up to ${FREE_RECORD_LIMIT} active people. Upgrade to Pro for unlimited records.`, 403);
+      }
+    }
+
     const person = await Person.create({
       userId: user._id,
       name: name.trim(),

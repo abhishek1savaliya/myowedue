@@ -28,6 +28,16 @@ const UserSchema = new Schema(
       types: { type: [String], default: [] },
     },
     darkMode: { type: Boolean, default: false },
+    isPremium: { type: Boolean, default: false },
+    subscriptionPlan: {
+      type: String,
+      enum: ["free", "pro_monthly", "pro_yearly"],
+      default: "free",
+    },
+    subscriptionEndDate: { type: Date, default: null },
+    appliedVoucherCode: { type: String, trim: true, default: null },
+    fontPreset: { type: String, default: "manrope" },
+    fontSizePreset: { type: String, default: "size-4" },
   },
   { timestamps: true }
 );
@@ -61,6 +71,19 @@ if (mongoose.models.User) {
       types: { type: [String], default: [] },
     };
   }
+  if (!User.schema.path("darkMode")) missingPaths.darkMode = { type: Boolean, default: false };
+  if (!User.schema.path("isPremium")) missingPaths.isPremium = { type: Boolean, default: false };
+  if (!User.schema.path("subscriptionPlan")) {
+    missingPaths.subscriptionPlan = {
+      type: String,
+      enum: ["free", "pro_monthly", "pro_yearly"],
+      default: "free",
+    };
+  }
+  if (!User.schema.path("subscriptionEndDate")) missingPaths.subscriptionEndDate = { type: Date, default: null };
+  if (!User.schema.path("appliedVoucherCode")) missingPaths.appliedVoucherCode = { type: String, trim: true, default: null };
+  if (!User.schema.path("fontPreset")) missingPaths.fontPreset = { type: String, default: "manrope" };
+  if (!User.schema.path("fontSizePreset")) missingPaths.fontSizePreset = { type: String, default: "size-4" };
 
   if (Object.keys(missingPaths).length > 0) {
     User.schema.add(missingPaths);

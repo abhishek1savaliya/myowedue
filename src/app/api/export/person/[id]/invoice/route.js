@@ -8,6 +8,7 @@ import { activeQuery } from "@/lib/bin";
 import { normalizeCurrency, convertFromUSD } from "@/lib/currency";
 import { getUsdRatesForUsage } from "@/lib/exchangeRates";
 import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
+import { supportsPremiumExports } from "@/lib/subscription";
 
 export const runtime = "nodejs";
 
@@ -201,6 +202,7 @@ export async function GET(request, { params }) {
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const isPremiumPdf = supportsPremiumExports(user);
 
     const width = 595;
     const height = 842;
@@ -211,9 +213,50 @@ export async function GET(request, { params }) {
     let page = pdfDoc.addPage([width, height]);
     let y = height - margin;
 
+    const theme = isPremiumPdf
+      ? {
+          headerBg: rgb(0.04, 0.08, 0.2),
+          headerAccentLeft: rgb(0.96, 0.68, 0.12),
+          headerAccentRight: rgb(0.16, 0.73, 0.95),
+          headerSub: rgb(0.86, 0.92, 1),
+          metricNeutral: { bg: rgb(0.93, 0.97, 1), border: rgb(0.42, 0.68, 0.95), title: rgb(0.12, 0.29, 0.55), value: rgb(0.07, 0.22, 0.44) },
+          metricYellow: { bg: rgb(1, 0.97, 0.86), border: rgb(0.93, 0.79, 0.33), title: rgb(0.52, 0.4, 0.07), value: rgb(0.46, 0.31, 0.04) },
+          metricRed: { bg: rgb(1, 0.9, 0.92), border: rgb(0.91, 0.4, 0.45), title: rgb(0.63, 0.1, 0.2), value: rgb(0.54, 0.08, 0.16) },
+          metricGreen: { bg: rgb(0.9, 0.98, 0.93), border: rgb(0.38, 0.73, 0.49), title: rgb(0.07, 0.45, 0.2), value: rgb(0.06, 0.37, 0.15) },
+          tableHeaderBg: rgb(0.05, 0.12, 0.26),
+          tableHeaderAccent: rgb(0.16, 0.73, 0.95),
+          rowAlt: rgb(0.95, 0.98, 1),
+          summaryBg: rgb(0.95, 0.98, 1),
+          footer: rgb(0.16, 0.24, 0.36),
+          chartBg: rgb(0.93, 0.97, 1),
+          chartBorder: rgb(0.68, 0.82, 0.98),
+          chartTrack: rgb(0.86, 0.92, 0.98),
+        }
+      : {
+          headerBg: rgb(0.07, 0.07, 0.08),
+          headerAccentLeft: rgb(0.96, 0.68, 0.12),
+          headerAccentRight: rgb(0.96, 0.68, 0.12),
+          headerSub: rgb(0.8, 0.8, 0.8),
+          metricNeutral: { bg: rgb(0.97, 0.97, 0.97), border: rgb(0.85, 0.85, 0.85), title: rgb(0.36, 0.36, 0.36), value: rgb(0.1, 0.1, 0.1) },
+          metricYellow: { bg: rgb(1, 0.97, 0.86), border: rgb(0.93, 0.79, 0.33), title: rgb(0.52, 0.4, 0.07), value: rgb(0.46, 0.31, 0.04) },
+          metricRed: { bg: rgb(1, 0.9, 0.9), border: rgb(0.91, 0.4, 0.4), title: rgb(0.63, 0.1, 0.1), value: rgb(0.5, 0.08, 0.08) },
+          metricGreen: { bg: rgb(0.9, 0.98, 0.93), border: rgb(0.38, 0.73, 0.49), title: rgb(0.07, 0.45, 0.2), value: rgb(0.06, 0.37, 0.15) },
+          tableHeaderBg: rgb(0.08, 0.08, 0.08),
+          tableHeaderAccent: rgb(0.08, 0.08, 0.08),
+          rowAlt: rgb(0.98, 0.98, 0.98),
+          summaryBg: rgb(0.97, 0.97, 0.97),
+          footer: rgb(0.45, 0.45, 0.45),
+          chartBg: rgb(0.96, 0.98, 1),
+          chartBorder: rgb(0.74, 0.82, 0.94),
+          chartTrack: rgb(0.9, 0.92, 0.96),
+        };
+
     const drawHeader = () => {
-      page.drawRectangle({ x: margin, y: y - 76, width: contentWidth, height: 76, color: rgb(0.07, 0.07, 0.08) });
-      page.drawRectangle({ x: margin, y: y - 76, width: 8, height: 76, color: rgb(0.96, 0.68, 0.12) });
+      page.drawRectangle({ x: margin, y: y - 76, width: contentWidth, height: 76, color: theme.headerBg });
+      page.drawRectangle({ x: margin, y: y - 76, width: 8, height: 76, color: theme.headerAccentLeft });
+      if (isPremiumPdf) {
+        page.drawRectangle({ x: margin + contentWidth - 8, y: y - 76, width: 8, height: 76, color: theme.headerAccentRight });
+      }
 
       page.drawText("MYOWEDUE", {
         x: margin + 14,
@@ -234,17 +277,26 @@ export async function GET(request, { params }) {
         y: y - 56,
         size: 9,
         font,
-        color: rgb(0.8, 0.8, 0.8),
+        color: theme.headerSub,
       });
+      if (isPremiumPdf) {
+        page.drawText("PREMIUM", {
+          x: margin + contentWidth - 76,
+          y: y - 30,
+          size: 9,
+          font: bold,
+          color: rgb(0.99, 0.83, 0.35),
+        });
+      }
       y -= 96;
     };
 
     const drawCard = (x, title, value, tone = "neutral") => {
       const palette = {
-        neutral: { bg: rgb(0.97, 0.97, 0.97), border: rgb(0.85, 0.85, 0.85), title: rgb(0.36, 0.36, 0.36), value: rgb(0.1, 0.1, 0.1) },
-        yellow: { bg: rgb(1, 0.97, 0.86), border: rgb(0.93, 0.79, 0.33), title: rgb(0.52, 0.4, 0.07), value: rgb(0.46, 0.31, 0.04) },
-        red: { bg: rgb(1, 0.9, 0.9), border: rgb(0.91, 0.4, 0.4), title: rgb(0.63, 0.1, 0.1), value: rgb(0.5, 0.08, 0.08) },
-        green: { bg: rgb(0.9, 0.98, 0.93), border: rgb(0.38, 0.73, 0.49), title: rgb(0.07, 0.45, 0.2), value: rgb(0.06, 0.37, 0.15) },
+        neutral: theme.metricNeutral,
+        yellow: theme.metricYellow,
+        red: theme.metricRed,
+        green: theme.metricGreen,
       };
       const style = palette[tone] || palette.neutral;
 
@@ -325,9 +377,9 @@ export async function GET(request, { params }) {
         y: chartY,
         width: chartWidth,
         height: chartHeight,
-        color: rgb(0.96, 0.98, 1),
+        color: theme.chartBg,
         borderWidth: 0.8,
-        borderColor: rgb(0.74, 0.82, 0.94),
+        borderColor: theme.chartBorder,
       });
 
       targetPage.drawText("INSIGHT CHART", {
@@ -362,7 +414,7 @@ export async function GET(request, { params }) {
           y: rowY - 1,
           width: barMaxWidth,
           height: 8,
-          color: rgb(0.9, 0.92, 0.96),
+          color: theme.chartTrack,
         });
 
         targetPage.drawRectangle({
@@ -386,7 +438,10 @@ export async function GET(request, { params }) {
     };
 
     const drawTableHeader = () => {
-      page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: rgb(0.08, 0.08, 0.08) });
+      page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: theme.tableHeaderBg });
+      if (isPremiumPdf) {
+        page.drawRectangle({ x: margin, y: y - rowHeight, width: 4, height: rowHeight, color: theme.tableHeaderAccent });
+      }
       page.drawText("Type", { x: margin + 8, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
       page.drawText("Amount", { x: margin + 92, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
       page.drawText("Total", { x: margin + 220, y: y - 15, size: 9, font: bold, color: rgb(1, 1, 1) });
@@ -498,7 +553,7 @@ export async function GET(request, { params }) {
       convertedTransactions.forEach((tx, idx) => {
         ensureSpace();
         if (idx % 2 === 0) {
-          page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: rgb(0.98, 0.98, 0.98) });
+          page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: theme.rowAlt });
         }
 
         const isCredit = tx.type === "credit";
@@ -535,7 +590,7 @@ export async function GET(request, { params }) {
       y: y - 40,
       width: contentWidth,
       height: 40,
-      color: rgb(0.97, 0.97, 0.97),
+      color: theme.summaryBg,
       borderWidth: 0.8,
       borderColor: summaryColor,
     });
@@ -592,7 +647,7 @@ export async function GET(request, { params }) {
       y: 18,
       size: 8,
       font,
-      color: rgb(0.45, 0.45, 0.45),
+      color: theme.footer,
     });
 
     const pages = pdfDoc.getPages();
@@ -603,7 +658,7 @@ export async function GET(request, { params }) {
         y: 18,
         size: 8,
         font,
-        color: rgb(0.45, 0.45, 0.45),
+        color: theme.footer,
       });
     });
 

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays } from "lucide-react";
+import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays, Gem, LifeBuoy, CreditCard } from "lucide-react";
 
 const baseLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -15,6 +15,7 @@ const baseLinks = [
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/bin", label: "Bin", icon: Trash2 },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/my-subscription", label: "My Subscription", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -23,6 +24,8 @@ export default function Sidebar({ notificationCount = 0 }) {
   const router = useRouter();
   const [liveNotificationCount, setLiveNotificationCount] = useState(notificationCount);
   const [canAccessContentEditor, setCanAccessContentEditor] = useState(false);
+  const [subscriptionLabel, setSubscriptionLabel] = useState("Free Plan");
+  const [isPremium, setIsPremium] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +55,8 @@ export default function Sidebar({ notificationCount = 0 }) {
           (role === "manager" && Boolean(meUser?.contentEditPermission));
         if (!cancelled) {
           setCanAccessContentEditor(hasPermission);
+          setIsPremium(Boolean(meUser?.isPremium));
+          setSubscriptionLabel(meUser?.subscriptionLabel || "Free Plan");
         }
         if (!userId || cancelled) return;
 
@@ -86,22 +91,45 @@ export default function Sidebar({ notificationCount = 0 }) {
 
   const links = canAccessContentEditor
     ? [...baseLinks, { href: "/content-editor", label: "Content Editor", icon: FilePenLine }]
-    : baseLinks;
+    : [...baseLinks];
+
+  if (isPremium) {
+    links.splice(links.length - 1, 0, { href: "/support", label: "Support", icon: LifeBuoy });
+  }
 
   return (
     <aside className="sticky top-0 z-30 w-full border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur md:h-screen md:w-72 md:border-b-0 md:border-r md:px-6 md:py-8">
-      <div className="mb-4 flex items-center justify-between md:mb-8">
-        <Link href="/dashboard" className="inline-flex min-w-0 items-center gap-2 rounded-xl p-1" aria-label="Go to dashboard">
-          <Image
-            src="/owedue-logo.svg"
-            alt="OWE DUE logo"
-            width={40}
-            height={40}
-            priority
-            className="h-8 w-8 rounded-lg sm:h-9 sm:w-9 md:h-10 md:w-10"
-          />
-          <span className="truncate text-base font-bold tracking-widest text-black sm:text-lg md:text-xl">OWE DUE</span>
-        </Link>
+      <div className="mb-4 flex items-start justify-between gap-3 md:mb-8">
+        <div className="inline-flex min-w-0 items-start gap-2 p-1">
+          <Link href="/dashboard" aria-label="Go to dashboard" className="rounded-xl">
+            <Image
+              src="/owedue-logo.svg"
+              alt="OWE DUE logo"
+              width={40}
+              height={40}
+              priority
+              className="h-8 w-8 rounded-lg sm:h-9 sm:w-9 md:h-10 md:w-10"
+            />
+          </Link>
+          <div className="min-w-0">
+            <Link href="/dashboard" className="truncate text-base font-bold tracking-widest text-black sm:text-lg md:text-xl">OWE DUE</Link>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {isPremium ? (
+                <Link
+                  href="/my-subscription"
+                  className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700 hover:bg-amber-100"
+                >
+                  <Gem size={10} />
+                  Pro
+                </Link>
+              ) : (
+                <span className="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-700">
+                  FREE
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
         <Link
           href="/notifications"
           aria-label="Open notifications"
@@ -124,12 +152,14 @@ export default function Sidebar({ notificationCount = 0 }) {
               href={item.href}
               className={`group flex min-w-33 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition md:min-w-0 md:justify-start md:gap-3 md:py-3 md:text-sm ${
                 active
-                  ? "border-black bg-black text-white"
+                  ? isPremium
+                    ? "border-amber-500 bg-linear-to-r from-zinc-950 via-zinc-900 to-amber-900 text-white"
+                    : "border-black bg-black text-white"
                   : "border-zinc-200 bg-white text-zinc-700 hover:border-black hover:text-black"
               }`}
             >
               <Icon size={16} />
-              <span>{item.label}</span>
+              <span className="min-w-0 wrap-break-word">{item.label}</span>
             </Link>
           );
         })}

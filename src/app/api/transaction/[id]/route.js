@@ -6,6 +6,8 @@ import Person from "@/models/Person";
 import { activeQuery, buildBinMeta } from "@/lib/bin";
 import { clearDashboardCache } from "@/lib/redis";
 import { deriveUserKey, encryptField, decryptTransaction } from "@/lib/crypto";
+import { normalizeRecurringConfig, recurringLabel } from "@/lib/recurring";
+import { hasActivePremium } from "@/lib/subscription";
 
 export async function PUT(request, { params }) {
   const { user, error } = await requireUser();
@@ -16,10 +18,15 @@ export async function PUT(request, { params }) {
     const body = await request.json();
     const eventAt = new Date();
     const eventAtText = eventAt.toLocaleString();
+    const recurringConfig = normalizeRecurringConfig(body);
 
     await connectDB();
     const existing = await Transaction.findOne({ _id: id, userId: user._id, ...activeQuery() });
     if (!existing) return fail("Transaction not found", 404);
+    const premiumUser = hasActivePremium(user);
+    if (recurringConfig.recurringEnabled && !premiumUser) {
+      return fail("Recurring dues are available on the Pro plan", 403);
+    }
 
     let nextPersonId = existing.personId;
     let nextPersonName = null;
@@ -43,6 +50,10 @@ export async function PUT(request, { params }) {
       date: body.date ? new Date(body.date) : existing.date,
       status: "pending",
       paidAt: null,
+      recurringEnabled: recurringConfig.recurringEnabled,
+      recurringFrequency: recurringConfig.recurringFrequency,
+      recurringInterval: recurringConfig.recurringInterval,
+      recurringEndDate: recurringConfig.recurringEndDate,
     };
 
     const history = [];
@@ -127,6 +138,25 @@ export async function PUT(request, { params }) {
         at: eventAt,
       });
     }
+    if (Boolean(existing.recurringEnabled) !== Boolean(setFields.recurringEnabled)) {
+      history.push({
+        action: setFields.recurringEnabled ? "recurring_enabled" : "recurring_disabled",
+        message: setFields.recurringEnabled
+          ? `Recurring due enabled (${recurringLabel(setFields)}) on ${eventAtText}`
+          : `Recurring due disabled on ${eventAtText}`,
+        at: eventAt,
+      });
+    } else if (setFields.recurringEnabled) {
+      const existingRecurringSummary = recurringLabel(existing);
+      const nextRecurringSummary = recurringLabel(setFields);
+      if (existingRecurringSummary !== nextRecurringSummary) {
+        history.push({
+          action: "recurring_updated",
+          message: `Recurring schedule changed from ${existingRecurringSummary} to ${nextRecurringSummary} on ${eventAtText}`,
+          at: eventAt,
+        });
+      }
+    }
 
     history.push({
       action: "updated",
@@ -179,7 +209,7 @@ export async function DELETE(_request, { params }) {
   try {
     const { id } = await params;
     await connectDB();
-    const { deletedAt, restoreUntil } = buildBinMeta();
+    const { deletedAt, restoreUntil } = buildBinMeta(user);
     const eventAt = new Date();
     const deletedAtMessage = `Transaction deleted at ${eventAt.toLocaleString()}`;
 

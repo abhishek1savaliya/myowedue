@@ -1,14 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import Loader from '@/components/Loader';
 
 export default function PricingComparison() {
   const [isPremium, setIsPremium] = useState(false);
   const [subscriptionEndDate, setSubscriptionEndDate] = useState(null);
-  const [voucherCode, setVoucherCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
   const [loadingStatus, setLoadingStatus] = useState(true);
 
   useEffect(() => {
@@ -31,49 +29,19 @@ export default function PricingComparison() {
   }, []);
 
   const features = [
-    { name: 'People Tracking', free: 'Up to 50', premium: 'Unlimited' },
-    { name: 'Monthly Transactions', free: 'Up to 1,000', premium: 'Unlimited' },
-    { name: 'Transaction History', free: '✓', premium: '✓' },
-    { name: 'Currency Support', free: '✓', premium: '✓' },
-    { name: 'PDF Export', free: '✓', premium: '✓' },
-    { name: 'Email Reminders', free: '✓', premium: '✓' },
-    { name: 'Premium Theme Access', free: '✗', premium: '✓' },
-    { name: 'Priority Support', free: '✗', premium: '✓' },
+    { name: 'Tracking', free: 'Basic tracking', premium: 'Advanced workflow tracking' },
+    { name: 'Records', free: '500 active people and 700 active transactions', premium: 'Unlimited records' },
+    { name: 'Reminders', free: 'Manual reminders', premium: 'Smart reminders (SMS/WhatsApp ready)' },
+    { name: 'Dashboard', free: 'Basic dashboard', premium: 'Advanced financial intelligence' },
+    { name: 'Reports', free: 'Basic list and snapshot', premium: 'Advanced reports and insights' },
+    { name: 'Recurring dues', free: '✗', premium: '✓' },
+    { name: 'Exports', free: 'CSV and JPG', premium: 'Premium PDF and Excel' },
+    { name: 'Payment links', free: '✗', premium: 'Workspace ready' },
+    { name: 'Backup & recovery', free: 'Standard', premium: 'Priority support included' },
+    { name: 'Bin retention', free: '3 years', premium: 'Unlimited' },
+    { name: 'Appearance', free: 'Standard light/dark', premium: 'Premium UI, font family and font size controls' },
+    { name: 'Support', free: 'Standard support', premium: 'Advanced personalized support' },
   ];
-
-  const handleVoucherSubmit = async (e) => {
-    e.preventDefault();
-    if (!voucherCode.trim()) {
-      setMessage('Please enter a voucher code');
-      return;
-    }
-
-    setLoading(true);
-    setMessage('');
-
-    try {
-      const res = await fetch('/api/subscription/validate-voucher', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voucherCode }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setMessage(`Error: ${data.error}`);
-      } else {
-        setMessage(`✓ Premium subscription activated until ${new Date(data.subscriptionEndDate).toLocaleDateString()}`);
-        setVoucherCode('');
-        setIsPremium(true);
-        setSubscriptionEndDate(data.subscriptionEndDate);
-      }
-    } catch (error) {
-      setMessage('Failed to validate voucher');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loadingStatus) {
     return <Loader />;
@@ -102,7 +70,7 @@ export default function PricingComparison() {
       {/* Pricing Table */}
       <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
         <h2 className="mb-2 text-2xl font-bold text-black">Plans & Features</h2>
-        <p className="mb-6 text-zinc-600">Choose the plan that fits your needs</p>
+        <p className="mb-6 text-zinc-600">Free for basics, or go Pro for $7/month or $70/year.</p>
 
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -110,7 +78,7 @@ export default function PricingComparison() {
               <tr className="border-b border-zinc-200">
                 <th className="px-4 py-4 text-left font-semibold text-black">Feature</th>
                 <th className="px-4 py-4 text-center font-semibold text-black">Free</th>
-                <th className="px-4 py-4 text-center font-semibold text-amber-600">Premium</th>
+                <th className="px-4 py-4 text-center font-semibold text-amber-600">Pro</th>
               </tr>
             </thead>
             <tbody>
@@ -126,34 +94,18 @@ export default function PricingComparison() {
         </div>
       </div>
 
-      {/* Voucher Code Section */}
+      {/* Subscription Purchase Section */}
       <div className="rounded-2xl border border-amber-200 bg-linear-to-br from-amber-50 to-white p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-        <h3 className="mb-2 text-xl font-bold text-amber-900">Upgrade to Premium</h3>
-        <p className="mb-6 text-amber-800">Have a voucher code? Activate it below to get premium access.</p>
+        <h3 className="mb-2 text-xl font-bold text-amber-900">Upgrade to Pro</h3>
+        <p className="mb-3 text-amber-800">Monthly: $7. You can apply voucher codes on the next page and pay $0 when a valid voucher is entered.</p>
+        <p className="mb-6 text-sm text-amber-700">Open My Subscription to view pro benefits, voucher field, payment popup, and activation details with due-date guidance.</p>
 
-        <form onSubmit={handleVoucherSubmit} className="flex gap-3">
-          <input
-            type="text"
-            value={voucherCode}
-            onChange={(e) => setVoucherCode(e.target.value)}
-            placeholder="Enter voucher code"
-            className="flex-1 rounded-lg border border-amber-300 bg-white px-4 py-2 text-black placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            disabled={loading}
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-amber-500 px-6 py-2 font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
-          >
-            {loading ? 'Activating...' : 'Activate'}
-          </button>
-        </form>
-
-        {message && (
-          <p className={`mt-4 text-sm font-medium ${message.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
-            {message}
-          </p>
-        )}
+        <Link
+          href="/my-subscription"
+          className="inline-flex items-center justify-center rounded-lg bg-amber-500 px-6 py-2 font-semibold text-white hover:bg-amber-600"
+        >
+          Go to My Subscription
+        </Link>
       </div>
     </div>
   );

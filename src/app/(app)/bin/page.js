@@ -9,19 +9,22 @@ export default function BinPage() {
   const [transactionBin, setTransactionBin] = useState([]);
   const [eventBin, setEventBin] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isPremium, setIsPremium] = useState(false);
 
   async function load() {
     setLoading(true);
-    const [pRes, tRes, eRes] = await Promise.all([
+    const [pRes, tRes, eRes, meRes] = await Promise.all([
       fetch("/api/bin/person", { cache: "no-store" }),
       fetch("/api/bin/transaction", { cache: "no-store" }),
       fetch("/api/bin/event", { cache: "no-store" }),
+      fetch("/api/auth/me", { cache: "no-store" }),
     ]);
 
-    const [pData, tData, eData] = await Promise.all([pRes.json(), tRes.json(), eRes.json()]);
+    const [pData, tData, eData, meData] = await Promise.all([pRes.json(), tRes.json(), eRes.json(), meRes.json()]);
     if (pRes.ok) setPersonBin(pData.people || []);
     if (tRes.ok) setTransactionBin(tData.transactions || []);
     if (eRes.ok) setEventBin(eData.events || []);
+    if (meRes.ok) setIsPremium(Boolean(meData?.user?.isPremium));
     setLoading(false);
   }
 
@@ -48,7 +51,7 @@ export default function BinPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">Bin</h1>
-        <p className="text-sm text-zinc-600">Restore deleted people/transactions/events within 3 years. After that they are auto-removed.</p>
+        <p className="text-sm text-zinc-600">{isPremium ? "Premium bin keeps deleted records indefinitely until you restore them." : "Restore deleted people/transactions/events within 3 years. After that they are auto-removed."}</p>
       </header>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5">
@@ -71,7 +74,7 @@ export default function BinPage() {
                     Restore
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-zinc-500">Restore before: {p.restoreUntil ? new Date(p.restoreUntil).toLocaleDateString() : "N/A"}</p>
+                <p className="mt-1 text-xs text-zinc-500">Restore before: {p.restoreUntil ? new Date(p.restoreUntil).toLocaleDateString() : "Unlimited"}</p>
               </article>
             ))
           )}
@@ -98,7 +101,7 @@ export default function BinPage() {
                     Restore
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-zinc-500">Restore before: {t.restoreUntil ? new Date(t.restoreUntil).toLocaleDateString() : "N/A"}</p>
+                <p className="mt-1 text-xs text-zinc-500">Restore before: {t.restoreUntil ? new Date(t.restoreUntil).toLocaleDateString() : "Unlimited"}</p>
                 <details className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
                   <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
                     Transaction History
@@ -153,7 +156,7 @@ export default function BinPage() {
                 </div>
                 <p className="mt-1 text-xs text-zinc-500">
                   Deleted: {e.deletedAt ? new Date(e.deletedAt).toLocaleDateString() : "N/A"} •{" "}
-                  Restore before: {e.restoreUntil ? new Date(e.restoreUntil).toLocaleDateString() : "N/A"}
+                  Restore before: {e.restoreUntil ? new Date(e.restoreUntil).toLocaleDateString() : "Unlimited"}
                 </p>
               </article>
             ))

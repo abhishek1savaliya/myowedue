@@ -1,5 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { DEFAULT_FONT_PRESET, DEFAULT_FONT_SIZE_PRESET } from "@/lib/appearance";
+import { getEffectivePlan, hasActivePremium } from "@/lib/subscription";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
@@ -35,6 +37,8 @@ export function safeUser(user) {
   const firstName = user.firstName || fromName.firstName;
   const lastName = user.lastName || fromName.lastName;
   const displayName = `${firstName} ${lastName}`.trim() || user.name || "User";
+  const isPremium = hasActivePremium(user);
+  const plan = getEffectivePlan(user);
 
   return {
     id: user._id.toString(),
@@ -50,5 +54,12 @@ export function safeUser(user) {
     contentEditPermission: Boolean(user.contentEditPermission),
     contentManagerId: user.contentManagerId?.toString?.() || null,
     darkMode: Boolean(user.darkMode),
+    isPremium,
+    subscriptionPlan: plan.key,
+    subscriptionLabel: plan.label,
+    subscriptionEndDate: isPremium ? user.subscriptionEndDate : null,
+    appliedVoucherCode: user.appliedVoucherCode || null,
+    fontPreset: isPremium ? user.fontPreset || DEFAULT_FONT_PRESET : DEFAULT_FONT_PRESET,
+    fontSizePreset: isPremium ? user.fontSizePreset || DEFAULT_FONT_SIZE_PRESET : DEFAULT_FONT_SIZE_PRESET,
   };
 }

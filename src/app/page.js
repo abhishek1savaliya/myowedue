@@ -33,6 +33,10 @@ export default async function Home() {
   const howItWorksSteps = Array.isArray(content.howItWorksSteps) ? content.howItWorksSteps : [];
   const whyChooseItems = Array.isArray(content.whyChooseItems) ? content.whyChooseItems : [];
   const securityItems = Array.isArray(content.securityItems) ? content.securityItems : [];
+  const freePlan = content.freePlan && typeof content.freePlan === "object" ? content.freePlan : {};
+  const paidPlan = content.paidPlan && typeof content.paidPlan === "object" ? content.paidPlan : {};
+  const freePlanFeatures = Array.isArray(freePlan.features) ? freePlan.features : [];
+  const paidPlanFeatures = Array.isArray(paidPlan.features) ? paidPlan.features : [];
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -242,6 +246,98 @@ export default async function Home() {
               </article>
             ))
           ) : null}
+        </div>
+      </section>
+
+      <section className="relative border-y border-zinc-200 bg-white/60">
+        <div className="mx-auto max-w-6xl px-6 py-14 md:py-16">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">{content.plansEyebrow || "Plans"}</p>
+          <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-black md:text-4xl">
+                {content.plansTitle || "Choose the plan that fits your workflow"}
+              </h2>
+              <div
+                className="mt-3 max-w-2xl text-sm leading-7 text-zinc-600 md:text-base cms-html"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    content.plansDescription ||
+                    "Start free, then move to Pro when you need premium exports, recurring dues, and advanced reminders.",
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-5 lg:grid-cols-2">
+            <article className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:p-7">
+              <p className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+                {freePlan.badge || "Free Plan"}
+              </p>
+              <h3 className="mt-4 text-2xl font-bold text-black">{freePlan.name || "Free"}</h3>
+              <div className="mt-3 flex items-end gap-2">
+                <span className="text-4xl font-bold text-black">{freePlan.price || "$0"}</span>
+                <span className="pb-1 text-sm font-semibold text-zinc-500">{freePlan.billing || "/forever"}</span>
+              </div>
+              <div
+                className="mt-4 text-sm leading-7 text-zinc-600 cms-html"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    freePlan.description ||
+                    "Best for getting started with personal due tracking and everyday reminders.",
+                }}
+              />
+              <div className="mt-5 space-y-3">
+                {freePlanFeatures.map((item, idx) => (
+                  <div key={`${item}-${idx}`} className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-700">
+                    {item}
+                  </div>
+                ))}
+              </div>
+              <Link
+                href={freePlan.ctaHref || "/signup"}
+                className="mt-6 inline-flex items-center gap-2 rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              >
+                {freePlan.ctaLabel || "Get started free"}
+              </Link>
+            </article>
+
+            <article className="rounded-3xl border border-amber-200 bg-linear-to-br from-amber-50 via-white to-emerald-50 p-6 shadow-[0_14px_36px_rgba(245,158,11,0.12)] md:p-7">
+              <p className="inline-flex rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                {paidPlan.badge || "Pro Plan"}
+              </p>
+              <h3 className="mt-4 text-2xl font-bold text-black">{paidPlan.name || "Pro"}</h3>
+              <div className="mt-3 flex items-end gap-2">
+                <span className="text-4xl font-bold text-black">{paidPlan.price || "$7"}</span>
+                <span className="pb-1 text-sm font-semibold text-zinc-500">{paidPlan.billing || "/month or $70/year"}</span>
+              </div>
+              <div
+                className="mt-4 text-sm leading-7 text-zinc-700 cms-html"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    paidPlan.description ||
+                    "Built for users who need unlimited growth, premium exports, recurring dues, and better payment collection tools.",
+                }}
+              />
+              <div className="mt-5 space-y-3">
+                {paidPlanFeatures.map((item, idx) => (
+                  <div key={`${item}-${idx}`} className="rounded-2xl border border-amber-200 bg-white/90 px-4 py-3 text-sm font-medium text-zinc-800">
+                    {item}
+                  </div>
+                ))}
+              </div>
+              <Link
+                href={paidPlan.ctaHref || "/signup"}
+                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-amber-400 to-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600"
+              >
+                {paidPlan.ctaLabel || "View Pro options"}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </article>
+          </div>
+
+          <p className="mt-5 text-sm text-zinc-500">
+            {content.plansFootnote || "This section can be managed from the admin content editor."}
+          </p>
         </div>
       </section>
 

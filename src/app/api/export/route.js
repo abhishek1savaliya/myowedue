@@ -5,6 +5,8 @@ import Transaction from "@/models/Transaction";
 import { ok, fail } from "@/lib/api";
 import { activeQuery } from "@/lib/bin";
 import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
+import { getFontPreset, getFontSizePreset } from "@/lib/appearance";
+import { supportsPremiumExports } from "@/lib/subscription";
 
 export const runtime = "nodejs";
 
@@ -21,6 +23,34 @@ function toCsvCell(value) {
   } catch {
     return String(value);
   }
+}
+
+function toSpreadsheetCell(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function resolvePdfFonts(pdfDoc, user) {
+  const preset = getFontPreset(user.fontPreset);
+  if (preset.pdfFamily === "times") {
+    return {
+      font: await pdfDoc.embedFont(StandardFonts.TimesRoman),
+      bold: await pdfDoc.embedFont(StandardFonts.TimesRomanBold),
+    };
+  }
+  if (preset.pdfFamily === "courier") {
+    return {
+      font: await pdfDoc.embedFont(StandardFonts.Courier),
+      bold: await pdfDoc.embedFont(StandardFonts.CourierBold),
+    };
+  }
+  return {
+    font: await pdfDoc.embedFont(StandardFonts.Helvetica),
+    bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
+  };
 }
 
 export async function GET(request) {
@@ -68,6 +98,9 @@ export async function GET(request) {
     );
 
     if (format === "pdf") {
+      if (!supportsPremiumExports(user)) {
+        return fail("Premium subscription required for PDF export", 403);
+      }
       return await generatePDF(user, decryptedTx, startDateStr, endDateStr);
     }
 
@@ -97,6 +130,59 @@ export async function GET(request) {
       });
     }
 
+    if (type === "excel") {
+      if (!supportsPremiumExports(user)) {
+        return fail("Premium subscription required for Excel export", 403);
+      }
+
+      const rows = decryptedTx
+        .map(
+          (item) => `
+            <Row>
+              <Cell><Data ss:Type="String">${toSpreadsheetCell(item.personId?.name || "Unknown")}</Data></Cell>
+              <Cell><Data ss:Type="Number">${Number(item.amount || 0)}</Data></Cell>
+              <Cell><Data ss:Type="String">${toSpreadsheetCell(item.type || "")}</Data></Cell>
+              <Cell><Data ss:Type="String">${toSpreadsheetCell(item.currency || "USD")}</Data></Cell>
+              <Cell><Data ss:Type="String">${toSpreadsheetCell(new Date(item.date).toLocaleDateString())}</Data></Cell>
+              <Cell><Data ss:Type="String">${toSpreadsheetCell(item.notes || "")}</Data></Cell>
+            </Row>`
+        )
+        .join("");
+
+      const workbook = `<?xml version="1.0"?>
+      <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+        xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+        <Styles>
+          <Style ss:ID="header">
+            <Font ss:Bold="1" ss:Color="#111111"/>
+            <Interior ss:Color="#FDE68A" ss:Pattern="Solid"/>
+          </Style>
+        </Styles>
+        <Worksheet ss:Name="Transactions">
+          <Table>
+            <Row>
+              <Cell ss:StyleID="header"><Data ss:Type="String">Person</Data></Cell>
+              <Cell ss:StyleID="header"><Data ss:Type="String">Amount</Data></Cell>
+              <Cell ss:StyleID="header"><Data ss:Type="String">Type</Data></Cell>
+              <Cell ss:StyleID="header"><Data ss:Type="String">Currency</Data></Cell>
+              <Cell ss:StyleID="header"><Data ss:Type="String">Date</Data></Cell>
+              <Cell ss:StyleID="header"><Data ss:Type="String">Notes</Data></Cell>
+            </Row>
+            ${rows}
+          </Table>
+        </Worksheet>
+      </Workbook>`;
+
+      return new Response(workbook, {
+        headers: {
+          "Content-Type": "application/vnd.ms-excel",
+          "Content-Disposition": "attachment; filename=transactions-premium.xls",
+        },
+      });
+    }
+
     return ok({ transactions: decryptedTx });
   } catch (error) {
     console.error("Export error:", error);
@@ -106,8 +192,8 @@ export async function GET(request) {
 
 async function generatePDF(user, transactions, startDateStr, endDateStr) {
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { font, bold } = await resolvePdfFonts(pdfDoc, user);
+  const scale = getFontSizePreset(user.fontSizePreset).scale;
 
   const width = 595;
   const height = 842;
@@ -117,44 +203,69 @@ async function generatePDF(user, transactions, startDateStr, endDateStr) {
   let currentPageNum = 0;
   let yPos = height - margin;
 
+  const palette = {
+    ink: rgb(0.07, 0.07, 0.08),
+    muted: rgb(0.45, 0.45, 0.45),
+    line: rgb(0.84, 0.84, 0.84),
+    accent: rgb(0.96, 0.68, 0.12),
+    accentSoft: rgb(1, 0.97, 0.86),
+    surface: rgb(0.97, 0.97, 0.97),
+    success: rgb(0.08, 0.48, 0.24),
+    danger: rgb(0.66, 0.12, 0.12),
+  };
+
   function addNewPage() {
     currentPageNum++;
-    yPos = height - margin - 50; // Leave space for header
+    yPos = height - margin - 72;
     return pdfDoc.addPage([width, height]);
   }
 
   function drawHeader(page) {
-    // Background
-    page.drawRectangle({ x: margin, y: height - margin - 50, width: contentWidth, height: 50, color: rgb(0.07, 0.07, 0.08) });
+    page.drawRectangle({ x: margin, y: height - margin - 62, width: contentWidth, height: 62, color: palette.ink });
+    page.drawRectangle({ x: margin, y: height - margin - 62, width: contentWidth, height: 4, color: palette.accent });
 
-    // Title
     page.drawText("TRANSACTIONS REPORT", {
       x: margin + 10,
-      y: height - margin - 30,
+      y: height - margin - 24,
       font: bold,
-      size: 18,
+      size: 16 * scale,
       color: rgb(1, 1, 1),
     });
 
-    // Date range
     const dateText = startDateStr && endDateStr
       ? `${startDateStr} to ${endDateStr}`
       : "All Time";
     page.drawText(dateText, {
       x: margin + 10,
-      y: height - margin - 45,
+      y: height - margin - 42,
       font,
-      size: 10,
+      size: 9 * scale,
       color: rgb(0.7, 0.7, 0.7),
     });
 
-    // Page number at top right
+    page.drawRectangle({
+      x: width - margin - 84,
+      y: height - margin - 41,
+      width: 74,
+      height: 20,
+      color: palette.accentSoft,
+      borderColor: palette.accent,
+      borderWidth: 0.8,
+    });
+    page.drawText("PREMIUM", {
+      x: width - margin - 73,
+      y: height - margin - 28,
+      font: bold,
+      size: 8 * scale,
+      color: rgb(0.45, 0.31, 0.04),
+    });
+
     page.drawText(`Page ${currentPageNum}`, {
-      x: width - margin - 50,
-      y: height - margin - 30,
+      x: width - margin - 42,
+      y: height - margin - 53,
       font,
-      size: 10,
-      color: rgb(0.5, 0.5, 0.5),
+      size: 8 * scale,
+      color: rgb(0.72, 0.72, 0.72),
     });
   }
 
@@ -163,24 +274,38 @@ async function generatePDF(user, transactions, startDateStr, endDateStr) {
       start: { x: margin, y: 30 },
       end: { x: width - margin, y: 30 },
       thickness: 0.5,
-      color: rgb(0.8, 0.8, 0.8),
+      color: palette.line,
     });
 
     page.drawText(`Generated on ${new Date().toLocaleString()}`, {
       x: margin,
       y: 10,
       font,
-      size: 8,
-      color: rgb(0.6, 0.6, 0.6),
+      size: 8 * scale,
+      color: palette.muted,
     });
 
-    page.drawText(`${user.name || "User"}`, {
-      x: width - margin - 100,
+    page.drawText("MYOWEDUE PREMIUM EXPORT", {
+      x: width - margin - 150,
       y: 10,
-      font,
-      size: 8,
-      color: rgb(0.6, 0.6, 0.6),
+      font: bold,
+      size: 8 * scale,
+      color: rgb(0.33, 0.33, 0.33),
     });
+  }
+
+  function drawMetricCard(page, x, title, value, tone = "neutral") {
+    const tones = {
+      neutral: { bg: palette.surface, border: rgb(0.85, 0.85, 0.85), title: rgb(0.34, 0.34, 0.34), value: rgb(0.1, 0.1, 0.1) },
+      green: { bg: rgb(0.91, 0.98, 0.93), border: rgb(0.44, 0.72, 0.51), title: rgb(0.06, 0.42, 0.19), value: rgb(0.06, 0.34, 0.16) },
+      red: { bg: rgb(1, 0.92, 0.92), border: rgb(0.9, 0.42, 0.42), title: rgb(0.58, 0.12, 0.12), value: rgb(0.49, 0.1, 0.1) },
+    };
+    const style = tones[tone] || tones.neutral;
+    const cardWidth = (contentWidth - 16) / 3;
+
+    page.drawRectangle({ x, y: yPos - 52, width: cardWidth, height: 52, color: style.bg, borderColor: style.border, borderWidth: 0.8 });
+    page.drawText(title, { x: x + 10, y: yPos - 18, font, size: 8 * scale, color: style.title });
+    page.drawText(value, { x: x + 10, y: yPos - 38, font: bold, size: 12 * scale, color: style.value });
   }
 
   // First page
@@ -194,33 +319,58 @@ async function generatePDF(user, transactions, startDateStr, endDateStr) {
     if (t.type === "credit") creditTotal += Number(t.amount || 0);
     if (t.type === "debit") debitTotal += Number(t.amount || 0);
   });
+  const netAmount = debitTotal - creditTotal;
+  const netLabel = netAmount >= 0 ? "You are net positive" : "You need to settle";
+  const netColor = netAmount >= 0 ? palette.success : palette.danger;
 
-  yPos -= 40;
-  page.drawText("Summary", { x: margin, y: yPos, font: bold, size: 14 });
-  yPos -= 25;
+  page.drawText(`Prepared for ${user.name || "User"} (${user.email || ""})`, {
+    x: margin,
+    y: yPos - 8,
+    font,
+    size: 9 * scale,
+    color: rgb(0.32, 0.32, 0.32),
+  });
+  yPos -= 30;
+
+  drawMetricCard(page, margin, "TOTAL TRANSACTIONS", String(transactions.length), "neutral");
+  drawMetricCard(page, margin + ((contentWidth - 16) / 3) + 8, "AMOUNT GAVE", money(creditTotal), "red");
+  drawMetricCard(page, margin + (((contentWidth - 16) / 3) + 8) * 2, "AMOUNT RECEIVED", money(debitTotal), "green");
+  yPos -= 64;
 
   page.drawRectangle({
     x: margin,
-    y: yPos - 50,
+    y: yPos - 36,
     width: contentWidth,
-    height: 60,
-    color: rgb(0.95, 0.95, 0.95),
+    height: 36,
+    color: rgb(0.98, 0.98, 0.98),
+    borderColor: netColor,
+    borderWidth: 0.8,
+  });
+  page.drawText(`NET BALANCE: ${netAmount >= 0 ? "+" : "-"}${money(Math.abs(netAmount))}`, {
+    x: margin + 10,
+    y: yPos - 14,
+    font: bold,
+    size: 10 * scale,
+    color: netColor,
+  });
+  page.drawText(netLabel, {
+    x: margin + 10,
+    y: yPos - 27,
+    font,
+    size: 8 * scale,
+    color: netColor,
   });
 
-  page.drawText(`Total Transactions: ${transactions.length}`, { x: margin + 10, y: yPos - 10, font: bold, size: 11 });
-  page.drawText(`Amount Gave: ${money(creditTotal)}`, { x: margin + 10, y: yPos - 30, font, size: 11, color: rgb(0.8, 0.1, 0.1) });
-  page.drawText(`Amount Received: ${money(debitTotal)}`, { x: margin + 10, y: yPos - 50, font, size: 11, color: rgb(0.1, 0.8, 0.1) });
+  yPos -= 46;
 
-  yPos -= 80;
-
-  // Transactions table header
   page.drawRectangle({
     x: margin,
     y: yPos - rowHeight,
     width: contentWidth,
     height: rowHeight,
-    color: rgb(0.1, 0.1, 0.1),
+    color: palette.ink,
   });
+  page.drawRectangle({ x: margin, y: yPos - rowHeight, width: 3, height: rowHeight, color: palette.accent });
 
   const col1 = margin + 10;
   const col2 = col1 + 150;
@@ -228,24 +378,33 @@ async function generatePDF(user, transactions, startDateStr, endDateStr) {
   const col4 = col3 + 80;
   const col5 = col4 + 80;
 
-  page.drawText("Person", { x: col1, y: yPos - 15, font: bold, size: 10, color: rgb(1, 1, 1) });
-  page.drawText("Type", { x: col2, y: yPos - 15, font: bold, size: 10, color: rgb(1, 1, 1) });
-  page.drawText("Amount", { x: col3, y: yPos - 15, font: bold, size: 10, color: rgb(1, 1, 1) });
-  page.drawText("Currency", { x: col4, y: yPos - 15, font: bold, size: 10, color: rgb(1, 1, 1) });
-  page.drawText("Date", { x: col5, y: yPos - 15, font: bold, size: 10, color: rgb(1, 1, 1) });
+  page.drawText("Person", { x: col1, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+  page.drawText("Type", { x: col2, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+  page.drawText("Amount", { x: col3, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+  page.drawText("Currency", { x: col4, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+  page.drawText("Date", { x: col5, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
 
   yPos -= rowHeight + 5;
 
   // Transactions rows
-  for (const tx of transactions) {
+  for (let idx = 0; idx < transactions.length; idx++) {
+    const tx = transactions[idx];
     if (yPos < margin + 50) {
       drawFooter(page);
       page = addNewPage();
       drawHeader(page);
-      yPos -= 40;
+      yPos -= 28;
+      page.drawRectangle({ x: margin, y: yPos - rowHeight, width: contentWidth, height: rowHeight, color: palette.ink });
+      page.drawRectangle({ x: margin, y: yPos - rowHeight, width: 3, height: rowHeight, color: palette.accent });
+      page.drawText("Person", { x: col1, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+      page.drawText("Type", { x: col2, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+      page.drawText("Amount", { x: col3, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+      page.drawText("Currency", { x: col4, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+      page.drawText("Date", { x: col5, y: yPos - 15, font: bold, size: 10 * scale, color: rgb(1, 1, 1) });
+      yPos -= rowHeight + 5;
     }
 
-    const bgColor = (transactions.indexOf(tx) % 2 === 0) ? rgb(0.97, 0.97, 0.97) : rgb(1, 1, 1);
+    const bgColor = (idx % 2 === 0) ? rgb(0.98, 0.98, 0.98) : rgb(1, 1, 1);
     page.drawRectangle({
       x: margin,
       y: yPos - rowHeight,
@@ -254,13 +413,13 @@ async function generatePDF(user, transactions, startDateStr, endDateStr) {
       color: bgColor,
     });
 
-    const textColor = tx.type === "credit" ? rgb(0.8, 0.1, 0.1) : rgb(0.1, 0.8, 0.1);
+    const textColor = tx.type === "credit" ? palette.danger : palette.success;
 
-    page.drawText((tx.personId?.name || "Unknown").substring(0, 20), { x: col1, y: yPos - 15, font, size: 9 });
-    page.drawText(tx.type.toUpperCase(), { x: col2, y: yPos - 15, font, size: 9, color: textColor });
-    page.drawText(money(tx.amount), { x: col3, y: yPos - 15, font, size: 9 });
-    page.drawText(tx.currency || "USD", { x: col4, y: yPos - 15, font, size: 9 });
-    page.drawText(new Date(tx.date).toLocaleDateString(), { x: col5, y: yPos - 15, font, size: 9 });
+    page.drawText((tx.personId?.name || "Unknown").substring(0, 20), { x: col1, y: yPos - 15, font, size: 9 * scale });
+    page.drawText(tx.type.toUpperCase(), { x: col2, y: yPos - 15, font: bold, size: 9 * scale, color: textColor });
+    page.drawText(money(tx.amount), { x: col3, y: yPos - 15, font, size: 9 * scale });
+    page.drawText(tx.currency || "USD", { x: col4, y: yPos - 15, font, size: 9 * scale });
+    page.drawText(new Date(tx.date).toLocaleDateString(), { x: col5, y: yPos - 15, font, size: 9 * scale });
 
     yPos -= rowHeight;
   }

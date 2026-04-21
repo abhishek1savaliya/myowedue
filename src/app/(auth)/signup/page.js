@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
+import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -30,6 +31,15 @@ export default function SignupPage() {
       return;
     }
 
+    if (data?.user) {
+      applyThemePreference(Boolean(data.user.darkMode));
+      applyAppearancePreference({
+        fontPreset: data.user.fontPreset,
+        fontSizePreset: data.user.fontSizePreset,
+        isPremium: Boolean(data.user.isPremium),
+      });
+    }
+
     router.push("/dashboard");
     router.refresh();
   }
@@ -37,7 +47,7 @@ export default function SignupPage() {
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
       <div className="mb-1 flex items-center gap-3">
-        <div className="rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500 p-2">
+        <div className="rounded-lg bg-linear-to-br from-emerald-400 to-emerald-500 p-2">
           <UserPlus className="h-5 w-5 text-white" />
         </div>
         <h1 className="text-2xl font-bold tracking-[0.18em] text-black">Create Account</h1>
@@ -113,7 +123,7 @@ export default function SignupPage() {
 
         <button
           disabled={loading}
-          className="w-full rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-emerald-500 hover:to-emerald-600 disabled:opacity-60 mt-6"
+          className="w-full rounded-xl bg-linear-to-r from-emerald-400 to-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-emerald-500 hover:to-emerald-600 disabled:opacity-60 mt-6"
         >
           {loading ? "Creating account..." : "Create account"}
         </button>

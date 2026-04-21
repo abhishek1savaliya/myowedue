@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-const protectedRoutes = ["/dashboard", "/people", "/transactions", "/bin", "/reports", "/settings", "/content-editor"];
+const protectedRoutes = ["/dashboard", "/people", "/transactions", "/bin", "/reports", "/settings", "/my-subscription", "/content-editor", "/support"];
 const authRoutes = ["/login", "/signup"];
-const adminProtectedRoutes = ["/admin/dashboard", "/admin/team", "/admin/tickets", "/admin/content"];
+const adminProtectedRoutes = ["/admin/dashboard", "/admin/team", "/admin/tickets", "/admin/content", "/admin/vouchers"];
 
 export function proxy(request) {
   const { pathname } = request.nextUrl;
@@ -39,12 +39,15 @@ export const config = {
     "/bin/:path*",
     "/reports/:path*",
     "/settings/:path*",
+    "/my-subscription/:path*",
     "/content-editor/:path*",
+    "/support/:path*",
     "/login",
     "/signup",
     "/admin/dashboard/:path*",
     "/admin/team/:path*",
     "/admin/tickets/:path*",
+    "/admin/vouchers/:path*",
     "/admin/login",
   ],
 };

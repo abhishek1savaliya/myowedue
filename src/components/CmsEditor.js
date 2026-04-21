@@ -231,6 +231,34 @@ function FeaturesField({ label, items, onChange }) {
   );
 }
 
+function PlanField({ label, value, onChange }) {
+  const plan = value && typeof value === "object" ? value : {};
+
+  function set(field, nextValue) {
+    onChange({ ...plan, [field]: nextValue });
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4 space-y-4">
+      <h3 className="text-sm font-semibold text-white">{label}</h3>
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextField label="Badge" value={plan.badge} onChange={(v) => set("badge", v)} />
+        <TextField label="Plan name" value={plan.name} onChange={(v) => set("name", v)} />
+        <TextField label="Price" value={plan.price} onChange={(v) => set("price", v)} />
+        <TextField label="Billing label" value={plan.billing} onChange={(v) => set("billing", v)} />
+        <TextField label="CTA label" value={plan.ctaLabel} onChange={(v) => set("ctaLabel", v)} />
+        <TextField label="CTA link" value={plan.ctaHref} onChange={(v) => set("ctaHref", v)} />
+      </div>
+      <RichTextField label="Description" value={plan.description} onChange={(v) => set("description", v)} />
+      <StringListField
+        label="Feature list"
+        items={Array.isArray(plan.features) ? plan.features : []}
+        onChange={(v) => set("features", v)}
+      />
+    </div>
+  );
+}
+
 function SecurityItemsField({ label, items, onChange }) {
   function updateItem(idx, field, val) {
     const next = items.map((item, i) => (i === idx ? { ...item, [field]: val } : item));
@@ -388,6 +416,12 @@ function HomeEditor({ content, onChange }) {
         items={Array.isArray(content.securityItems) ? content.securityItems : []}
         onChange={(v) => set("securityItems", v)}
       />
+      <TextField label="Plans eyebrow" value={content.plansEyebrow} onChange={(v) => set("plansEyebrow", v)} />
+      <TextField label="Plans title" value={content.plansTitle} onChange={(v) => set("plansTitle", v)} />
+      <RichTextField label="Plans description" value={content.plansDescription} onChange={(v) => set("plansDescription", v)} />
+      <PlanField label="Free plan" value={content.freePlan} onChange={(v) => set("freePlan", v)} />
+      <PlanField label="Paid plan" value={content.paidPlan} onChange={(v) => set("paidPlan", v)} />
+      <TextField label="Plans footnote" value={content.plansFootnote} onChange={(v) => set("plansFootnote", v)} />
       <TextField label="Final CTA title" value={content.finalCtaTitle} onChange={(v) => set("finalCtaTitle", v)} />
     </div>
   );

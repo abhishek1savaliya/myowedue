@@ -60,7 +60,7 @@ export async function DELETE(_request, { params }) {
   try {
     const { id } = await params;
     await connectDB();
-    const { deletedAt, restoreUntil } = buildBinMeta();
+    const { deletedAt, restoreUntil } = buildBinMeta(user);
     const eventAt = new Date();
 
     const person = await Person.findOneAndUpdate(
