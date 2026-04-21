@@ -155,18 +155,20 @@ export default function EventsPage() {
   const past = events.filter((e) => new Date(e.startTime) < new Date());
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-3 py-5 sm:px-4 sm:py-8">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-black">Events</h1>
-          <p className="mt-0.5 text-sm text-zinc-500">
-            Manage your events. Get notified 3 days, 3 hours, and 1 hour before each event.
-          </p>
+      <div className="mb-5 sm:mb-6">
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-xl font-bold text-black sm:text-2xl">Events</h1>
+            <p className="mt-0.5 text-xs text-zinc-500 sm:text-sm">
+              Manage your events. Get notified 3 days, 3 hours &amp; 1 hour before.
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <label
-            className={`flex cursor-pointer items-center gap-2 rounded-xl border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-black hover:text-black ${importing ? "pointer-events-none opacity-60" : ""}`}
+            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-300 px-3 py-2.5 text-sm font-medium text-zinc-700 transition hover:border-black hover:text-black sm:flex-none ${importing ? "pointer-events-none opacity-60" : ""}`}
             title="Import .ics file"
           >
             <Upload size={15} />
@@ -182,7 +184,7 @@ export default function EventsPage() {
           </label>
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 rounded-xl bg-black px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-black px-3 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 sm:flex-none"
           >
             <Plus size={15} /> New Event
           </button>
@@ -223,8 +225,8 @@ export default function EventsPage() {
 
       {/* Modal form */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:px-4">
+          <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-black">{editingId ? "Edit Event" : "New Event"}</h2>
               <button onClick={() => setShowForm(false)} className="text-zinc-400 hover:text-black">
@@ -244,12 +246,12 @@ export default function EventsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-zinc-700">Start *</label>
                   <input
                     type="datetime-local"
-                    className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm outline-none focus:border-black"
                     value={form.startTime}
                     onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
                     required
@@ -259,7 +261,7 @@ export default function EventsPage() {
                   <label className="mb-1 block text-sm font-medium text-zinc-700">End</label>
                   <input
                     type="datetime-local"
-                    className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm outline-none focus:border-black"
                     value={form.endTime}
                     onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
                   />
@@ -300,18 +302,18 @@ export default function EventsPage() {
 
               {error && <p className="text-sm text-red-600">{error}</p>}
 
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="rounded-xl border border-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:border-black"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-700 hover:border-black sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
+                  className="w-full rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 sm:w-auto"
                 >
                   {saving ? "Saving…" : editingId ? "Save Changes" : "Create Event"}
                 </button>
@@ -362,12 +364,12 @@ function EventCard({ event, onEdit, onDelete }) {
   const isPast = new Date(event.startTime) < new Date();
   return (
     <div
-      className={`rounded-2xl border px-5 py-4 transition ${isPast ? "border-zinc-100 bg-zinc-50 opacity-60" : "border-zinc-200 bg-white hover:border-zinc-400"}`}
+      className={`rounded-2xl border px-4 py-3.5 transition sm:px-5 sm:py-4 ${isPast ? "border-zinc-100 bg-zinc-50 opacity-60" : "border-zinc-200 bg-white"}`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-black">{event.title}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
+          <div className="mt-1 flex flex-col gap-0.5 text-xs text-zinc-500 sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-1">
             <span className="flex items-center gap-1">
               <Clock size={12} />
               {formatDateTime(event.startTime, event.allDay)}
@@ -380,22 +382,22 @@ function EventCard({ event, onEdit, onDelete }) {
             )}
           </div>
           {event.description && (
-            <p className="mt-2 text-xs text-zinc-500 line-clamp-2">{event.description}</p>
+            <p className="mt-1.5 text-xs text-zinc-500 line-clamp-2">{event.description}</p>
           )}
         </div>
         {!isPast && (
-          <div className="flex shrink-0 gap-1">
+          <div className="flex shrink-0 gap-0.5">
             <button
               onClick={() => onEdit(event)}
-              className="rounded-lg px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-black"
+              className="rounded-lg px-2.5 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-black active:bg-zinc-200"
             >
               Edit
             </button>
             <button
               onClick={() => onDelete(event._id)}
-              className="rounded-lg px-2 py-1 text-xs text-zinc-500 hover:bg-red-50 hover:text-red-600"
+              className="rounded-lg px-2.5 py-2 text-xs text-zinc-500 hover:bg-red-50 hover:text-red-600 active:bg-red-100"
             >
-              <Trash2 size={13} />
+              <Trash2 size={14} />
             </button>
           </div>
         )}
