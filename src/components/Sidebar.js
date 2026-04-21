@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
@@ -89,14 +90,27 @@ export default function Sidebar({ notificationCount = 0 }) {
 
   return (
     <aside className="sticky top-0 z-30 w-full border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur md:h-screen md:w-72 md:border-b-0 md:border-r md:px-6 md:py-8">
-      <div className="mb-4 flex items-center justify-between md:mb-8 md:block">
-        <h1 className="text-xl font-bold tracking-[0.18em] text-black">OWE DUE</h1>
+      <div className="mb-4 flex items-center justify-between md:mb-8">
+        <Link href="/dashboard" className="inline-flex min-w-0 items-center gap-2 rounded-xl p-1" aria-label="Go to dashboard">
+          <Image
+            src="/owedue-logo.svg"
+            alt="OWE DUE logo"
+            width={40}
+            height={40}
+            priority
+            className="h-8 w-8 rounded-lg sm:h-9 sm:w-9 md:h-10 md:w-10"
+          />
+          <span className="truncate text-base font-bold tracking-widest text-black sm:text-lg md:text-xl">OWE DUE</span>
+        </Link>
         <Link
           href="/notifications"
           aria-label="Open notifications"
-          className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-1 text-xs text-zinc-700 transition hover:border-black hover:text-black"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 transition hover:border-black hover:text-black md:h-10 md:w-10"
         >
-          <Bell size={14} /> {liveNotificationCount}
+          <Bell size={16} />
+          <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-black px-1 text-[10px] font-semibold leading-none text-white">
+            {liveNotificationCount > 99 ? "99+" : liveNotificationCount}
+          </span>
         </Link>
       </div>
 

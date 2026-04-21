@@ -1,9 +1,21 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import PublicFooter from "@/components/PublicFooter";
 import { ArrowRight } from "lucide-react";
 import { getCmsPageContent } from "@/lib/cmsPublic";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+export const metadata = {
+  title: "Personal Credit & Debit Tracker",
+  description:
+    "Manage dues, reminders, events, and payment history in one premium workspace with OWE DUE.",
+  alternates: {
+    canonical: "/",
+  },
+};
 
 export default async function Home() {
   const store = await cookies();
@@ -21,15 +33,67 @@ export default async function Home() {
   const whyChooseItems = Array.isArray(content.whyChooseItems) ? content.whyChooseItems : [];
   const securityItems = Array.isArray(content.securityItems) ? content.securityItems : [];
 
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${siteUrl}/#organization`,
+        name: "OWE DUE",
+        url: siteUrl,
+        logo: `${siteUrl}/owedue-logo.svg`,
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${siteUrl}/#website`,
+        url: siteUrl,
+        name: "OWE DUE",
+        publisher: { "@id": `${siteUrl}/#organization` },
+        inLanguage: "en",
+      },
+      {
+        "@type": "WebPage",
+        "@id": `${siteUrl}/#home`,
+        url: siteUrl,
+        name: "OWE DUE | Personal Credit & Debit Tracker",
+        description:
+          "Track credits, debits, reminders, and due history in one premium workspace.",
+        isPartOf: { "@id": `${siteUrl}/#website` },
+        about: { "@id": `${siteUrl}/#organization` },
+      },
+      {
+        "@type": "ItemList",
+        "@id": `${siteUrl}/#site-navigation`,
+        itemListElement: [
+          { "@type": "SiteNavigationElement", position: 1, name: "Login", url: `${siteUrl}/login` },
+          { "@type": "SiteNavigationElement", position: 2, name: "Sign up", url: `${siteUrl}/signup` },
+          { "@type": "SiteNavigationElement", position: 3, name: "Privacy Policy", url: `${siteUrl}/privacy-policy` },
+          { "@type": "SiteNavigationElement", position: 4, name: "Contact", url: `${siteUrl}/contact-us` },
+        ],
+      },
+    ],
+  };
+
   return (
     <main className="relative overflow-hidden bg-linear-to-b from-background via-background to-background text-foreground">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(245,158,11,0.14),transparent_34%),radial-gradient(circle_at_84%_84%,rgba(16,185,129,0.12),transparent_34%)]" />
 
       <section className="relative mx-auto max-w-6xl px-6 pb-16 pt-10 md:pb-20 md:pt-14">
-        <header className="flex items-center justify-between">
-          <div>
-            <p className="text-xl font-bold tracking-[0.18em] text-black">OWE DUE</p>
-            <p className="text-xs text-zinc-600">Personal credit and debit tracker</p>
+        <header className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <Image
+              src="/owedue-logo.svg"
+              alt="OWE DUE logo"
+              width={40}
+              height={40}
+              className="h-9 w-9 rounded-lg sm:h-10 sm:w-10"
+              priority
+            />
+            <div>
+              <p className="text-lg font-bold tracking-[0.16em] text-black sm:text-xl">OWE DUE</p>
+              <p className="text-[11px] text-zinc-600 sm:text-xs">Personal credit and debit tracker</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Link
