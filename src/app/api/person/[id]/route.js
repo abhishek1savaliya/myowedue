@@ -25,7 +25,7 @@ export async function PUT(request, { params }) {
         email: payload.email?.trim().toLowerCase() || "",
         phone: payload.phone?.trim() || "",
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!person) return fail("Person not found", 404);
@@ -66,7 +66,7 @@ export async function DELETE(_request, { params }) {
     const person = await Person.findOneAndUpdate(
       { _id: id, userId: user._id, ...activeQuery() },
       { $set: { isDeleted: true, deletedAt, restoreUntil } },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (!person) return fail("Person not found", 404);
 

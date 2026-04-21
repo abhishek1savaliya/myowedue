@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Moon, Sun } from "lucide-react";
 import Loader from "@/components/Loader";
 import { applyThemePreference } from "@/lib/theme-client";
 
@@ -194,18 +195,22 @@ export default function SettingsPage() {
           <option value="monthly">Monthly</option>
         </select>
 
-        <label className="flex items-center gap-2 text-sm text-zinc-700">
-          <input
-            type="checkbox"
-            checked={darkMode}
-            onChange={(e) => {
-              const next = e.target.checked;
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-700">Display Mode</p>
+          <button
+            type="button"
+            aria-pressed={darkMode}
+            onClick={() => {
+              const next = !darkMode;
               setDarkMode(next);
               applyThemePreference(next);
             }}
-          />
-          Enable dark mode preference
-        </label>
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-black hover:bg-zinc-50"
+          >
+            {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {darkMode ? "Light mode" : "Dark mode"}
+          </button>
+        </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <button

@@ -30,7 +30,7 @@ export async function PATCH(req, { params }) {
       }
     }
 
-    const updated = await AdminUser.findByIdAndUpdate(id, allowed, { new: true });
+    const updated = await AdminUser.findByIdAndUpdate(id, allowed, { returnDocument: "after" });
     if (!updated) return fail("Member not found", 404);
 
     return ok({

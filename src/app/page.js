@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import PublicFooter from "@/components/PublicFooter";
+import PublicModeToggle from "@/components/PublicModeToggle";
 import { ArrowRight } from "lucide-react";
 import { getCmsPageContent } from "@/lib/cmsPublic";
 
@@ -96,6 +97,7 @@ export default async function Home() {
             </div>
           </div>
           <div className="flex gap-2">
+            <PublicModeToggle />
             <Link
               href="/login"
               className="rounded-xl border border-zinc-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-amber-400 hover:text-amber-600"

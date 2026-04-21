@@ -50,7 +50,7 @@ export async function PUT(request) {
           ...(typeof notificationsEnabled === "boolean" ? { notificationsEnabled } : {}),
         },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!updated) return fail("User not found", 404);

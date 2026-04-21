@@ -101,7 +101,7 @@ export async function PATCH(req) {
     const updated = await AdminUser.findByIdAndUpdate(
       admin._id,
       { firstName: f, lastName: l, name },
-      { new: true }
+      { returnDocument: "after" }
     ).lean();
 
     if (!updated) return fail("User not found", 404);

@@ -69,34 +69,34 @@ export default function ContactUsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-950 text-stone-100">
+    <main className="min-h-screen bg-background text-foreground">
       <section className="mx-auto max-w-5xl px-6 py-12 md:py-16">
         <Link href="/" className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300">
           Back to home
         </Link>
 
         <div className="mt-5 grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
-          <article className="rounded-3xl border border-stone-700 bg-stone-900/70 p-6 md:p-8">
+          <article className="rounded-3xl border border-zinc-200 bg-white/80 p-6 md:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-300">Contact us</p>
-            <h1 className="mt-2 text-4xl text-stone-50">{content.heading}</h1>
-            <div className="mt-4 text-sm leading-7 text-stone-300 cms-html" dangerouslySetInnerHTML={{ __html: content.description }} />
+            <h1 className="mt-2 text-4xl text-black">{content.heading}</h1>
+            <div className="mt-4 text-sm leading-7 text-zinc-600 cms-html" dangerouslySetInnerHTML={{ __html: content.description }} />
 
-            <div className="mt-6 grid gap-3 text-sm text-stone-200">
+            <div className="mt-6 grid gap-3 text-sm text-zinc-700">
               {(Array.isArray(content.contactItems) ? content.contactItems : []).map((item, idx) => (
-                <p key={`${item}-${idx}`} className="rounded-xl border border-stone-700 bg-stone-900 px-4 py-3">
+                <p key={`${item}-${idx}`} className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
                   {item}
                 </p>
               ))}
             </div>
           </article>
 
-          <article className="rounded-3xl border border-stone-700 bg-stone-900/70 p-6 md:p-8">
+          <article className="rounded-3xl border border-zinc-200 bg-white/80 p-6 md:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-300">{content.formTitle}</p>
 
             {success ? (
-              <div className="mt-6 rounded-xl border border-emerald-600/30 bg-emerald-500/10 px-4 py-5 text-sm text-emerald-300">
+              <div className="mt-6 rounded-xl border border-emerald-600/30 bg-emerald-500/10 px-4 py-5 text-sm text-emerald-600">
                 <p className="font-semibold text-base">{content.successTitle}</p>
-                <p className="mt-1 text-stone-400">{content.successDescription}</p>
+                <p className="mt-1 text-zinc-600">{content.successDescription}</p>
                 <button
                   onClick={() => setSuccess(false)}
                   className="mt-3 text-xs text-amber-300 underline"
@@ -112,7 +112,7 @@ export default function ContactUsPage() {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
-                  className="w-full rounded-xl border border-stone-600 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder:text-stone-500 focus:border-amber-400 focus:outline-none"
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none"
                 />
                 <input
                   type="email"
@@ -120,7 +120,7 @@ export default function ContactUsPage() {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required
-                  className="w-full rounded-xl border border-stone-600 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder:text-stone-500 focus:border-amber-400 focus:outline-none"
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none"
                 />
                 <textarea
                   rows={5}
@@ -128,7 +128,7 @@ export default function ContactUsPage() {
                   value={form.message}
                   onChange={(e) => setForm({ ...form, message: e.target.value })}
                   required
-                  className="w-full rounded-xl border border-stone-600 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder:text-stone-500 focus:border-amber-400 focus:outline-none"
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none"
                 />
                 {error && (
                   <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
@@ -138,7 +138,7 @@ export default function ContactUsPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-stone-900 transition hover:bg-amber-200 disabled:opacity-60"
+                  className="w-full rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-amber-200 disabled:opacity-60"
                 >
                   {loading ? "Sending..." : "Send message"}
                 </button>

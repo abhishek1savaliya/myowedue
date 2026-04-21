@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
+import { applyThemePreference } from "@/lib/theme-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,6 +31,10 @@ export default function LoginPage() {
       return;
     }
 
+    if (data?.user && typeof data.user.darkMode === "boolean") {
+      applyThemePreference(data.user.darkMode);
+    }
+
     router.push("/dashboard");
     router.refresh();
   }
@@ -37,7 +42,7 @@ export default function LoginPage() {
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
       <div className="mb-1 flex items-center gap-3">
-        <div className="rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 p-2">
+        <div className="rounded-lg bg-linear-to-br from-amber-400 to-amber-500 p-2">
           <LogIn className="h-5 w-5 text-white" />
         </div>
         <h1 className="text-2xl font-bold tracking-[0.18em] text-black">Welcome Back</h1>
@@ -84,7 +89,7 @@ export default function LoginPage() {
 
         <button
           disabled={loading}
-          className="w-full rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600 disabled:opacity-60 mt-6"
+          className="w-full rounded-xl bg-linear-to-r from-amber-400 to-amber-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600 disabled:opacity-60 mt-6"
         >
           {loading ? "Signing in..." : "Sign in"}
         </button>

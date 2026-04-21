@@ -156,7 +156,7 @@ export async function PUT(request, { params }) {
     const tx = await Transaction.findOneAndUpdate(
       { _id: id, userId: user._id, ...activeQuery() },
       updateDoc,
-      { new: true }
+      { returnDocument: "after" }
     ).populate("personId", "name email");
 
     if (!tx) return fail("Transaction not found", 404);
@@ -201,7 +201,7 @@ export async function DELETE(_request, { params }) {
           },
         },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (!tx) return fail("Transaction not found", 404);
 

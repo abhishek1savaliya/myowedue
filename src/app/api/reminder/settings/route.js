@@ -22,7 +22,7 @@ export async function PUT(request) {
         ...(reminderFrequency ? { reminderFrequency } : {}),
         ...(typeof darkMode === "boolean" ? { darkMode } : {}),
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     await clearDashboardCache(user._id);
