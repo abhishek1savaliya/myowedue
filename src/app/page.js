@@ -6,7 +6,7 @@ import PublicFooter from "@/components/PublicFooter";
 import { ArrowRight } from "lucide-react";
 import { getCmsPageContent } from "@/lib/cmsPublic";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://myowedue.vercel.app";
 
 export const metadata = {
   title: "Personal Credit & Debit Tracker",
