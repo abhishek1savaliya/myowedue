@@ -8,6 +8,7 @@ const EventSchema = new Schema(
     location: { type: String, trim: true, default: "" },
     startTime: { type: Date, required: true },
     endTime: { type: Date },
+    timezone: { type: String, default: "Australia/Melbourne", trim: true },
     allDay: { type: Boolean, default: false },
     // Tracks which notifications have already been sent to avoid duplicates
     notifiedAt: {

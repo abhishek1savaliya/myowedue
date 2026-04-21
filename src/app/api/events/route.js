@@ -3,6 +3,8 @@ import { ok, fail } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import Event from "@/models/Event";
 
+const DEFAULT_TIMEZONE = "Australia/Melbourne";
+
 // GET /api/events — list upcoming (and recent past) events
 export async function GET() {
   const { user, error } = await requireUser();
@@ -38,7 +40,7 @@ export async function POST(request) {
     const body = await request.json().catch(() => null);
     if (!body) return fail("Invalid request body", 400);
 
-    const { title, description, location, startTime, endTime, allDay } = body;
+    const { title, description, location, startTime, endTime, allDay, timezone } = body;
     if (!title?.trim()) return fail("Title is required", 400);
     if (!startTime) return fail("Start time is required", 400);
 
@@ -49,6 +51,7 @@ export async function POST(request) {
       location: location?.trim() || "",
       startTime: new Date(startTime),
       endTime: endTime ? new Date(endTime) : undefined,
+      timezone: typeof timezone === "string" && timezone.trim() ? timezone.trim() : DEFAULT_TIMEZONE,
       allDay: Boolean(allDay),
     });
 

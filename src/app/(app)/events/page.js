@@ -2,32 +2,47 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Calendar, Plus, Upload, Trash2, MapPin, Clock, X } from "lucide-react";
+import moment from "moment-timezone";
 import EmptyState from "@/components/EmptyState";
 
-function formatDateTime(dateStr, allDay) {
+const DEFAULT_TIMEZONE = "Australia/Melbourne";
+const TIMEZONE_OPTIONS = [
+  "Australia/Melbourne",
+  "Australia/Sydney",
+  "Australia/Perth",
+  "Australia/Brisbane",
+  "UTC",
+  "Asia/Kolkata",
+  "Asia/Dubai",
+  "Europe/London",
+  "Europe/Berlin",
+  "America/New_York",
+  "America/Los_Angeles",
+];
+
+function formatDateTime(dateStr, allDay, timezone = DEFAULT_TIMEZONE) {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
+  const m = moment(dateStr).tz(timezone);
   if (allDay) {
-    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    return m.format("ddd, MMM D, YYYY");
   }
-  return d.toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return `${m.format("ddd, MMM D, YYYY h:mm A")} (${m.format("z")})`;
 }
 
-function toInputDatetime(dateStr) {
+function toInputDatetime(dateStr, timezone = DEFAULT_TIMEZONE) {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return moment(dateStr).tz(timezone).format("YYYY-MM-DDTHH:mm");
 }
 
-const emptyForm = { title: "", description: "", location: "", startTime: "", endTime: "", allDay: false };
+const emptyForm = {
+  title: "",
+  description: "",
+  location: "",
+  startTime: "",
+  endTime: "",
+  timezone: DEFAULT_TIMEZONE,
+  allDay: false,
+};
 
 export default function EventsPage() {
   const [events, setEvents] = useState([]);
@@ -65,13 +80,15 @@ export default function EventsPage() {
   }
 
   function openEdit(event) {
+    const timezone = event.timezone || DEFAULT_TIMEZONE;
     setEditingId(event._id);
     setForm({
       title: event.title,
       description: event.description || "",
       location: event.location || "",
-      startTime: toInputDatetime(event.startTime),
-      endTime: event.endTime ? toInputDatetime(event.endTime) : "",
+      startTime: toInputDatetime(event.startTime, timezone),
+      endTime: event.endTime ? toInputDatetime(event.endTime, timezone) : "",
+      timezone,
       allDay: Boolean(event.allDay),
     });
     setError("");
@@ -94,8 +111,11 @@ export default function EventsPage() {
           title: form.title.trim(),
           description: form.description.trim(),
           location: form.location.trim(),
-          startTime: new Date(form.startTime).toISOString(),
-          endTime: form.endTime ? new Date(form.endTime).toISOString() : undefined,
+          startTime: moment.tz(form.startTime, form.timezone || DEFAULT_TIMEZONE).toISOString(),
+          endTime: form.endTime
+            ? moment.tz(form.endTime, form.timezone || DEFAULT_TIMEZONE).toISOString()
+            : undefined,
+          timezone: form.timezone || DEFAULT_TIMEZONE,
           allDay: form.allDay,
         }),
       });
@@ -268,6 +288,20 @@ export default function EventsPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Time zone</label>
+                <select
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-black"
+                  value={form.timezone}
+                  onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+                >
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <option key={tz} value={tz}>{tz}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-zinc-500">Default: Australia/Melbourne</p>
+              </div>
+
               <div className="flex items-center gap-2">
                 <input
                   id="allDay"
@@ -362,6 +396,7 @@ export default function EventsPage() {
 
 function EventCard({ event, onEdit, onDelete }) {
   const isPast = new Date(event.startTime) < new Date();
+  const timezone = event.timezone || DEFAULT_TIMEZONE;
   return (
     <div
       className={`rounded-2xl border px-4 py-3.5 transition sm:px-5 sm:py-4 ${isPast ? "border-zinc-100 bg-zinc-50 opacity-60" : "border-zinc-200 bg-white"}`}
@@ -372,8 +407,8 @@ function EventCard({ event, onEdit, onDelete }) {
           <div className="mt-1 flex flex-col gap-0.5 text-xs text-zinc-500 sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-1">
             <span className="flex items-center gap-1">
               <Clock size={12} />
-              {formatDateTime(event.startTime, event.allDay)}
-              {event.endTime && <> – {formatDateTime(event.endTime, event.allDay)}</>}
+              {formatDateTime(event.startTime, event.allDay, timezone)}
+              {event.endTime && <> – {formatDateTime(event.endTime, event.allDay, timezone)}</>}
             </span>
             {event.location && (
               <span className="flex items-center gap-1">

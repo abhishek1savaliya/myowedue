@@ -3,6 +3,8 @@ import { ok, fail } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import Event from "@/models/Event";
 
+const DEFAULT_TIMEZONE = "Australia/Melbourne";
+
 /**
  * Parses an ICS date string (YYYYMMDD or YYYYMMDDTHHmmssZ) into a JS Date.
  */
@@ -102,6 +104,7 @@ export async function POST(request) {
       location: e.location || "",
       startTime: e.startTime,
       endTime: e.endTime || undefined,
+      timezone: DEFAULT_TIMEZONE,
       allDay: e.allDay,
     }));
 
