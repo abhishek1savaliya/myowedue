@@ -7,18 +7,21 @@ import Loader from "@/components/Loader";
 export default function BinPage() {
   const [personBin, setPersonBin] = useState([]);
   const [transactionBin, setTransactionBin] = useState([]);
+  const [eventBin, setEventBin] = useState([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
-    const [pRes, tRes] = await Promise.all([
+    const [pRes, tRes, eRes] = await Promise.all([
       fetch("/api/bin/person", { cache: "no-store" }),
       fetch("/api/bin/transaction", { cache: "no-store" }),
+      fetch("/api/bin/event", { cache: "no-store" }),
     ]);
 
-    const [pData, tData] = await Promise.all([pRes.json(), tRes.json()]);
+    const [pData, tData, eData] = await Promise.all([pRes.json(), tRes.json(), eRes.json()]);
     if (pRes.ok) setPersonBin(pData.people || []);
     if (tRes.ok) setTransactionBin(tData.transactions || []);
+    if (eRes.ok) setEventBin(eData.events || []);
     setLoading(false);
   }
 
@@ -36,11 +39,16 @@ export default function BinPage() {
     if (res.ok) load();
   }
 
+  async function restoreEvent(id) {
+    const res = await fetch(`/api/bin/event/${id}/restore`, { method: "POST" });
+    if (res.ok) load();
+  }
+
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">Bin</h1>
-        <p className="text-sm text-zinc-600">Restore deleted people/transactions within 3 years. After that they are auto-removed.</p>
+        <p className="text-sm text-zinc-600">Restore deleted people/transactions/events within 3 years. After that they are auto-removed.</p>
       </header>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5">
@@ -110,6 +118,43 @@ export default function BinPage() {
                     )}
                   </div>
                 </details>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5">
+        <h2 className="text-lg font-semibold">Event Bin</h2>
+        <p className="text-xs text-zinc-500">Deleted events can be restored within 3 years.</p>
+        <div className="mt-4 space-y-3">
+          {loading ? (
+            <Loader />
+          ) : eventBin.length === 0 ? (
+            <EmptyState text="Event bin is empty." />
+          ) : (
+            eventBin.map((e) => (
+              <article key={e._id} className="rounded-xl border border-zinc-200 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-black">{e.title}</p>
+                    <p className="text-xs text-zinc-500">
+                      {new Date(e.startTime).toLocaleString(undefined, {
+                        weekday: "short", month: "short", day: "numeric", year: "numeric",
+                        ...(e.allDay ? {} : { hour: "2-digit", minute: "2-digit" }),
+                      })}
+                      {e.location ? ` • ${e.location}` : ""}
+                    </p>
+                    {e.description && <p className="mt-0.5 text-xs text-zinc-400 line-clamp-1">{e.description}</p>}
+                  </div>
+                  <button onClick={() => restoreEvent(e._id)} className="w-full rounded-lg border border-black px-3 py-2 text-xs sm:w-auto">
+                    Restore
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Deleted: {e.deletedAt ? new Date(e.deletedAt).toLocaleDateString() : "N/A"} •{" "}
+                  Restore before: {e.restoreUntil ? new Date(e.restoreUntil).toLocaleDateString() : "N/A"}
+                </p>
               </article>
             ))
           )}

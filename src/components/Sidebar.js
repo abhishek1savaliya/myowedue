@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine } from "lucide-react";
+import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays } from "lucide-react";
 
 const baseLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/people", label: "People", icon: Users },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { href: "/events", label: "Events", icon: CalendarDays },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/bin", label: "Bin", icon: Trash2 },
   { href: "/reports", label: "Reports", icon: FileText },
@@ -44,8 +45,10 @@ export default function Sidebar({ notificationCount = 0 }) {
         const meData = await meRes.json().catch(() => ({}));
         const meUser = meData?.user || {};
         const userId = meUser?.id;
-        const role = String(meUser?.cmsRole || "manager");
-        const hasPermission = role === "super_admin" || role === "manager" || Boolean(meUser?.contentEditPermission);
+        const role = String(meUser?.cmsRole || "");
+        const hasPermission =
+          role === "super_admin" ||
+          (role === "manager" && Boolean(meUser?.contentEditPermission));
         if (!cancelled) {
           setCanAccessContentEditor(hasPermission);
         }
