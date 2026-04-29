@@ -84,9 +84,9 @@ export default async function Home() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(245,158,11,0.14),transparent_34%),radial-gradient(circle_at_84%_84%,rgba(16,185,129,0.12),transparent_34%)]" />
 
-      <section className="relative mx-auto max-w-6xl px-6 pb-16 pt-10 md:pb-20 md:pt-14">
+      <section className="relative mx-auto max-w-6xl px-4 pb-16 pt-10 sm:px-6 md:pb-20 md:pt-14">
         <header className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <Image
               src="/owedue-logo.svg"
               alt="OWE DUE logo"
@@ -95,24 +95,18 @@ export default async function Home() {
               className="h-9 w-9 rounded-lg sm:h-10 sm:w-10"
               priority
             />
-            <div>
-              <p className="text-lg font-bold tracking-[0.16em] text-black sm:text-xl">OWE DUE</p>
-              <p className="text-[11px] text-zinc-600 sm:text-xs">Personal credit and debit tracker</p>
+            <div className="min-w-0">
+              <p className="text-lg font-bold tracking-[0.12em] text-black sm:text-xl">OWE DUE</p>
+              <p className="truncate text-[11px] text-zinc-600 sm:text-xs">Personal credit and debit tracker</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <PublicModeToggle />
             <Link
               href="/login"
-              className="rounded-xl border border-zinc-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-amber-400 hover:text-amber-600"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-300 px-3 py-2 text-center text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-amber-400 hover:text-amber-600 sm:px-4"
             >
               Login
-            </Link>
-            <Link
-              href="/signup"
-              className="rounded-xl bg-linear-to-r from-emerald-400 to-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:from-emerald-500 hover:to-emerald-600"
-            >
-              Get Started
             </Link>
           </div>
         </header>
@@ -127,17 +121,17 @@ export default async function Home() {
             </h1>
             <div className="mt-5 max-w-2xl text-sm leading-7 text-zinc-600 md:text-base cms-html" dangerouslySetInnerHTML={{ __html: content.heroDescription || "Manage dues in one premium workspace." }} />
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-amber-400 to-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-amber-400 to-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600 sm:w-auto"
               >
                 {content.ctaPrimary || "Create your account"}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/login"
-                className="rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                className="inline-flex w-full items-center justify-center rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:w-auto"
               >
                 {content.ctaSecondary || "Already have an account"}
               </Link>
@@ -349,16 +343,16 @@ export default async function Home() {
               {content.finalCtaTitle || "Join thousands of users tracking dues effortlessly."}
             </h2>
           </div>
-          <div className="mt-6 flex flex-wrap gap-3 md:mt-0 md:flex-nowrap">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap md:mt-0 md:flex-nowrap">
             <Link
               href="/signup"
-              className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-emerald-400 to-emerald-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-emerald-500 hover:to-emerald-600"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-400 to-emerald-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-emerald-500 hover:to-emerald-600 sm:w-auto"
             >
               Get started free
             </Link>
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:w-auto"
             >
               Sign in
             </Link>

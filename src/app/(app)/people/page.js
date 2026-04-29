@@ -312,8 +312,8 @@ export default function PeoplePage() {
       ) : null}
 
       {invoiceModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 p-3 pt-6 sm:items-center sm:p-4">
+          <div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-5">
             <h2 className="text-lg font-semibold text-black">Generate Invoice</h2>
             <p className="mt-2 text-sm text-zinc-600">For: <span className="font-semibold">{invoiceModal.personName}</span></p>
             
@@ -348,7 +348,7 @@ export default function PeoplePage() {
               </div>
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setInvoiceModal(null)}
