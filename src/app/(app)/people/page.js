@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import { normalizeCurrency, convertFromUSD, formatCurrency, DEFAULT_FX } from "@/lib/currency";
@@ -17,6 +18,8 @@ export default function PeoplePage() {
   const [rates, setRates] = useState(null);
   const [invoiceModal, setInvoiceModal] = useState(null); // { personId, personName, startDate, endDate }
   const invoiceOptions = ["AUD", "INR", "USD", "EUR", "GBP"];
+  const hasOverlayOpen = Boolean(deleteTarget || invoiceModal);
+  const canUsePortal = typeof document !== "undefined";
 
   function getInvoiceCurrency(personId) {
     return invoiceCurrencies[personId] || "AUD";
@@ -69,6 +72,20 @@ export default function PeoplePage() {
   useEffect(() => {
     load(true);
   }, []);
+
+  useEffect(() => {
+    if (!hasOverlayOpen) return undefined;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+    };
+  }, [hasOverlayOpen]);
 
   async function addPerson(e) {
     e.preventDefault();
@@ -284,89 +301,95 @@ export default function PeoplePage() {
         </div>
       )}
 
-      {deleteTarget ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
-            <h2 className="text-lg font-semibold text-black">Delete Person?</h2>
-            <p className="mt-2 text-sm text-zinc-600">
-              Move {deleteTarget.name} and related transactions to bin?
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => removePerson(deleteTarget.id)}
-                className="rounded-lg bg-black px-4 py-2 text-sm text-white"
-              >
-                Yes, Move to Bin
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {invoiceModal ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 p-3 pt-6 sm:items-center sm:p-4">
-          <div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-5">
-            <h2 className="text-lg font-semibold text-black">Generate Invoice</h2>
-            <p className="mt-2 text-sm text-zinc-600">For: <span className="font-semibold">{invoiceModal.personName}</span></p>
-            
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-black">From Date</label>
-                <input
-                  type="date"
-                  value={invoiceModal.startDate}
-                  onChange={(e) =>
-                    setInvoiceModal((prev) => ({
-                      ...prev,
-                      startDate: e.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-                />
+      {deleteTarget && canUsePortal
+        ? createPortal(
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4">
+              <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+                <h2 className="text-lg font-semibold text-black">Delete Person?</h2>
+                <p className="mt-2 text-sm text-zinc-600">
+                  Move {deleteTarget.name} and related transactions to bin?
+                </p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(null)}
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removePerson(deleteTarget.id)}
+                    className="rounded-lg bg-black px-4 py-2 text-sm text-white"
+                  >
+                    Yes, Move to Bin
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-black">To Date</label>
-                <input
-                  type="date"
-                  value={invoiceModal.endDate}
-                  onChange={(e) =>
-                    setInvoiceModal((prev) => ({
-                      ...prev,
-                      endDate: e.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
+            </div>,
+            document.body
+          )
+        : null}
 
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setInvoiceModal(null)}
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={generateInvoice}
-                className="rounded-lg bg-black px-4 py-2 text-sm text-white"
-              >
-                Generate Invoice
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {invoiceModal && canUsePortal
+        ? createPortal(
+            <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 sm:items-center sm:p-4">
+              <div className="w-full max-h-[85dvh] overflow-y-auto rounded-t-3xl border border-zinc-200 bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:max-w-md sm:rounded-2xl sm:p-5">
+                <h2 className="text-lg font-semibold text-black">Generate Invoice</h2>
+                <p className="mt-2 text-sm text-zinc-600">For: <span className="font-semibold">{invoiceModal.personName}</span></p>
+                
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-black">From Date</label>
+                    <input
+                      type="date"
+                      value={invoiceModal.startDate}
+                      onChange={(e) =>
+                        setInvoiceModal((prev) => ({
+                          ...prev,
+                          startDate: e.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-black">To Date</label>
+                    <input
+                      type="date"
+                      value={invoiceModal.endDate}
+                      onChange={(e) =>
+                        setInvoiceModal((prev) => ({
+                          ...prev,
+                          endDate: e.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setInvoiceModal(null)}
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={generateInvoice}
+                    className="rounded-lg bg-black px-4 py-2 text-sm text-white"
+                  >
+                    Generate Invoice
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
