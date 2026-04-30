@@ -12,29 +12,44 @@ const CardSchema = new Schema(
     variantValue: { type: String, required: true, trim: true },
     variantLabel: { type: String, required: true, trim: true },
     network: { type: String, required: true, trim: true },
+    lookupBin: { type: String, trim: true, minlength: 6, maxlength: 8, default: "" },
     nameOnCard: { type: String, trim: true, default: "" },
+    encryptedNameOnCard: { type: String, trim: true, default: "" },
     encryptedCardNumber: { type: String, trim: true, default: "" },
     last4: { type: String, required: true, trim: true },
     cardNumberLength: { type: Number, required: true, min: 12, max: 19 },
-    expiryMonth: { type: String, required: true, trim: true },
-    expiryYear: { type: String, required: true, trim: true },
+    expiryMonth: { type: String, trim: true, default: "" },
+    expiryYear: { type: String, trim: true, default: "" },
+    encryptedExpiryMonth: { type: String, trim: true, default: "" },
+    encryptedExpiryYear: { type: String, trim: true, default: "" },
+    encryptedPrivateNote: { type: String, trim: true, default: "" },
   },
   { timestamps: true }
 );
 
 CardSchema.index({ userId: 1, createdAt: -1 });
 CardSchema.index({ userId: 1, issuingCountryCode: 1, issuingBankKey: 1 });
+CardSchema.index({ lookupBin: 1, updatedAt: -1 });
 
 let Card;
 
 if (mongoose.models.Card) {
   Card = mongoose.models.Card;
+  if (!Card.schema.path("lookupBin")) {
+    Card.schema.add({
+      lookupBin: { type: String, trim: true, minlength: 6, maxlength: 8, default: "" },
+    });
+  }
   const missingPaths = {};
+  if (!Card.schema.path("encryptedNameOnCard")) missingPaths.encryptedNameOnCard = { type: String, trim: true, default: "" };
   if (!Card.schema.path("encryptedCardNumber")) missingPaths.encryptedCardNumber = { type: String, trim: true, default: "" };
   if (!Card.schema.path("last4")) missingPaths.last4 = { type: String, required: true, trim: true, default: "" };
   if (!Card.schema.path("cardNumberLength")) missingPaths.cardNumberLength = { type: Number, required: true, min: 12, max: 19, default: 16 };
-  if (!Card.schema.path("expiryMonth")) missingPaths.expiryMonth = { type: String, required: true, trim: true, default: "" };
-  if (!Card.schema.path("expiryYear")) missingPaths.expiryYear = { type: String, required: true, trim: true, default: "" };
+  if (!Card.schema.path("expiryMonth")) missingPaths.expiryMonth = { type: String, trim: true, default: "" };
+  if (!Card.schema.path("expiryYear")) missingPaths.expiryYear = { type: String, trim: true, default: "" };
+  if (!Card.schema.path("encryptedExpiryMonth")) missingPaths.encryptedExpiryMonth = { type: String, trim: true, default: "" };
+  if (!Card.schema.path("encryptedExpiryYear")) missingPaths.encryptedExpiryYear = { type: String, trim: true, default: "" };
+  if (!Card.schema.path("encryptedPrivateNote")) missingPaths.encryptedPrivateNote = { type: String, trim: true, default: "" };
 
   if (Object.keys(missingPaths).length > 0) {
     Card.schema.add(missingPaths);

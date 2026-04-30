@@ -1,20 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Copy, Eye, EyeOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Copy, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 
 const initialForm = {
-  cardTypeValue: "",
-  issuingCountryCode: "",
-  issuingBankKey: "",
-  variantValue: "",
-  network: "",
-  nameOnCard: "",
   cardNumber: "",
+  nameOnCard: "",
   expiryMonth: "",
   expiryYear: "",
+  privateNote: "",
 };
 
 function normalizeCardNumberInput(value) {
@@ -36,12 +32,19 @@ function formatExpiryYearInput(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 2);
 }
 
+function resolveLookupBin(value) {
+  const digits = normalizeCardNumberInput(value);
+  if (digits.length >= 8) return digits.slice(0, 8);
+  if (digits.length >= 6) return digits.slice(0, 6);
+  return "";
+}
+
 function buildMaskedCardNumber(length, last4, revealLast4) {
   const safeLength = Math.max(12, Math.min(Number(length || 16), 19));
   const hiddenDigits = Math.max(safeLength - 4, 8);
-  const hidden = "•".repeat(hiddenDigits);
-  const safeLast4 = String(last4 || "••••").slice(-4).padStart(4, "•");
-  const raw = `${hidden}${revealLast4 ? safeLast4 : "••••"}`;
+  const hidden = "*".repeat(hiddenDigits);
+  const safeLast4 = String(last4 || "****").slice(-4).padStart(4, "*");
+  const raw = `${hidden}${revealLast4 ? safeLast4 : "****"}`;
   return raw.match(/.{1,4}/g)?.join(" ") || raw;
 }
 
@@ -56,11 +59,29 @@ function getNetworkAccent(network) {
 }
 
 function getNetworkLabel(network) {
-  return network || "Card Network";
+  return network || "Card";
+}
+
+function buildDetectedDetails(source) {
+  if (!source) return null;
+
+  return {
+    cardTypeLabel: source.cardTypeLabel || source.metadata?.type || "Payment Card",
+    issuingBankName: source.issuingBankName || source.metadata?.issuer || "Unknown Issuer",
+    issuingCountryName: source.issuingCountryName || source.metadata?.countryName || "Unknown",
+    variantLabel: source.variantLabel || source.metadata?.tier || "Card",
+    network: source.network || source.metadata?.scheme || "Card",
+    metadata: {
+      scheme: source.metadata?.scheme || source.network || "Card",
+      type: source.metadata?.type || source.cardTypeLabel || "Payment Card",
+      tier: source.metadata?.tier || source.variantLabel || "Card",
+      issuer: source.metadata?.issuer || source.issuingBankName || "Unknown Issuer",
+      countryName: source.metadata?.countryName || source.issuingCountryName || "Unknown",
+    },
+  };
 }
 
 export default function CardsPage() {
-  const [catalog, setCatalog] = useState({ cardTypes: [], countries: [], banks: [] });
   const [cards, setCards] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState("");
@@ -74,22 +95,18 @@ export default function CardsPage() {
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [verifyingPassword, setVerifyingPassword] = useState(false);
+  const [binLookup, setBinLookup] = useState({
+    status: "idle",
+    message: "Enter at least the first 6 digits to detect the card details automatically.",
+    data: null,
+    lookupBin: "",
+  });
+  const lastLookupBinRef = useRef("");
 
   async function load() {
     setLoading(true);
-    const [catalogRes, cardsRes] = await Promise.all([
-      fetch("/api/cards/catalog", { cache: "no-store" }),
-      fetch("/api/cards", { cache: "no-store" }),
-    ]);
-
-    const catalogData = await catalogRes.json().catch(() => ({}));
+    const cardsRes = await fetch("/api/cards", { cache: "no-store" });
     const cardsData = await cardsRes.json().catch(() => ({}));
-
-    if (catalogRes.ok) {
-      setCatalog(catalogData.catalog || { cardTypes: [], countries: [], banks: [] });
-    } else {
-      setMessage(catalogData.message || "Failed to load card catalog.");
-    }
 
     if (cardsRes.ok) {
       setCards(cardsData.cards || []);
@@ -104,69 +121,82 @@ export default function CardsPage() {
     load();
   }, []);
 
-  function getAvailableBanks(nextForm = form) {
-    return (catalog.banks || []).filter((bank) => {
-      if (nextForm.issuingCountryCode && bank.countryCode !== nextForm.issuingCountryCode) return false;
-      if (
-        nextForm.cardTypeValue &&
-        Array.isArray(bank.cardTypes) &&
-        bank.cardTypes.length > 0 &&
-        !bank.cardTypes.includes(nextForm.cardTypeValue)
-      ) {
-        return false;
+  const normalizedCardNumber = normalizeCardNumberInput(form.cardNumber);
+  const editingCard = cards.find((card) => card.id === editingId) || null;
+
+  useEffect(() => {
+    if (normalizedCardNumber.length < 6) {
+      lastLookupBinRef.current = "";
+      setBinLookup(
+        editingCard
+          ? {
+              status: "idle",
+              message: "Enter a new card number to refresh the detected details, or leave it blank to keep the current issuer data.",
+              data: null,
+              lookupBin: "",
+            }
+          : {
+              status: "idle",
+              message: "Enter at least the first 6 digits to detect the card details automatically.",
+              data: null,
+              lookupBin: "",
+            }
+      );
+      return;
+    }
+
+    const lookupBin = resolveLookupBin(normalizedCardNumber);
+    if (!lookupBin || lookupBin === lastLookupBinRef.current) {
+      return;
+    }
+
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      lastLookupBinRef.current = lookupBin;
+      setBinLookup((prev) => ({
+        status: "loading",
+        message: "Detecting issuer details from the BIN...",
+        data: prev.lookupBin === lookupBin ? prev.data : null,
+        lookupBin,
+      }));
+
+      const res = await fetch(`/api/cards/bin?number=${encodeURIComponent(normalizedCardNumber)}`, {
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!active) return;
+
+      if (!res.ok) {
+        setBinLookup({
+          status: "error",
+          message: data.message || "Could not detect card details for those digits.",
+          data: null,
+          lookupBin,
+        });
+        return;
       }
-      return true;
-    });
-  }
 
-  function getSelectedBank(nextForm = form) {
-    return getAvailableBanks(nextForm).find((bank) => bank.key === nextForm.issuingBankKey) || null;
-  }
+      setBinLookup({
+        status: "success",
+        message: "Card details detected automatically.",
+        data,
+        lookupBin: data.lookupBin || lookupBin,
+      });
+    }, 250);
 
-  function getAvailableVariants(nextForm = form) {
-    return getSelectedBank(nextForm)?.variants || [];
-  }
-
-  function updateVariant(nextForm) {
-    const variant = getAvailableVariants(nextForm).find((item) => item.value === nextForm.variantValue);
-    return {
-      ...nextForm,
-      network: variant?.network || "",
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
     };
-  }
+  }, [editingCard, normalizedCardNumber]);
 
   function updateFormField(field, value) {
     setFieldErrors((prev) => {
       if (!prev[field]) return prev;
       return { ...prev, [field]: "" };
     });
-
-    setForm((prev) => {
-      let next = { ...prev, [field]: value };
-
-      if (field === "cardTypeValue" || field === "issuingCountryCode") {
-        next = {
-          ...next,
-          issuingBankKey: "",
-          variantValue: "",
-          network: "",
-        };
-      }
-
-      if (field === "issuingBankKey") {
-        next = {
-          ...next,
-          variantValue: "",
-          network: "",
-        };
-      }
-
-      if (field === "variantValue") {
-        next = updateVariant(next);
-      }
-
-      return next;
-    });
+    setMessage("");
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   async function handleSubmit(e) {
@@ -179,13 +209,15 @@ export default function CardsPage() {
 
     const url = editingId ? `/api/cards/${editingId}` : "/api/cards";
     const method = editingId ? "PUT" : "POST";
+    const payload = {
+      ...form,
+      cardNumber: normalizedCardNumber,
+    };
+
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        cardNumber: normalizeCardNumberInput(form.cardNumber),
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
     setSaving(false);
@@ -194,6 +226,8 @@ export default function CardsPage() {
       const nextMessage = data.message || "Failed to save card.";
       if (nextMessage === "Enter a valid expiry month") {
         setFieldErrors({ expiryMonth: nextMessage });
+      } else if (nextMessage === "Enter a valid expiry year") {
+        setFieldErrors({ expiryYear: nextMessage });
       } else {
         setMessage(nextMessage);
       }
@@ -203,6 +237,13 @@ export default function CardsPage() {
     setForm(initialForm);
     setEditingId("");
     setFieldErrors({});
+    setBinLookup({
+      status: "idle",
+      message: "Enter at least the first 6 digits to detect the card details automatically.",
+      data: null,
+      lookupBin: "",
+    });
+    lastLookupBinRef.current = "";
     setMessage(data.message || (editingId ? "Card updated successfully." : "Card added successfully."));
     load();
   }
@@ -210,24 +251,26 @@ export default function CardsPage() {
   function startEdit(card) {
     setEditingId(card.id);
     setForm({
-      cardTypeValue: card.cardTypeValue || "",
-      issuingCountryCode: card.issuingCountryCode || "",
-      issuingBankKey: card.issuingBankKey || "",
-      variantValue: card.variantValue || "",
-      network: card.network || "",
-      nameOnCard: card.nameOnCard || "",
       cardNumber: "",
+      nameOnCard: card.nameOnCard || "",
       expiryMonth: card.expiryMonth || "",
       expiryYear: card.expiryYear || "",
+      privateNote: card.privateNote || "",
     });
+    setFieldErrors({});
     setMessage(
       card.hasStoredCardNumber
-        ? "Leave card number blank to keep the existing stored card number."
+        ? "Leave the card number blank to keep the existing stored card number and issuer details."
         : "Re-enter the full card number to enable secure full-number reveal for this card."
     );
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    setBinLookup({
+      status: "idle",
+      message: "Enter a new card number to refresh the detected details, or leave it blank to keep the current issuer data.",
+      data: null,
+      lookupBin: "",
+    });
+    lastLookupBinRef.current = "";
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function cancelEdit() {
@@ -235,6 +278,13 @@ export default function CardsPage() {
     setForm(initialForm);
     setMessage("");
     setFieldErrors({});
+    setBinLookup({
+      status: "idle",
+      message: "Enter at least the first 6 digits to detect the card details automatically.",
+      data: null,
+      lookupBin: "",
+    });
+    lastLookupBinRef.current = "";
   }
 
   function closePasswordModal() {
@@ -275,12 +325,14 @@ export default function CardsPage() {
     const valueToCopy = revealedDetails?.cardNumber
       ? formatCardNumberInput(revealedDetails.cardNumber)
       : buildMaskedCardNumber(card.cardNumberLength, card.last4, true);
+
     setMessage("");
-    if (typeof window !== "undefined" && window.navigator?.clipboard?.writeText) {
+    if (window.navigator?.clipboard?.writeText) {
       await window.navigator.clipboard.writeText(valueToCopy);
       setMessage(revealedDetails?.cardNumber ? "Full card number copied." : "Masked card number copied.");
       return;
     }
+
     setMessage(revealedDetails?.cardNumber ? "Full card number is ready to copy." : "Masked card number is ready to copy.");
   }
 
@@ -327,134 +379,131 @@ export default function CardsPage() {
     closePasswordModal();
   }
 
-  const availableBanks = getAvailableBanks();
-  const availableVariants = getAvailableVariants();
-  const previewDigits = normalizeCardNumberInput(form.cardNumber);
-  const previewLast4 = previewDigits ? previewDigits.slice(-4).padStart(4, "•") : "••••";
+  const detectedDetails = buildDetectedDetails(binLookup.data) || buildDetectedDetails(editingCard);
+  const previewDigits = normalizedCardNumber;
+  const previewLast4 = previewDigits ? previewDigits.slice(-4).padStart(4, "*") : "****";
   const previewLength = previewDigits.length >= 12 ? previewDigits.length : 16;
   const previewNumber = buildMaskedCardNumber(previewLength, previewLast4, true);
-  const previewName = form.nameOnCard || "CARDHOLDER NAME";
-  const previewExpiry = `${form.expiryMonth.padEnd(2, "•")}/${form.expiryYear.padEnd(2, "•")}`;
+  const previewNetwork = detectedDetails?.network || "Card";
+  const previewTitle = detectedDetails?.issuingBankName || "Issuer Pending";
+  const previewSubtitle = detectedDetails?.variantLabel || detectedDetails?.cardTypeLabel || "Detected after 6 digits";
+  const previewExpiry = `${form.expiryMonth.padEnd(2, "*")}/${form.expiryYear.padEnd(2, "*")}`;
 
   return (
     <div className="space-y-6">
-      <header>
+      <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Cards</h1>
-        <p className="text-sm text-zinc-600">
-          Add and manage card-style records with masked number display, secure full-number reveal, expiry, bank, and network. CVV is never stored.
+        <p className="max-w-3xl text-sm text-zinc-600">
+          Enter a card number and expiry, and the app will detect issuer details from the first 6 to 8 digits using a cached BIN lookup. Full card numbers stay encrypted at rest and can be revealed only after password confirmation.
         </p>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <form onSubmit={handleSubmit} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 md:grid-cols-2">
-          <input
-            required={!editingId}
-            value={form.cardNumber}
-            onChange={(e) => updateFormField("cardNumber", formatCardNumberInput(e.target.value))}
-            placeholder={editingId ? "Enter new card number (optional)" : "Card number"}
-            inputMode="numeric"
-            className="rounded-xl border border-zinc-300 px-3 py-2 md:col-span-2"
-          />
+      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+        <form onSubmit={handleSubmit} className="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1 md:col-span-2">
+              <input
+                required={!editingId}
+                value={form.cardNumber}
+                onChange={(e) => updateFormField("cardNumber", formatCardNumberInput(e.target.value))}
+                placeholder={editingId ? "Enter new card number (optional)" : "Card number"}
+                inputMode="numeric"
+                className="w-full rounded-xl border border-zinc-300 px-3 py-3"
+              />
+              <p className="text-xs text-zinc-500">The BIN lookup runs after the 6th digit and refreshes again when 8 digits are available.</p>
+            </div>
 
-          <div className="space-y-1">
-            <input
-              required
-              value={form.expiryMonth}
-              onChange={(e) => updateFormField("expiryMonth", formatExpiryMonthInput(e.target.value))}
-              placeholder="Expiry month (MM)"
-              inputMode="numeric"
-              className={`w-full rounded-xl border px-3 py-2 ${fieldErrors.expiryMonth ? "border-red-500 text-red-700 focus:border-red-500" : "border-zinc-300"}`}
-            />
-            {fieldErrors.expiryMonth ? <p className="text-sm text-red-600">{fieldErrors.expiryMonth}</p> : null}
+            <div className="space-y-1 md:col-span-2">
+              <input
+                value={form.nameOnCard}
+                onChange={(e) => updateFormField("nameOnCard", e.target.value)}
+                placeholder="Name on card (optional)"
+                className="w-full rounded-xl border border-zinc-300 px-3 py-3"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <input
+                required
+                value={form.expiryMonth}
+                onChange={(e) => updateFormField("expiryMonth", formatExpiryMonthInput(e.target.value))}
+                placeholder="Expiry month (MM)"
+                inputMode="numeric"
+                className={`w-full rounded-xl border px-3 py-3 ${fieldErrors.expiryMonth ? "border-red-500 text-red-700" : "border-zinc-300"}`}
+              />
+              {fieldErrors.expiryMonth ? <p className="text-sm text-red-600">{fieldErrors.expiryMonth}</p> : null}
+            </div>
+
+            <div className="space-y-1">
+              <input
+                required
+                value={form.expiryYear}
+                onChange={(e) => updateFormField("expiryYear", formatExpiryYearInput(e.target.value))}
+                placeholder="Expiry year (YY)"
+                inputMode="numeric"
+                className={`w-full rounded-xl border px-3 py-3 ${fieldErrors.expiryYear ? "border-red-500 text-red-700" : "border-zinc-300"}`}
+              />
+              {fieldErrors.expiryYear ? <p className="text-sm text-red-600">{fieldErrors.expiryYear}</p> : null}
+            </div>
+
+            <div className="space-y-1 md:col-span-2">
+              <textarea
+                value={form.privateNote}
+                onChange={(e) => updateFormField("privateNote", e.target.value)}
+                placeholder="Private note (optional)"
+                maxLength={1000}
+                rows={3}
+                className="w-full rounded-xl border border-zinc-300 px-3 py-3"
+              />
+              <p className="text-xs text-zinc-500">Saved encrypted for your account. Good for reminders or card-specific notes, not CVV.</p>
+            </div>
           </div>
 
-          <input
-            required
-            value={form.expiryYear}
-            onChange={(e) => updateFormField("expiryYear", formatExpiryYearInput(e.target.value))}
-            placeholder="Expiry year (YY)"
-            inputMode="numeric"
-            className="rounded-xl border border-zinc-300 px-3 py-2"
-          />
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            For security and PCI compliance, CVV is not stored for later use. Users should enter CVV only at payment time, or use a payment gateway token/vault flow for future inline transactions.
+          </div>
 
-          <select
-            required
-            value={form.cardTypeValue}
-            onChange={(e) => updateFormField("cardTypeValue", e.target.value)}
-            className="rounded-xl border border-zinc-300 px-3 py-2"
-          >
-            <option value="">Select card type</option>
-            {(catalog.cardTypes || []).map((item) => (
-              <option key={item.value} value={item.value}>{item.label}</option>
-            ))}
-          </select>
+          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-[linear-gradient(135deg,#0f172a_0%,#172554_55%,#1e293b_100%)] p-4 text-white shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-200/90">Detected Details</p>
+                <p className="mt-2 text-sm text-slate-200/75">{binLookup.message}</p>
+              </div>
+              {binLookup.status === "loading" ? <LoaderCircle className="mt-0.5 h-4 w-4 animate-spin text-cyan-200" /> : null}
+            </div>
 
-          <select
-            required
-            value={form.issuingCountryCode}
-            onChange={(e) => updateFormField("issuingCountryCode", e.target.value)}
-            className="rounded-xl border border-zinc-300 px-3 py-2"
-          >
-            <option value="">Select issuing country</option>
-            {(catalog.countries || []).map((item) => (
-              <option key={item.code} value={item.code}>{item.name}</option>
-            ))}
-          </select>
+            {detectedDetails ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Issuer</p>
+                  <p className="mt-2 text-base font-semibold leading-snug text-white">{detectedDetails.issuingBankName}</p>
+                </div>
+                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Country</p>
+                  <p className="mt-2 text-base font-semibold leading-snug text-white">{detectedDetails.issuingCountryName}</p>
+                </div>
+                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Network</p>
+                  <p className="mt-2 text-base font-semibold leading-snug text-cyan-200">{detectedDetails.network}</p>
+                </div>
+                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Type</p>
+                  <p className="mt-2 text-base font-semibold leading-snug text-amber-200">{detectedDetails.cardTypeLabel}</p>
+                </div>
+                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm sm:col-span-2">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Variant</p>
+                  <p className="mt-2 text-base font-semibold leading-snug text-emerald-200">{detectedDetails.variantLabel}</p>
+                </div>
+              </div>
+            ) : null}
+          </div>
 
-          <select
-            required
-            value={form.issuingBankKey}
-            onChange={(e) => updateFormField("issuingBankKey", e.target.value)}
-            className="rounded-xl border border-zinc-300 px-3 py-2"
-            disabled={!form.cardTypeValue || !form.issuingCountryCode}
-          >
-            <option value="">Select issuing bank</option>
-            {availableBanks.map((item) => (
-              <option key={item.key} value={item.key}>{item.name}</option>
-            ))}
-          </select>
-
-          <select
-            required
-            value={form.variantValue}
-            onChange={(e) => updateFormField("variantValue", e.target.value)}
-            className="rounded-xl border border-zinc-300 px-3 py-2"
-            disabled={!form.issuingBankKey}
-          >
-            <option value="">Select card variant</option>
-            {availableVariants.map((item) => (
-              <option key={item.value} value={item.value}>{item.label}</option>
-            ))}
-          </select>
-
-          <input
-            value={form.nameOnCard}
-            onChange={(e) => updateFormField("nameOnCard", e.target.value.toUpperCase())}
-            placeholder="Name on card (optional)"
-            className="rounded-xl border border-zinc-300 px-3 py-2 md:col-span-2"
-          />
-
-          <input
-            value={form.network}
-            readOnly
-            placeholder="Network auto-selected"
-            className="rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-zinc-600 md:col-span-2"
-          />
-
-          <div className="flex flex-col gap-3 md:col-span-2 xl:flex-row xl:items-center">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-60"
-            >
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <button type="submit" disabled={saving} className="rounded-xl bg-black px-4 py-3 text-white disabled:opacity-60">
               {saving ? "Saving..." : editingId ? "Update Card" : "Add Card"}
             </button>
             {editingId ? (
-              <button
-                type="button"
-                onClick={cancelEdit}
-                className="rounded-xl border border-zinc-300 px-4 py-2 text-zinc-700"
-              >
+              <button type="button" onClick={cancelEdit} className="rounded-xl border border-zinc-300 px-4 py-3 text-zinc-700">
                 Cancel Edit
               </button>
             ) : null}
@@ -462,27 +511,29 @@ export default function CardsPage() {
           </div>
         </form>
 
-        <div className={`relative overflow-hidden rounded-[28px] bg-linear-to-br p-6 text-white shadow-[0_20px_60px_rgba(15,23,42,0.22)] ${getNetworkAccent(form.network)}`}>
+        <div className={`relative self-start overflow-hidden rounded-[28px] bg-linear-to-br p-6 text-white shadow-[0_20px_60px_rgba(15,23,42,0.22)] aspect-[1.586/1] min-h-[260px] ${getNetworkAccent(previewNetwork)}`}>
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.28),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.16),transparent_32%)]" />
-          <div className="relative">
-            <div className="flex items-start justify-between">
+          <div className="relative flex h-full flex-col">
+            <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-white/70">Preview</p>
                 <p className="mt-3 text-2xl font-semibold tracking-[0.18em]">{previewNumber}</p>
               </div>
               <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]">
-                {getNetworkLabel(form.network)}
+                {getNetworkLabel(previewNetwork)}
               </span>
             </div>
 
-            <div className="mt-10 flex items-end justify-between gap-4">
+            <div className="mt-auto grid gap-5 pt-10 sm:grid-cols-2">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Cardholder</p>
-                <p className="mt-2 text-sm font-semibold tracking-[0.14em]">{previewName}</p>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Issuer</p>
+                <p className="mt-2 text-sm font-semibold tracking-[0.08em]">{previewTitle}</p>
+                <p className="mt-2 text-xs text-white/70">{previewSubtitle}</p>
               </div>
-              <div className="text-right">
+              <div className="sm:text-right">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Expires</p>
                 <p className="mt-2 text-sm font-semibold tracking-[0.14em]">{previewExpiry}</p>
+                <p className="mt-2 text-xs text-white/70">{detectedDetails?.issuingCountryName || "Country pending"}</p>
               </div>
             </div>
           </div>
@@ -522,14 +573,17 @@ export default function CardsPage() {
 
                   <p className="mt-8 text-2xl font-semibold tracking-[0.18em]">{cardNumberText}</p>
 
-                  <div className="mt-8 flex items-end justify-between gap-3 text-sm">
+                  <div className="mt-8 grid gap-4 text-sm sm:grid-cols-2">
                     <div>
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Cardholder</p>
-                      <p className="mt-2 font-semibold tracking-[0.14em]">{card.nameOnCard || "NOT PROVIDED"}</p>
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Type</p>
+                      <p className="mt-2 font-semibold tracking-[0.08em]">{card.cardTypeLabel}</p>
+                      <p className="mt-2 text-xs text-white/75">{card.issuingCountryName}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="sm:text-right">
                       <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Expires</p>
-                      <p className="mt-2 font-semibold tracking-[0.14em]">{`${card.expiryMonth || "••"}/${card.expiryYear || "••"}`}</p>
+                      <p className="mt-2 font-semibold tracking-[0.14em]">{`${card.expiryMonth || "**"}/${card.expiryYear || "**"}`}</p>
+                      <p className="mt-2 text-xs text-white/75">{card.nameOnCard || "Stored without cardholder name"}</p>
+                      {card.privateNote ? <p className="mt-2 text-xs text-white/75">{card.privateNote}</p> : null}
                     </div>
                   </div>
 
@@ -583,7 +637,7 @@ export default function CardsPage() {
           <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-black">Confirm Password</h2>
             <p className="mt-2 text-sm text-zinc-600">
-              Enter your login password to reveal the full card number. CVV is never stored.
+              Enter your login password to reveal the full card number. CVV is not collected or stored.
             </p>
 
             <form onSubmit={confirmPasswordAndReveal} className="mt-4 space-y-3">
@@ -598,18 +652,10 @@ export default function CardsPage() {
               {passwordError ? <p className="text-sm text-red-600">{passwordError}</p> : null}
 
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={closePasswordModal}
-                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700"
-                >
+                <button type="button" onClick={closePasswordModal} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={verifyingPassword}
-                  className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
-                >
+                <button type="submit" disabled={verifyingPassword} className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-60">
                   {verifyingPassword ? "Checking..." : "Show Details"}
                 </button>
               </div>

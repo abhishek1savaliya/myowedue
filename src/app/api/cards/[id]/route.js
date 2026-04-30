@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/db";
 import { fail, logActivity, ok } from "@/lib/api";
+import { lookupHandyBin } from "@/lib/handyBin";
 import { requireUser } from "@/lib/session";
-import { ensureCardCatalog, resolveCardSelection, serializeCardCatalog } from "@/lib/cardCatalog";
 import { resolveStoredCardData, serializeCard } from "@/lib/cardStorage";
 import Card from "@/models/Card";
 
@@ -16,8 +16,21 @@ export async function PUT(request, { params }) {
     const existing = await Card.findOne({ _id: id, userId: user._id });
     if (!existing) return fail("Card not found", 404);
 
-    const catalog = await ensureCardCatalog();
-    const selection = resolveCardSelection(serializeCardCatalog(catalog), body);
+    const nextCardDigits = String(body.cardNumber || "").replace(/\D/g, "");
+    const selection = nextCardDigits
+      ? await lookupHandyBin(nextCardDigits)
+      : {
+          lookupBin: existing.lookupBin || "",
+          cardTypeValue: existing.cardTypeValue,
+          cardTypeLabel: existing.cardTypeLabel,
+          issuingCountryCode: existing.issuingCountryCode,
+          issuingCountryName: existing.issuingCountryName,
+          issuingBankKey: existing.issuingBankKey,
+          issuingBankName: existing.issuingBankName,
+          variantValue: existing.variantValue,
+          variantLabel: existing.variantLabel,
+          network: existing.network,
+        };
     const storedCardData = await resolveStoredCardData(body, user, existing);
 
     const card = await Card.findOneAndUpdate(
@@ -29,7 +42,7 @@ export async function PUT(request, { params }) {
     if (!card) return fail("Card not found", 404);
 
     await logActivity(user._id, "card_updated", `Updated ${selection.variantLabel} (${selection.issuingBankName})`);
-    return ok({ card: serializeCard(card), message: "Card updated successfully" });
+    return ok({ card: await serializeCard(card, user), message: "Card updated successfully" });
   } catch (caughtError) {
     return fail(caughtError?.message || "Failed to update card", 422);
   }

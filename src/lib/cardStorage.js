@@ -17,10 +17,20 @@ function normalizeExpiryYear(value) {
   return digits.length >= 2 ? digits.slice(-2) : digits.padStart(2, "0");
 }
 
+function normalizeCardholderName(value) {
+  return String(value || "").trim().slice(0, 120);
+}
+
+function normalizePrivateNote(value) {
+  return String(value || "").trim().slice(0, 1000);
+}
+
 export async function resolveStoredCardData(payload = {}, user, existingCard = null) {
   const digits = normalizeCardDigits(payload.cardNumber);
   const expiryMonth = normalizeExpiryMonth(payload.expiryMonth);
   const expiryYear = normalizeExpiryYear(payload.expiryYear);
+  const nameOnCard = normalizeCardholderName(payload.nameOnCard);
+  const privateNote = normalizePrivateNote(payload.privateNote);
 
   const nextLast4 = digits ? digits.slice(-4) : existingCard?.last4 || "";
   const nextLength = digits ? digits.length : existingCard?.cardNumberLength || 0;
@@ -49,21 +59,59 @@ export async function resolveStoredCardData(payload = {}, user, existingCard = n
   const nextData = {
     last4: nextLast4,
     cardNumberLength: nextLength,
-    expiryMonth,
-    expiryYear,
+    nameOnCard: "",
+    expiryMonth: "",
+    expiryYear: "",
   };
 
+  const userKey = await deriveUserKey(user._id.toString(), user.email);
+
   if (digits) {
-    const userKey = await deriveUserKey(user._id.toString(), user.email);
     nextData.encryptedCardNumber = await encryptField(digits, userKey);
   } else if (existingCard?.encryptedCardNumber) {
     nextData.encryptedCardNumber = existingCard.encryptedCardNumber;
   }
 
+  nextData.encryptedExpiryMonth = await encryptField(expiryMonth, userKey);
+  nextData.encryptedExpiryYear = await encryptField(expiryYear, userKey);
+  nextData.encryptedNameOnCard = nameOnCard ? await encryptField(nameOnCard, userKey) : "";
+  nextData.encryptedPrivateNote = privateNote ? await encryptField(privateNote, userKey) : "";
+
   return nextData;
 }
 
-export function serializeCard(card) {
+export async function serializeCard(card, user) {
+  const userKey = await deriveUserKey(user._id.toString(), user.email);
+
+  let expiryMonth = card.expiryMonth || "";
+  let expiryYear = card.expiryYear || "";
+  let nameOnCard = card.nameOnCard || "";
+  let privateNote = "";
+
+  if (card.encryptedExpiryMonth) {
+    try {
+      expiryMonth = String(await decryptField(card.encryptedExpiryMonth, userKey) || "");
+    } catch {}
+  }
+
+  if (card.encryptedExpiryYear) {
+    try {
+      expiryYear = String(await decryptField(card.encryptedExpiryYear, userKey) || "");
+    } catch {}
+  }
+
+  if (card.encryptedNameOnCard) {
+    try {
+      nameOnCard = String(await decryptField(card.encryptedNameOnCard, userKey) || "");
+    } catch {}
+  }
+
+  if (card.encryptedPrivateNote) {
+    try {
+      privateNote = String(await decryptField(card.encryptedPrivateNote, userKey) || "");
+    } catch {}
+  }
+
   return {
     id: card._id.toString(),
     cardTypeValue: card.cardTypeValue,
@@ -75,11 +123,12 @@ export function serializeCard(card) {
     variantValue: card.variantValue,
     variantLabel: card.variantLabel,
     network: card.network,
-    nameOnCard: card.nameOnCard || "",
+    nameOnCard,
+    privateNote,
     last4: card.last4 || "",
     cardNumberLength: card.cardNumberLength || 16,
-    expiryMonth: card.expiryMonth || "",
-    expiryYear: card.expiryYear || "",
+    expiryMonth,
+    expiryYear,
     hasStoredCardNumber: Boolean(card.encryptedCardNumber),
     createdAt: card.createdAt,
     updatedAt: card.updatedAt,
@@ -93,12 +142,26 @@ export async function revealStoredCardNumber(card, user) {
 
   const userKey = await deriveUserKey(user._id.toString(), user.email);
   const cardNumber = await decryptField(card.encryptedCardNumber, userKey);
+  const expiryMonth = card.encryptedExpiryMonth
+    ? String(await decryptField(card.encryptedExpiryMonth, userKey) || "")
+    : card.expiryMonth || "";
+  const expiryYear = card.encryptedExpiryYear
+    ? String(await decryptField(card.encryptedExpiryYear, userKey) || "")
+    : card.expiryYear || "";
+  const nameOnCard = card.encryptedNameOnCard
+    ? String(await decryptField(card.encryptedNameOnCard, userKey) || "")
+    : card.nameOnCard || "";
+  const privateNote = card.encryptedPrivateNote
+    ? String(await decryptField(card.encryptedPrivateNote, userKey) || "")
+    : "";
 
   return {
     id: card._id.toString(),
     cardNumber: String(cardNumber || ""),
-    expiryMonth: card.expiryMonth || "",
-    expiryYear: card.expiryYear || "",
+    expiryMonth,
+    expiryYear,
+    nameOnCard,
+    privateNote,
     last4: card.last4 || "",
   };
 }
