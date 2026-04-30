@@ -122,6 +122,14 @@ export function notificationsCacheKey(userId) {
   return `notifications:${String(userId)}:list`;
 }
 
+export function cardsCacheKey(userId) {
+  return `cards:${String(userId)}:list`;
+}
+
+export function filesCacheKey(userId, queryString = "", origin = "") {
+  return `files:${String(userId)}:${encodeKeyPart(origin)}:${encodeKeyPart(queryString)}`;
+}
+
 export async function publishNotificationEvent(userId, type = "changed") {
   try {
     const client = await getRedisClient();
@@ -154,8 +162,11 @@ export async function clearUserApiCache(userId) {
       `people:${userIdText}`,
       `transactions:${userIdText}`,
       `notifications:${userIdText}`,
+      `cards:${userIdText}`,
+      `files:${userIdText}`,
       `people:${userIdText}:list`,
       `notifications:${userIdText}:list`,
+      `cards:${userIdText}:list`,
       `dashboard:${userIdText}:AUD`,
       `dashboard:${userIdText}:USD`,
       `dashboard:${userIdText}:INR`,
@@ -170,6 +181,8 @@ export async function clearUserApiCache(userId) {
       `transactions:list:${userIdText}:*`,
       `transactions:data:${userIdText}:*`,
       `notifications:${userIdText}:*`,
+      `cards:${userIdText}:*`,
+      `files:${userIdText}:*`,
     ];
 
     const keysToDelete = new Set();

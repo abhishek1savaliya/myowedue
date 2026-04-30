@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CreditCard, Gem, ReceiptText, ShieldCheck, Ticket, X } from "lucide-react";
 import Loader from "@/components/Loader";
+import ModalPortal from "@/components/ModalPortal";
 import { applyAppearancePreference } from "@/lib/theme-client";
 
 const PRO_BENEFITS = [
@@ -229,6 +230,7 @@ export default function MySubscriptionPage() {
         ) : null}
 
         {showCancelConfirm ? (
+          <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-sm rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 p-6 shadow-2xl">
               <h2 className="text-lg font-semibold text-rose-700">Cancel Subscription?</h2>
@@ -256,6 +258,7 @@ export default function MySubscriptionPage() {
               </div>
             </div>
           </div>
+          </ModalPortal>
         ) : null}
 
         {paymentMessage ? <p className="text-sm text-zinc-600">{paymentMessage}</p> : null}
@@ -298,6 +301,7 @@ export default function MySubscriptionPage() {
       </section>
 
       {showPurchaseModal ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
           <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl sm:p-5">
             <div className="flex items-start justify-between gap-3">
@@ -399,9 +403,11 @@ export default function MySubscriptionPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
 
       {showSuccessModal && successPayload ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center sm:p-4">
           <div className="w-full max-w-xl rounded-2xl border border-emerald-200 bg-white p-5 shadow-2xl sm:p-6">
             <h2 className="text-xl font-semibold text-emerald-700">Your subscription is activated</h2>
@@ -429,6 +435,7 @@ export default function MySubscriptionPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

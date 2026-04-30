@@ -4,6 +4,7 @@ import crypto from "crypto";
 // Use secretbox directly
 const { secretbox } = nacl;
 const { randomBytes } = nacl;
+const keyCache = global.__myowedueUserKeyCache || (global.__myowedueUserKeyCache = new Map());
 
 /**
  * Convert string to Uint8Array (UTF-8)
@@ -38,6 +39,12 @@ function base64ToUint8Array(str) {
  * This key is deterministic - same user will always get the same key
  */
 export async function deriveUserKey(userId, email) {
+  const cacheKey = `${userId}:${String(email || "").toLowerCase()}`;
+  const cachedKey = keyCache.get(cacheKey);
+  if (cachedKey) {
+    return cachedKey;
+  }
+
   // Create a deterministic seed from user ID and email using SHA-512
   const hash = crypto
     .createHash("sha512")
@@ -46,7 +53,13 @@ export async function deriveUserKey(userId, email) {
 
   // Use first 32 bytes for nacl.secretBox key (which needs exactly 32 bytes)
   // Convert Buffer to Uint8Array
-  return new Uint8Array(hash.slice(0, 32));
+  const nextKey = new Uint8Array(hash.slice(0, 32));
+  if (keyCache.size >= 200) {
+    const oldestKey = keyCache.keys().next().value;
+    if (oldestKey) keyCache.delete(oldestKey);
+  }
+  keyCache.set(cacheKey, nextKey);
+  return nextKey;
 }
 
 /**
@@ -174,6 +187,15 @@ export async function decryptTransaction(transaction, userKey) {
   return decrypted;
 }
 
+export async function decryptTransactionAmount(transaction, userKey) {
+  if (!transaction?.encryptedAmount) {
+    return Number(transaction?.amount ?? 0);
+  }
+
+  const amount = await decryptField(transaction.encryptedAmount, userKey);
+  return parseFloat(amount);
+}
+
 /**
  * Generate a random encryption key (useful for testing)
  */
@@ -186,6 +208,7 @@ export default {
   decryptField,
   encryptTransaction,
   decryptTransaction,
+  decryptTransactionAmount,
   deriveUserKey,
   generateRandomKey,
 };

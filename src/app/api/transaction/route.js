@@ -10,7 +10,8 @@ import {
   setRedisJSON,
   transactionListCacheKey,
 } from "@/lib/redis";
-import { deriveUserKey, decryptTransaction, encryptTransaction } from "@/lib/crypto";
+import { deriveUserKey, decryptTransaction, decryptTransactionAmount, encryptTransaction } from "@/lib/crypto";
+import { formatDateTimeLabel, nextDateOnly, parseDateInputValue } from "@/lib/datetime";
 import { FREE_RECORD_LIMIT, FREE_TRANSACTION_LIMIT, hasActivePremium } from "@/lib/subscription";
 import { normalizeRecurringConfig } from "@/lib/recurring";
 
@@ -54,8 +55,8 @@ export async function GET(request) {
   if (type && ["credit", "debit"].includes(type)) query.type = type;
   if (start || end) {
     query.date = {};
-    if (start) query.date.$gte = new Date(start);
-    if (end) query.date.$lte = new Date(end);
+    if (start) query.date.$gte = parseDateInputValue(start);
+    if (end) query.date.$lt = nextDateOnly(end);
   }
   // Note: amount range filter is applied in-memory after decryption
   // because encrypted transactions don't have a plain `amount` field in DB
@@ -71,21 +72,24 @@ export async function GET(request) {
 
   const transactions = await Transaction.find(query)
     .populate("personId", "name email phone")
-    .sort({ date: -1, createdAt: -1 });
+    .sort({ date: -1, createdAt: -1 })
+    .lean();
 
   // Derive user's encryption key for decryption
   const userKey = await deriveUserKey(user._id.toString(), user.email);
 
   const hydratedTransactions = await Promise.all(
     transactions.map(async (tx) => {
-      const plain = tx.toObject();
+      const plain = { ...tx };
       
       // Decrypt encrypted fields if they exist
       try {
         if (plain.encryptedAmount) {
-          const decrypted = await decryptTransaction(plain, userKey);
-          plain.amount = decrypted.amount;
-          if (decrypted.notes !== undefined) plain.notes = decrypted.notes;
+          plain.amount = await decryptTransactionAmount(plain, userKey);
+          if (plain.encryptedNotes) {
+            const decrypted = await decryptTransaction(plain, userKey);
+            if (decrypted.notes !== undefined) plain.notes = decrypted.notes;
+          }
         }
         // If neither encryptedAmount nor amount exists, something is wrong
         if (plain.amount === undefined) {
@@ -111,7 +115,7 @@ export async function GET(request) {
         if (!hasCreatedLog) {
           existingLogs.push({
             action: "created",
-            message: `Transaction created at ${new Date(plain.createdAt || plain.date || new Date()).toLocaleString()}`,
+            message: `Transaction created at ${formatDateTimeLabel(plain.createdAt || plain.date || new Date())}`,
             at: plain.createdAt || plain.date || new Date(),
           });
         }
@@ -119,7 +123,7 @@ export async function GET(request) {
         if (!hasDeletedLog && plain.lastDeletedAt) {
           existingLogs.push({
             action: "deleted",
-            message: `Transaction deleted at ${new Date(plain.lastDeletedAt).toLocaleString()}`,
+            message: `Transaction deleted at ${formatDateTimeLabel(plain.lastDeletedAt)}`,
             at: plain.lastDeletedAt,
           });
         }
@@ -127,7 +131,7 @@ export async function GET(request) {
         if (!hasRestoredLog && plain.lastRestoredAt) {
           existingLogs.push({
             action: "restored",
-            message: `Transaction restored at ${new Date(plain.lastRestoredAt).toLocaleString()}`,
+            message: `Transaction restored at ${formatDateTimeLabel(plain.lastRestoredAt)}`,
             at: plain.lastRestoredAt,
           });
         }
@@ -137,11 +141,11 @@ export async function GET(request) {
       }
 
       const fallbackLogs = [
-        {
-          action: "created",
-          message: `Transaction created at ${new Date(plain.createdAt || plain.date || new Date()).toLocaleString()}`,
-          at: plain.createdAt || plain.date || new Date(),
-        },
+      {
+        action: "created",
+        message: `Transaction created at ${formatDateTimeLabel(plain.createdAt || plain.date || new Date())}`,
+        at: plain.createdAt || plain.date || new Date(),
+      },
       ];
 
       plain.changeLogs = fallbackLogs;
@@ -202,7 +206,7 @@ export async function POST(request) {
       // Don't store plain amount - only encrypted version
       type,
       // Don't store plain notes - only encrypted version
-      date: new Date(date),
+      date: parseDateInputValue(date),
       currency: currency || "USD",
       status: "pending",
       recurringEnabled: recurringConfig.recurringEnabled,
@@ -212,13 +216,13 @@ export async function POST(request) {
       changeLogs: [
         {
           action: "created",
-          message: `Transaction created at ${new Date().toLocaleString()}`,
+          message: `Transaction created at ${formatDateTimeLabel(new Date())}`,
           at: new Date(),
         },
         ...(recurringConfig.recurringEnabled
           ? [{
               action: "recurring_enabled",
-              message: `Recurring due created (${recurringConfig.recurringFrequency}, every ${recurringConfig.recurringInterval}) at ${new Date().toLocaleString()}`,
+              message: `Recurring due created (${recurringConfig.recurringFrequency}, every ${recurringConfig.recurringInterval}) at ${formatDateTimeLabel(new Date())}`,
               at: new Date(),
             }]
           : []),

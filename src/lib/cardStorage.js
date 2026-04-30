@@ -26,6 +26,10 @@ function normalizePrivateNote(value) {
 }
 
 export async function resolveStoredCardData(payload = {}, user, existingCard = null) {
+  if (String(payload.cvv || payload.encryptedCvv || "").trim()) {
+    throw new Error("CVV cannot be stored in this app");
+  }
+
   const digits = normalizeCardDigits(payload.cardNumber);
   const expiryMonth = normalizeExpiryMonth(payload.expiryMonth);
   const expiryYear = normalizeExpiryYear(payload.expiryYear);
@@ -80,58 +84,65 @@ export async function resolveStoredCardData(payload = {}, user, existingCard = n
   return nextData;
 }
 
-export async function serializeCard(card, user) {
-  const userKey = await deriveUserKey(user._id.toString(), user.email);
+async function decodeCardView(card, userKey) {
+  const safeCard = typeof card?.toObject === "function" ? card.toObject() : card;
 
-  let expiryMonth = card.expiryMonth || "";
-  let expiryYear = card.expiryYear || "";
-  let nameOnCard = card.nameOnCard || "";
+  let expiryMonth = safeCard.expiryMonth || "";
+  let expiryYear = safeCard.expiryYear || "";
+  let nameOnCard = safeCard.nameOnCard || "";
   let privateNote = "";
 
-  if (card.encryptedExpiryMonth) {
+  if (safeCard.encryptedExpiryMonth) {
     try {
-      expiryMonth = String(await decryptField(card.encryptedExpiryMonth, userKey) || "");
+      expiryMonth = String(await decryptField(safeCard.encryptedExpiryMonth, userKey) || "");
     } catch {}
   }
 
-  if (card.encryptedExpiryYear) {
+  if (safeCard.encryptedExpiryYear) {
     try {
-      expiryYear = String(await decryptField(card.encryptedExpiryYear, userKey) || "");
+      expiryYear = String(await decryptField(safeCard.encryptedExpiryYear, userKey) || "");
     } catch {}
   }
 
-  if (card.encryptedNameOnCard) {
+  if (safeCard.encryptedNameOnCard) {
     try {
-      nameOnCard = String(await decryptField(card.encryptedNameOnCard, userKey) || "");
+      nameOnCard = String(await decryptField(safeCard.encryptedNameOnCard, userKey) || "");
     } catch {}
   }
 
-  if (card.encryptedPrivateNote) {
+  if (safeCard.encryptedPrivateNote) {
     try {
-      privateNote = String(await decryptField(card.encryptedPrivateNote, userKey) || "");
+      privateNote = String(await decryptField(safeCard.encryptedPrivateNote, userKey) || "");
     } catch {}
   }
+
+  return { expiryMonth, expiryYear, nameOnCard, privateNote, safeCard };
+}
+
+export async function serializeCard(card, user, userKeyOverride = null) {
+  const userKey = userKeyOverride || await deriveUserKey(user._id.toString(), user.email);
+  const { expiryMonth, expiryYear, nameOnCard, privateNote, safeCard } = await decodeCardView(card, userKey);
 
   return {
-    id: card._id.toString(),
-    cardTypeValue: card.cardTypeValue,
-    cardTypeLabel: card.cardTypeLabel,
-    issuingCountryCode: card.issuingCountryCode,
-    issuingCountryName: card.issuingCountryName,
-    issuingBankKey: card.issuingBankKey,
-    issuingBankName: card.issuingBankName,
-    variantValue: card.variantValue,
-    variantLabel: card.variantLabel,
-    network: card.network,
+    id: safeCard._id.toString(),
+    cardTypeValue: safeCard.cardTypeValue,
+    cardTypeLabel: safeCard.cardTypeLabel,
+    issuingCountryCode: safeCard.issuingCountryCode,
+    issuingCountryName: safeCard.issuingCountryName,
+    issuingBankKey: safeCard.issuingBankKey,
+    issuingBankName: safeCard.issuingBankName,
+    variantValue: safeCard.variantValue,
+    variantLabel: safeCard.variantLabel,
+    network: safeCard.network,
     nameOnCard,
     privateNote,
-    last4: card.last4 || "",
-    cardNumberLength: card.cardNumberLength || 16,
+    last4: safeCard.last4 || "",
+    cardNumberLength: safeCard.cardNumberLength || 16,
     expiryMonth,
     expiryYear,
-    hasStoredCardNumber: Boolean(card.encryptedCardNumber),
-    createdAt: card.createdAt,
-    updatedAt: card.updatedAt,
+    hasStoredCardNumber: Boolean(safeCard.encryptedCardNumber),
+    createdAt: safeCard.createdAt,
+    updatedAt: safeCard.updatedAt,
   };
 }
 

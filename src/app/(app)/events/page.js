@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Calendar, Plus, Upload, Trash2, MapPin, Clock, X } from "lucide-react";
 import moment from "moment-timezone";
 import EmptyState from "@/components/EmptyState";
+import ModalPortal from "@/components/ModalPortal";
 
 const DEFAULT_TIMEZONE = "Australia/Melbourne";
 const TIMEZONE_OPTIONS = [
@@ -219,6 +220,7 @@ export default function EventsPage() {
 
       {/* Delete confirmation dialog */}
       {confirmDelete && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
             <h2 className="text-base font-semibold text-black">Delete event?</h2>
@@ -241,10 +243,12 @@ export default function EventsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Modal form */}
       {showForm && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:px-4">
           <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between">
@@ -355,6 +359,7 @@ export default function EventsPage() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Event list */}

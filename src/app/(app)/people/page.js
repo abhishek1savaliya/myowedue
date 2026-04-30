@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
+import ModalPortal from "@/components/ModalPortal";
 import { normalizeCurrency, convertFromUSD, formatCurrency, DEFAULT_FX } from "@/lib/currency";
 
 const initial = { name: "", email: "", phone: "" };
@@ -19,7 +19,6 @@ export default function PeoplePage() {
   const [invoiceModal, setInvoiceModal] = useState(null); // { personId, personName, startDate, endDate }
   const invoiceOptions = ["AUD", "INR", "USD", "EUR", "GBP"];
   const hasOverlayOpen = Boolean(deleteTarget || invoiceModal);
-  const canUsePortal = typeof document !== "undefined";
 
   function getInvoiceCurrency(personId) {
     return invoiceCurrencies[personId] || "AUD";
@@ -301,10 +300,10 @@ export default function PeoplePage() {
         </div>
       )}
 
-      {deleteTarget && canUsePortal
-        ? createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4">
-              <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+      {deleteTarget ? (
+        <ModalPortal>
+            <div className="fixed inset-0 z-[100] flex min-h-dvh items-end justify-center overflow-y-auto bg-black/45 px-3 py-0 sm:items-center sm:p-4">
+              <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-zinc-200 bg-white p-5 shadow-2xl sm:rounded-2xl">
                 <h2 className="text-lg font-semibold text-black">Delete Person?</h2>
                 <p className="mt-2 text-sm text-zinc-600">
                   Move {deleteTarget.name} and related transactions to bin?
@@ -326,13 +325,12 @@ export default function PeoplePage() {
                   </button>
                 </div>
               </div>
-            </div>,
-            document.body
-          )
-        : null}
+            </div>
+        </ModalPortal>
+      ) : null}
 
-      {invoiceModal && canUsePortal
-        ? createPortal(
+      {invoiceModal ? (
+        <ModalPortal>
             <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 sm:items-center sm:p-4">
               <div className="w-full max-h-[85dvh] overflow-y-auto rounded-t-3xl border border-zinc-200 bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:max-w-md sm:rounded-2xl sm:p-5">
                 <h2 className="text-lg font-semibold text-black">Generate Invoice</h2>
@@ -386,10 +384,9 @@ export default function PeoplePage() {
                   </button>
                 </div>
               </div>
-            </div>,
-            document.body
-          )
-        : null}
+            </div>
+        </ModalPortal>
+      ) : null}
     </div>
   );
 }

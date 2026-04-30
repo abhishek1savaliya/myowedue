@@ -7,7 +7,8 @@ import { activeQuery } from "@/lib/bin";
 import { dashboardCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
 import { convertFromUSD, normalizeCurrency } from "@/lib/currency";
 import { getLatestUsdRatesFromDB, getUsdRatesForUsage } from "@/lib/exchangeRates";
-import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
+import { deriveUserKey, decryptTransactionAmount } from "@/lib/crypto";
+import { formatMonthKey } from "@/lib/datetime";
 
 const DEFAULT_DASHBOARD_CURRENCY = "AUD";
 const ALLOWED_CURRENCIES = new Set(["USD", "AUD", "INR", "EUR", "GBP"]);
@@ -39,7 +40,7 @@ export async function GET(request) {
     await connectDB();
 
     const [transactions, people] = await Promise.all([
-      Transaction.find({ userId: user._id, ...activeQuery() }).populate("personId", "name"),
+      Transaction.find({ userId: user._id, ...activeQuery() }).populate("personId", "name").lean(),
       Person.find({ userId: user._id, ...activeQuery() }),
     ]);
     const [usdRates, latestRateEntry] = await Promise.all([
@@ -60,19 +61,18 @@ export async function GET(request) {
     for (const tx of transactions) {
       if (tx.status !== "pending") continue;
 
-      // Decrypt transaction to get actual amount
-      let decryptedTx = tx;
-      if (tx.encryptedAmount) {
-        try {
-          decryptedTx = await decryptTransaction(tx.toObject(), userKey);
-        } catch (err) {
-          console.error(`Failed to decrypt transaction ${tx._id}:`, err.message);
-          continue; // Skip transaction if decryption fails
+      let decryptedAmount = tx.amount;
+      try {
+        if (tx.encryptedAmount) {
+          decryptedAmount = await decryptTransactionAmount(tx, userKey);
         }
+      } catch (err) {
+        console.error(`Failed to decrypt transaction ${tx._id}:`, err.message);
+        continue;
       }
 
       const amountInDashboardCurrency = toDashboardCurrency(
-        decryptedTx.amount,
+        decryptedAmount,
         tx.currency,
         dashboardCurrency,
         usdRates
@@ -81,14 +81,15 @@ export async function GET(request) {
       if (tx.type === "credit") totalGiven += amountInDashboardCurrency;
       if (tx.type === "debit") totalReceivedBack += amountInDashboardCurrency;
 
-      const txData = tx.toObject();
+      const txData = { ...tx };
+      txData.amount = decryptedAmount;
       txData.amountInDashboardCurrency = amountInDashboardCurrency;
       txData.signedAmountInDashboardCurrency =
         tx.type === "credit" ? -amountInDashboardCurrency : amountInDashboardCurrency;
       pending.push(txData);
       pendingNet += txData.signedAmountInDashboardCurrency;
 
-      const monthKey = new Date(tx.date).toISOString().slice(0, 7);
+      const monthKey = formatMonthKey(tx.date);
       const currentMonth = monthlyMap.get(monthKey) || { credit: 0, debit: 0 };
       currentMonth[tx.type] += amountInDashboardCurrency;
       monthlyMap.set(monthKey, currentMonth);

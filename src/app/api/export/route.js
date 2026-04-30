@@ -6,6 +6,7 @@ import { ok, fail } from "@/lib/api";
 import { activeQuery } from "@/lib/bin";
 import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 import { getFontPreset, getFontSizePreset } from "@/lib/appearance";
+import { formatDateOnly, formatDateTimeLabel, nextDateOnly, parseDateOnly } from "@/lib/datetime";
 import { supportsPremiumExports } from "@/lib/subscription";
 
 export const runtime = "nodejs";
@@ -69,11 +70,9 @@ export async function GET(request) {
     const query = { userId: user._id, ...activeQuery() };
     if (startDateStr || endDateStr) {
       query.date = {};
-      if (startDateStr) query.date.$gte = new Date(startDateStr);
+      if (startDateStr) query.date.$gte = parseDateOnly(startDateStr);
       if (endDateStr) {
-        const endDate = new Date(endDateStr);
-        endDate.setDate(endDate.getDate() + 1);
-        query.date.$lt = endDate;
+        query.date.$lt = nextDateOnly(endDateStr);
       }
     }
 
@@ -117,7 +116,7 @@ export async function GET(request) {
             t.amount || "",
             t.type,
             t.currency,
-            new Date(t.date).toISOString(),
+            formatDateOnly(t.date),
             `"${notes.replace(/"/g, '""')}"`,
           ].join(",")
         );
@@ -143,7 +142,7 @@ export async function GET(request) {
               <Cell><Data ss:Type="Number">${Number(item.amount || 0)}</Data></Cell>
               <Cell><Data ss:Type="String">${toSpreadsheetCell(item.type || "")}</Data></Cell>
               <Cell><Data ss:Type="String">${toSpreadsheetCell(item.currency || "USD")}</Data></Cell>
-              <Cell><Data ss:Type="String">${toSpreadsheetCell(new Date(item.date).toLocaleDateString())}</Data></Cell>
+              <Cell><Data ss:Type="String">${toSpreadsheetCell(formatDateOnly(item.date))}</Data></Cell>
               <Cell><Data ss:Type="String">${toSpreadsheetCell(item.notes || "")}</Data></Cell>
             </Row>`
         )
@@ -277,7 +276,7 @@ async function generatePDF(user, transactions, startDateStr, endDateStr) {
       color: palette.line,
     });
 
-    page.drawText(`Generated on ${new Date().toLocaleString()}`, {
+    page.drawText(`Generated on ${formatDateTimeLabel(new Date())}`, {
       x: margin,
       y: 10,
       font,
@@ -419,7 +418,7 @@ async function generatePDF(user, transactions, startDateStr, endDateStr) {
     page.drawText(tx.type.toUpperCase(), { x: col2, y: yPos - 15, font: bold, size: 9 * scale, color: textColor });
     page.drawText(money(tx.amount), { x: col3, y: yPos - 15, font, size: 9 * scale });
     page.drawText(tx.currency || "USD", { x: col4, y: yPos - 15, font, size: 9 * scale });
-    page.drawText(new Date(tx.date).toLocaleDateString(), { x: col5, y: yPos - 15, font, size: 9 * scale });
+    page.drawText(formatDateOnly(tx.date), { x: col5, y: yPos - 15, font, size: 9 * scale });
 
     yPos -= rowHeight;
   }
@@ -430,7 +429,7 @@ async function generatePDF(user, transactions, startDateStr, endDateStr) {
   return new Response(pdfBytes, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename=transactions-${new Date().toISOString().slice(0, 10)}.pdf`,
+      "Content-Disposition": `attachment; filename=transactions-${formatDateOnly(new Date())}.pdf`,
     },
   });
 }

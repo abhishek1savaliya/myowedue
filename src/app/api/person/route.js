@@ -5,7 +5,7 @@ import Person from "@/models/Person";
 import Transaction from "@/models/Transaction";
 import { activeQuery } from "@/lib/bin";
 import { clearDashboardCache, getRedisJSON, peopleCacheKey, setRedisJSON } from "@/lib/redis";
-import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
+import { deriveUserKey, decryptTransactionAmount } from "@/lib/crypto";
 import { FREE_RECORD_LIMIT, hasActivePremium } from "@/lib/subscription";
 
 export async function GET(request) {
@@ -60,12 +60,10 @@ export async function GET(request) {
     if (!bucket) continue;
     const currency = item.currency || "USD";
 
-    // Decrypt transaction to get actual amount
     let decryptedAmount = item.amount;
     if (item.encryptedAmount) {
       try {
-        const decrypted = await decryptTransaction(item, userKey);
-        decryptedAmount = decrypted.amount;
+        decryptedAmount = await decryptTransactionAmount(item, userKey);
       } catch (err) {
         console.error(`Failed to decrypt transaction ${item._id}:`, err.message);
         if (!decryptedAmount) continue; // Skip if decryption fails and no plain amount

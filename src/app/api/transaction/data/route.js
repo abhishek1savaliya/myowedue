@@ -5,7 +5,8 @@ import Transaction from "@/models/Transaction";
 import Person from "@/models/Person";
 import { activeQuery } from "@/lib/bin";
 import { getRedisJSON, setRedisJSON, transactionDataCacheKey } from "@/lib/redis";
-import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
+import { deriveUserKey, decryptTransaction, decryptTransactionAmount } from "@/lib/crypto";
+import { formatDateTimeLabel, nextDateOnly, parseDateInputValue } from "@/lib/datetime";
 
 export async function GET(request) {
   const { user, error } = await requireUser();
@@ -47,8 +48,8 @@ export async function GET(request) {
   if (type && ["credit", "debit"].includes(type)) query.type = type;
   if (start || end) {
     query.date = {};
-    if (start) query.date.$gte = new Date(start);
-    if (end) query.date.$lte = new Date(end);
+    if (start) query.date.$gte = parseDateInputValue(start);
+    if (end) query.date.$lt = nextDateOnly(end);
   }
   // Note: amount range filter applied in-memory after decryption
 
@@ -66,19 +67,22 @@ export async function GET(request) {
     Person.find({ userId: user._id, ...activeQuery() }).sort({ createdAt: -1 }).lean(),
     Transaction.find(query)
       .populate("personId", "name email phone")
-      .sort({ date: -1, createdAt: -1 }),
+      .sort({ date: -1, createdAt: -1 })
+      .lean(),
   ]);
 
   const userKey = await deriveUserKey(user._id.toString(), user.email);
 
   const hydratedTransactions = await Promise.all(transactions.map(async (tx) => {
-    const plain = tx.toObject();
+    const plain = { ...tx };
 
     if (plain.encryptedAmount) {
       try {
-        const decrypted = await decryptTransaction(plain, userKey);
-        plain.amount = decrypted.amount;
-        if (decrypted.notes !== undefined) plain.notes = decrypted.notes;
+        plain.amount = await decryptTransactionAmount(plain, userKey);
+        if (plain.encryptedNotes) {
+          const decrypted = await decryptTransaction(plain, userKey);
+          if (decrypted.notes !== undefined) plain.notes = decrypted.notes;
+        }
       } catch (err) {
         console.error(`Failed to decrypt transaction ${plain._id}:`, err.message);
       }
@@ -96,7 +100,7 @@ export async function GET(request) {
       if (!hasCreatedLog) {
         existingLogs.push({
           action: "created",
-          message: `Transaction created at ${new Date(plain.createdAt || plain.date || new Date()).toLocaleString()}`,
+          message: `Transaction created at ${formatDateTimeLabel(plain.createdAt || plain.date || new Date())}`,
           at: plain.createdAt || plain.date || new Date(),
         });
       }
@@ -104,7 +108,7 @@ export async function GET(request) {
       if (!hasDeletedLog && plain.lastDeletedAt) {
         existingLogs.push({
           action: "deleted",
-          message: `Transaction deleted at ${new Date(plain.lastDeletedAt).toLocaleString()}`,
+          message: `Transaction deleted at ${formatDateTimeLabel(plain.lastDeletedAt)}`,
           at: plain.lastDeletedAt,
         });
       }
@@ -112,7 +116,7 @@ export async function GET(request) {
       if (!hasRestoredLog && plain.lastRestoredAt) {
         existingLogs.push({
           action: "restored",
-          message: `Transaction restored at ${new Date(plain.lastRestoredAt).toLocaleString()}`,
+          message: `Transaction restored at ${formatDateTimeLabel(plain.lastRestoredAt)}`,
           at: plain.lastRestoredAt,
         });
       }
@@ -124,7 +128,7 @@ export async function GET(request) {
     const fallbackLogs = [
       {
         action: "created",
-        message: `Transaction created at ${new Date(plain.createdAt || plain.date || new Date()).toLocaleString()}`,
+        message: `Transaction created at ${formatDateTimeLabel(plain.createdAt || plain.date || new Date())}`,
         at: plain.createdAt || plain.date || new Date(),
       },
     ];
@@ -132,7 +136,7 @@ export async function GET(request) {
     if (plain.lastDeletedAt) {
       fallbackLogs.push({
         action: "deleted",
-        message: `Transaction deleted at ${new Date(plain.lastDeletedAt).toLocaleString()}`,
+        message: `Transaction deleted at ${formatDateTimeLabel(plain.lastDeletedAt)}`,
         at: plain.lastDeletedAt,
       });
     }
@@ -140,7 +144,7 @@ export async function GET(request) {
     if (plain.lastRestoredAt) {
       fallbackLogs.push({
         action: "restored",
-        message: `Transaction restored at ${new Date(plain.lastRestoredAt).toLocaleString()}`,
+        message: `Transaction restored at ${formatDateTimeLabel(plain.lastRestoredAt)}`,
         at: plain.lastRestoredAt,
       });
     }

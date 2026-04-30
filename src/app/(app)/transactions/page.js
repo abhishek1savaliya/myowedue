@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { BellRing, Gem, Link2, Lock, Pencil, Repeat, Trash2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import ModalPortal from "@/components/ModalPortal";
+import { formatDateOnly } from "@/lib/datetime";
 import { recurringLabel } from "@/lib/recurring";
 
 const txInitial = {
@@ -11,7 +13,7 @@ const txInitial = {
   type: "credit",
   currency: "USD",
   notes: "",
-  date: new Date().toISOString().slice(0, 10),
+  date: formatDateOnly(new Date()),
   recurringEnabled: false,
   recurringFrequency: "monthly",
   recurringInterval: "1",
@@ -109,8 +111,8 @@ export default function TransactionsPage() {
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     setExportModal({
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      startDate: formatDateOnly(startDate),
+      endDate: formatDateOnly(endDate),
     });
   }
 
@@ -352,6 +354,7 @@ export default function TransactionsPage() {
       </div>
 
       {exportModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6">
             <h3 className="text-lg font-semibold text-black mb-4">Export Transactions to PDF</h3>
@@ -391,6 +394,7 @@ export default function TransactionsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {transactions.length === 0 ? (
@@ -413,7 +417,7 @@ export default function TransactionsPage() {
                 <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${style.labelClass}`}>
                   {style.label}
                 </span>
-                <span className="text-sm text-zinc-600">{new Date(t.date).toLocaleDateString()}</span>
+                <span className="text-sm text-zinc-600">{formatDateOnly(t.date)}</span>
                 {t.recurringEnabled ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                     <Repeat className="h-3 w-3" />
@@ -452,11 +456,11 @@ export default function TransactionsPage() {
                       type: t.type,
                       currency: t.currency,
                       notes: t.notes || "",
-                      date: new Date(t.date).toISOString().slice(0, 10),
+                      date: formatDateOnly(t.date),
                       recurringEnabled: Boolean(t.recurringEnabled),
                       recurringFrequency: t.recurringFrequency || "monthly",
                       recurringInterval: String(t.recurringInterval || 1),
-                      recurringEndDate: t.recurringEndDate ? new Date(t.recurringEndDate).toISOString().slice(0, 10) : "",
+                      recurringEndDate: t.recurringEndDate ? formatDateOnly(t.recurringEndDate) : "",
                     });
                   }}
                   aria-label="Edit transaction"

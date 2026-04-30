@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/db";
 import { fail, logActivity, ok } from "@/lib/api";
 import { lookupHandyBin } from "@/lib/handyBin";
+import { clearUserApiCache } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import { resolveStoredCardData, serializeCard } from "@/lib/cardStorage";
 import Card from "@/models/Card";
@@ -41,6 +42,7 @@ export async function PUT(request, { params }) {
 
     if (!card) return fail("Card not found", 404);
 
+    await clearUserApiCache(user._id);
     await logActivity(user._id, "card_updated", `Updated ${selection.variantLabel} (${selection.issuingBankName})`);
     return ok({ card: await serializeCard(card, user), message: "Card updated successfully" });
   } catch (caughtError) {
@@ -58,6 +60,7 @@ export async function DELETE(_request, { params }) {
     const card = await Card.findOneAndDelete({ _id: id, userId: user._id });
     if (!card) return fail("Card not found", 404);
 
+    await clearUserApiCache(user._id);
     await logActivity(user._id, "card_deleted", `Deleted ${card.variantLabel} (${card.issuingBankName})`);
     return ok({ message: "Card deleted successfully" });
   } catch {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Copy, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
+import ModalPortal from "@/components/ModalPortal";
 
 const initialForm = {
   cardNumber: "",
@@ -123,6 +124,8 @@ export default function CardsPage() {
 
   const normalizedCardNumber = normalizeCardNumberInput(form.cardNumber);
   const editingCard = cards.find((card) => card.id === editingId) || null;
+  const detectedDetails = buildDetectedDetails(binLookup.data) || buildDetectedDetails(editingCard);
+  const showDetectedDetails = binLookup.status !== "idle" || Boolean(detectedDetails);
 
   useEffect(() => {
     if (normalizedCardNumber.length < 6) {
@@ -379,7 +382,6 @@ export default function CardsPage() {
     closePasswordModal();
   }
 
-  const detectedDetails = buildDetectedDetails(binLookup.data) || buildDetectedDetails(editingCard);
   const previewDigits = normalizedCardNumber;
   const previewLast4 = previewDigits ? previewDigits.slice(-4).padStart(4, "*") : "****";
   const previewLength = previewDigits.length >= 12 ? previewDigits.length : 16;
@@ -394,7 +396,7 @@ export default function CardsPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Cards</h1>
         <p className="max-w-3xl text-sm text-zinc-600">
-          Enter a card number and expiry, and the app will detect issuer details from the first 6 to 8 digits using a cached BIN lookup. Full card numbers stay encrypted at rest and can be revealed only after password confirmation.
+          Enter a card number and expiry, and the app will detect issuer details from the first 6 to 8 digits using a cached BIN lookup. Full card numbers stay encrypted at rest and can be revealed only after password confirmation, while CVV stays excluded.
         </p>
       </header>
 
@@ -404,18 +406,17 @@ export default function CardsPage() {
             <div className="space-y-1 md:col-span-2">
               <input
                 required={!editingId}
-                value={form.cardNumber}
+                value={form.cardNumber ?? ""}
                 onChange={(e) => updateFormField("cardNumber", formatCardNumberInput(e.target.value))}
                 placeholder={editingId ? "Enter new card number (optional)" : "Card number"}
                 inputMode="numeric"
                 className="w-full rounded-xl border border-zinc-300 px-3 py-3"
               />
-              <p className="text-xs text-zinc-500">The BIN lookup runs after the 6th digit and refreshes again when 8 digits are available.</p>
             </div>
 
             <div className="space-y-1 md:col-span-2">
               <input
-                value={form.nameOnCard}
+                value={form.nameOnCard ?? ""}
                 onChange={(e) => updateFormField("nameOnCard", e.target.value)}
                 placeholder="Name on card (optional)"
                 className="w-full rounded-xl border border-zinc-300 px-3 py-3"
@@ -425,7 +426,7 @@ export default function CardsPage() {
             <div className="space-y-1">
               <input
                 required
-                value={form.expiryMonth}
+                value={form.expiryMonth ?? ""}
                 onChange={(e) => updateFormField("expiryMonth", formatExpiryMonthInput(e.target.value))}
                 placeholder="Expiry month (MM)"
                 inputMode="numeric"
@@ -437,7 +438,7 @@ export default function CardsPage() {
             <div className="space-y-1">
               <input
                 required
-                value={form.expiryYear}
+                value={form.expiryYear ?? ""}
                 onChange={(e) => updateFormField("expiryYear", formatExpiryYearInput(e.target.value))}
                 placeholder="Expiry year (YY)"
                 inputMode="numeric"
@@ -448,7 +449,7 @@ export default function CardsPage() {
 
             <div className="space-y-1 md:col-span-2">
               <textarea
-                value={form.privateNote}
+                value={form.privateNote ?? ""}
                 onChange={(e) => updateFormField("privateNote", e.target.value)}
                 placeholder="Private note (optional)"
                 maxLength={1000}
@@ -460,43 +461,45 @@ export default function CardsPage() {
           </div>
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            For security and PCI compliance, CVV is not stored for later use. Users should enter CVV only at payment time, or use a payment gateway token/vault flow for future inline transactions.
+            CVV is intentionally not saved by the app, even though the card record stores the rest of your reference details in encrypted form.
           </div>
 
-          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-[linear-gradient(135deg,#0f172a_0%,#172554_55%,#1e293b_100%)] p-4 text-white shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-200/90">Detected Details</p>
-                <p className="mt-2 text-sm text-slate-200/75">{binLookup.message}</p>
+          {showDetectedDetails ? (
+            <div className="overflow-hidden rounded-3xl border border-slate-800 bg-[linear-gradient(135deg,#0f172a_0%,#172554_55%,#1e293b_100%)] p-4 text-white shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-200/90">Detected Details</p>
+                  {binLookup.status !== "idle" ? <p className="mt-2 text-sm text-slate-200/75">{binLookup.message}</p> : null}
+                </div>
+                {binLookup.status === "loading" ? <LoaderCircle className="mt-0.5 h-4 w-4 animate-spin text-cyan-200" /> : null}
               </div>
-              {binLookup.status === "loading" ? <LoaderCircle className="mt-0.5 h-4 w-4 animate-spin text-cyan-200" /> : null}
+
+              {detectedDetails ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Issuer</p>
+                    <p className="mt-2 text-base font-semibold leading-snug text-white">{detectedDetails.issuingBankName}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Country</p>
+                    <p className="mt-2 text-base font-semibold leading-snug text-white">{detectedDetails.issuingCountryName}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Network</p>
+                    <p className="mt-2 text-base font-semibold leading-snug text-cyan-200">{detectedDetails.network}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Type</p>
+                    <p className="mt-2 text-base font-semibold leading-snug text-amber-200">{detectedDetails.cardTypeLabel}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm sm:col-span-2">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Variant</p>
+                    <p className="mt-2 text-base font-semibold leading-snug text-emerald-200">{detectedDetails.variantLabel}</p>
+                  </div>
+                </div>
+              ) : null}
             </div>
-
-            {detectedDetails ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Issuer</p>
-                  <p className="mt-2 text-base font-semibold leading-snug text-white">{detectedDetails.issuingBankName}</p>
-                </div>
-                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Country</p>
-                  <p className="mt-2 text-base font-semibold leading-snug text-white">{detectedDetails.issuingCountryName}</p>
-                </div>
-                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Network</p>
-                  <p className="mt-2 text-base font-semibold leading-snug text-cyan-200">{detectedDetails.network}</p>
-                </div>
-                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Type</p>
-                  <p className="mt-2 text-base font-semibold leading-snug text-amber-200">{detectedDetails.cardTypeLabel}</p>
-                </div>
-                <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm sm:col-span-2">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Variant</p>
-                  <p className="mt-2 text-base font-semibold leading-snug text-emerald-200">{detectedDetails.variantLabel}</p>
-                </div>
-              </div>
-            ) : null}
-          </div>
+          ) : null}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <button type="submit" disabled={saving} className="rounded-xl bg-black px-4 py-3 text-white disabled:opacity-60">
@@ -633,6 +636,7 @@ export default function CardsPage() {
       )}
 
       {passwordModal.open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-black">Confirm Password</h2>
@@ -662,6 +666,7 @@ export default function CardsPage() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

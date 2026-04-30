@@ -1,5 +1,7 @@
 export const FREE_RECORD_LIMIT = 500;
 export const FREE_TRANSACTION_LIMIT = 700;
+export const FREE_STORAGE_BYTES = 1 * 1024 * 1024 * 1024;
+export const PREMIUM_STORAGE_BYTES = 10 * 1024 * 1024 * 1024;
 export const PREMIUM_GRACE_DAYS = 7;
 export const PREMIUM_MONTHLY_DURATION_DAYS = 30;
 
@@ -108,4 +110,8 @@ export function supportsPremiumExports(user) {
 
 export function supportsPremiumSupport(user) {
   return hasActivePremium(user);
+}
+
+export function getStorageQuotaBytes(user) {
+  return hasActivePremium(user) ? PREMIUM_STORAGE_BYTES : FREE_STORAGE_BYTES;
 }

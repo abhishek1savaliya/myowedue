@@ -6,6 +6,7 @@ import Person from "@/models/Person";
 import { activeQuery, buildBinMeta } from "@/lib/bin";
 import { clearDashboardCache } from "@/lib/redis";
 import { deriveUserKey, encryptField, decryptTransaction } from "@/lib/crypto";
+import { formatDateOnly, formatDateTimeLabel, parseDateInputValue } from "@/lib/datetime";
 import { normalizeRecurringConfig, recurringLabel } from "@/lib/recurring";
 import { hasActivePremium } from "@/lib/subscription";
 
@@ -17,7 +18,7 @@ export async function PUT(request, { params }) {
     const { id } = await params;
     const body = await request.json();
     const eventAt = new Date();
-    const eventAtText = eventAt.toLocaleString();
+    const eventAtText = formatDateTimeLabel(eventAt);
     const recurringConfig = normalizeRecurringConfig(body);
 
     await connectDB();
@@ -47,7 +48,7 @@ export async function PUT(request, { params }) {
       type: body.type || existing.type,
       // Don't store plain notes - will be encrypted
       currency: body.currency || existing.currency,
-      date: body.date ? new Date(body.date) : existing.date,
+      date: body.date ? parseDateInputValue(body.date) : existing.date,
       status: "pending",
       paidAt: null,
       recurringEnabled: recurringConfig.recurringEnabled,
@@ -57,8 +58,8 @@ export async function PUT(request, { params }) {
     };
 
     const history = [];
-    const existingDate = new Date(existing.date).toISOString().slice(0, 10);
-    const updatedDate = new Date(setFields.date).toISOString().slice(0, 10);
+    const existingDate = formatDateOnly(existing.date);
+    const updatedDate = formatDateOnly(setFields.date);
 
     // Derive user's encryption key early (needed for decryption comparisons)
     const userKey = await deriveUserKey(user._id.toString(), user.email);
@@ -211,7 +212,7 @@ export async function DELETE(_request, { params }) {
     await connectDB();
     const { deletedAt, restoreUntil } = buildBinMeta(user);
     const eventAt = new Date();
-    const deletedAtMessage = `Transaction deleted at ${eventAt.toLocaleString()}`;
+    const deletedAtMessage = `Transaction deleted at ${formatDateTimeLabel(eventAt)}`;
 
     const tx = await Transaction.findOneAndUpdate(
       { _id: id, userId: user._id, ...activeQuery() },

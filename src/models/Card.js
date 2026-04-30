@@ -16,6 +16,9 @@ const CardSchema = new Schema(
     nameOnCard: { type: String, trim: true, default: "" },
     encryptedNameOnCard: { type: String, trim: true, default: "" },
     encryptedCardNumber: { type: String, trim: true, default: "" },
+    // --- Added CVV Field ---
+    encryptedCvv: { type: String, trim: true, default: "" },
+    // -----------------------
     last4: { type: String, required: true, trim: true },
     cardNumberLength: { type: Number, required: true, min: 12, max: 19 },
     expiryMonth: { type: String, trim: true, default: "" },
@@ -35,14 +38,17 @@ let Card;
 
 if (mongoose.models.Card) {
   Card = mongoose.models.Card;
-  if (!Card.schema.path("lookupBin")) {
-    Card.schema.add({
-      lookupBin: { type: String, trim: true, minlength: 6, maxlength: 8, default: "" },
-    });
-  }
+
   const missingPaths = {};
+
+  // Logic to add missing paths to existing model
+  if (!Card.schema.path("lookupBin")) missingPaths.lookupBin = { type: String, trim: true, minlength: 6, maxlength: 8, default: "" };
   if (!Card.schema.path("encryptedNameOnCard")) missingPaths.encryptedNameOnCard = { type: String, trim: true, default: "" };
   if (!Card.schema.path("encryptedCardNumber")) missingPaths.encryptedCardNumber = { type: String, trim: true, default: "" };
+
+  // Ensure encryptedCvv is added to existing models in memory
+  if (!Card.schema.path("encryptedCvv")) missingPaths.encryptedCvv = { type: String, trim: true, default: "" };
+
   if (!Card.schema.path("last4")) missingPaths.last4 = { type: String, required: true, trim: true, default: "" };
   if (!Card.schema.path("cardNumberLength")) missingPaths.cardNumberLength = { type: Number, required: true, min: 12, max: 19, default: 16 };
   if (!Card.schema.path("expiryMonth")) missingPaths.expiryMonth = { type: String, trim: true, default: "" };
