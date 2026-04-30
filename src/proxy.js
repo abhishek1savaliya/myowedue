@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-const protectedRoutes = ["/dashboard", "/people", "/transactions", "/bin", "/reports", "/settings", "/my-subscription", "/content-editor", "/support"];
+const protectedRoutes = ["/dashboard", "/people", "/cards", "/transactions", "/bin", "/reports", "/settings", "/my-subscription", "/content-editor", "/support"];
 const authRoutes = ["/login", "/signup"];
-const adminProtectedRoutes = ["/admin/dashboard", "/admin/team", "/admin/tickets", "/admin/content", "/admin/vouchers"];
+const adminProtectedRoutes = ["/admin/dashboard", "/admin/team", "/admin/tickets", "/admin/content", "/admin/vouchers", "/admin/cards"];
 
 export function proxy(request) {
   const { pathname } = request.nextUrl;
@@ -35,6 +35,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/people/:path*",
+    "/cards/:path*",
     "/transactions/:path*",
     "/bin/:path*",
     "/reports/:path*",
@@ -48,6 +49,7 @@ export const config = {
     "/admin/team/:path*",
     "/admin/tickets/:path*",
     "/admin/vouchers/:path*",
+    "/admin/cards/:path*",
     "/admin/login",
   ],
 };

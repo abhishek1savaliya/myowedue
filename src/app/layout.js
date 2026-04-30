@@ -1,6 +1,9 @@
 import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "./globals.css";
 import ThemeSync from "@/components/ThemeSync";
+import CookieConsentBanner from "@/components/CookieConsentBanner";
+import { getUiPreferenceBootstrapScript } from "@/lib/cookie-preferences";
+import { DEFAULT_FONT_PRESET, DEFAULT_FONT_SIZE_PRESET, getFontPreset, getFontSizePreset } from "@/lib/appearance";
 
 const display = Cormorant_Garamond({
   variable: "--font-display",
@@ -71,14 +74,38 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  const uiPreferenceBootstrapScript = getUiPreferenceBootstrapScript();
+  const defaultFont = getFontPreset(DEFAULT_FONT_PRESET);
+  const defaultSize = getFontSizePreset(DEFAULT_FONT_SIZE_PRESET);
+  const defaultMobileScale =
+    defaultSize.scale <= 1 ? defaultSize.scale : 1 + (defaultSize.scale - 1) * 0.55;
+
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${display.variable} ${body.variable} h-full antialiased`}
+      data-premium-ui="false"
+      data-font-preset={DEFAULT_FONT_PRESET}
+      data-font-size-preset={DEFAULT_FONT_SIZE_PRESET}
+      style={{
+        "--ui-body-font": defaultFont.body,
+        "--ui-display-font": defaultFont.display,
+        "--ui-font-scale": String(defaultSize.scale),
+        "--ui-font-size-mobile": `${15 * defaultMobileScale}px`,
+        "--ui-font-size-desktop": `${16 * defaultSize.scale}px`,
+        "--ui-type-scale-mobile": String(defaultMobileScale),
+        "--ui-type-scale-desktop": String(defaultSize.scale),
+      }}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
+        <script
+          id="myowedue-ui-pref-boot"
+          dangerouslySetInnerHTML={{ __html: uiPreferenceBootstrapScript }}
+        />
         <ThemeSync />
         {children}
+        <CookieConsentBanner />
       </body>
     </html>
   );

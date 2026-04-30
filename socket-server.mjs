@@ -1,11 +1,13 @@
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { createClient } from "redis";
+import { Redis } from "@upstash/redis";
 
 const SOCKET_PORT = Number(process.env.SOCKET_PORT || 4001);
 const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-const REDIS_URL = process.env.REDIS_URL;
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_TOKEN;
 const CHANNEL = "notifications:events";
+let subscription = null;
 
 const httpServer = createServer((_, res) => {
   res.writeHead(200, { "Content-Type": "application/json" });
@@ -27,19 +29,25 @@ io.on("connection", (socket) => {
 });
 
 async function startRedisSubscriber() {
-  if (!REDIS_URL) {
-    console.warn("Socket server started without REDIS_URL; realtime events will be disabled.");
+  if (!REDIS_URL || !REDIS_TOKEN) {
+    console.warn("Socket server started without Upstash Redis credentials; realtime events will be disabled.");
     return;
   }
 
-  const subscriber = createClient({ url: REDIS_URL });
-  subscriber.on("error", (error) => {
+  const subscriber = new Redis({
+    url: REDIS_URL,
+    token: REDIS_TOKEN,
+    automaticDeserialization: false,
+  });
+
+  subscription = subscriber.subscribe(CHANNEL);
+  subscription.on("error", (error) => {
     console.error("Socket Redis subscriber error:", error?.message || error);
   });
 
-  await subscriber.connect();
-  await subscriber.subscribe(CHANNEL, (payload) => {
+  subscription.on(`message:${CHANNEL}`, ({ message }) => {
     try {
+      const payload = typeof message === "string" ? message : JSON.stringify(message || {});
       const parsed = JSON.parse(payload || "{}");
       const userId = parsed?.userId;
       if (!userId) return;
@@ -60,3 +68,18 @@ httpServer.listen(SOCKET_PORT, async () => {
   console.log(`Socket.IO notification server listening on :${SOCKET_PORT}`);
   await startRedisSubscriber();
 });
+
+async function shutdown() {
+  try {
+    if (subscription) {
+      await subscription.unsubscribe();
+    }
+  } finally {
+    httpServer.close(() => {
+      process.exit(0);
+    });
+  }
+}
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);

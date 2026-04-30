@@ -6,6 +6,10 @@ import { Lock, Moon, Sun } from "lucide-react";
 import Loader from "@/components/Loader";
 import { FONT_PRESETS, FONT_SIZE_PRESETS } from "@/lib/appearance";
 import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
+import {
+  persistAppearancePreference,
+  persistThemePreference,
+} from "@/lib/cookie-preferences";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -42,15 +46,24 @@ export default function SettingsPage() {
       });
       setFrequency(user.reminderFrequency || "weekly");
       const userDarkMode = Boolean(user.darkMode);
+      const premium = Boolean(user.isPremium);
+      const nextFontPreset = user.fontPreset || "manrope";
+      const nextFontSizePreset = user.fontSizePreset || "size-4";
       setDarkMode(userDarkMode);
       applyThemePreference(userDarkMode);
-      setIsPremium(Boolean(user.isPremium));
-      setFontPreset(user.fontPreset || "manrope");
-      setFontSizePreset(user.fontSizePreset || "size-4");
+      setIsPremium(premium);
+      setFontPreset(nextFontPreset);
+      setFontSizePreset(nextFontSizePreset);
       applyAppearancePreference({
-        fontPreset: user.fontPreset || "manrope",
-        fontSizePreset: user.fontSizePreset || "size-4",
-        isPremium: Boolean(user.isPremium),
+        fontPreset: nextFontPreset,
+        fontSizePreset: nextFontSizePreset,
+        isPremium: premium,
+      });
+      persistThemePreference({ scope: "auth", isDarkMode: userDarkMode });
+      persistAppearancePreference({
+        fontPreset: nextFontPreset,
+        fontSizePreset: nextFontSizePreset,
+        isPremium: premium,
       });
       setNotificationsEnabled(user.notificationsEnabled !== false);
     }
@@ -108,6 +121,8 @@ export default function SettingsPage() {
     if (res.ok) {
       applyThemePreference(darkMode);
       applyAppearancePreference({ fontPreset, fontSizePreset, isPremium });
+      persistThemePreference({ scope: "auth", isDarkMode: darkMode });
+      persistAppearancePreference({ fontPreset, fontSizePreset, isPremium });
     }
     setSettingsMessage(res.ok ? "Saved" : data.message || "Failed");
   }

@@ -65,7 +65,13 @@ export default function AdminLayout({ children }) {
 
   const role = admin?.role || "support";
   const isAdminSide = role === "superadmin" || role === "manager";
-  const navItems = isAdminSide ? ADMIN_NAV : EMPLOYEE_NAV;
+  const navItems = isAdminSide
+    ? [
+        ...ADMIN_NAV.slice(0, 4),
+        { href: "/admin/cards", label: "Cards Catalog", icon: "CC" },
+        ...ADMIN_NAV.slice(4),
+      ]
+    : EMPLOYEE_NAV;
   const badge = ROLE_BADGE[role] || ROLE_BADGE.support;
 
   return (

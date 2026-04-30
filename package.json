@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "socket": "node socket-server.mjs"
+    "socket": "node socket-server.mjs",
+    "cards:import": "node scripts/import-card-catalog.cjs"
   },
   "dependencies": {
+    "@upstash/redis": "^1.37.0",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.1.0",
     "dotenv": "^17.4.2",
@@ -26,7 +28,6 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-quill-new": "^3.8.3",
-    "redis": "^5.11.0",
     "resend": "^6.10.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",

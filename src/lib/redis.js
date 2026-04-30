@@ -1,7 +1,8 @@
-import { createClient } from "redis";
+import { Redis } from "@upstash/redis";
 
-let clientPromise = null;
 let redisDisabledUntil = 0;
+let client = null;
+const NOTIFICATION_CHANNEL = "notifications:events";
 
 function isRedisTemporarilyDisabled() {
   return Date.now() < redisDisabledUntil;
@@ -11,48 +12,47 @@ function disableRedisFor(ms = 30000) {
   redisDisabledUntil = Date.now() + ms;
 }
 
-function hasRedisUrl() {
-  return Boolean(process.env.REDIS_URL);
+function getRedisConfig() {
+  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_TOKEN;
+
+  if (!url || !token) return null;
+  return { url, token };
 }
 
-async function createRedisClient() {
-  const client = createClient({
-    url: process.env.REDIS_URL,
-    socket: {
-      connectTimeout: 2000,
-      reconnectStrategy: (retries) => {
-        if (retries > 2) return new Error("Redis reconnect aborted");
-        return Math.min((retries + 1) * 200, 600);
-      },
-    },
-  });
+function hasRedisConfig() {
+  return Boolean(getRedisConfig());
+}
 
-  client.on("error", (error) => {
-    console.error("Redis error:", error?.message || error);
-    const text = String(error?.message || "").toLowerCase();
-    if (text.includes("max number of clients") || text.includes("econnrefused") || text.includes("timeout")) {
-      disableRedisFor(30000);
-    }
-  });
-
-  await client.connect();
-  return client;
+function handleRedisError(context, error) {
+  console.error(`${context}:`, error?.message || error);
+  const text = String(error?.message || error || "").toLowerCase();
+  if (
+    text.includes("timeout") ||
+    text.includes("econnrefused") ||
+    text.includes("429") ||
+    text.includes("too many") ||
+    text.includes("fetch failed")
+  ) {
+    disableRedisFor(30000);
+  }
 }
 
 export async function getRedisClient() {
-  if (!hasRedisUrl()) return null;
+  if (!hasRedisConfig()) return null;
   if (isRedisTemporarilyDisabled()) return null;
 
-  if (!clientPromise) {
-    clientPromise = createRedisClient().catch((error) => {
-      clientPromise = null;
-      console.error("Redis connect failed:", error?.message || error);
-      disableRedisFor(30000);
-      return null;
+  if (!client) {
+    const config = getRedisConfig();
+    if (!config) return null;
+
+    client = new Redis({
+      ...config,
+      automaticDeserialization: false,
     });
   }
 
-  return clientPromise;
+  return client;
 }
 
 export async function getRedisJSON(key) {
@@ -61,11 +61,12 @@ export async function getRedisJSON(key) {
     if (!client) return null;
 
     const value = await client.get(key);
-    if (!value) return null;
+    if (value == null) return null;
+    if (typeof value !== "string") return value;
 
     return JSON.parse(value);
   } catch (error) {
-    console.error("Redis get failed:", error?.message || error);
+    handleRedisError("Redis get failed", error);
     return null;
   }
 }
@@ -75,10 +76,10 @@ export async function setRedisJSON(key, data, ttlSeconds = 120) {
     const client = await getRedisClient();
     if (!client) return false;
 
-    await client.set(key, JSON.stringify(data), { EX: ttlSeconds });
+    await client.set(key, JSON.stringify(data), { ex: ttlSeconds });
     return true;
   } catch (error) {
-    console.error("Redis set failed:", error?.message || error);
+    handleRedisError("Redis set failed", error);
     return false;
   }
 }
@@ -91,7 +92,7 @@ export async function delRedisKey(key) {
     await client.del(key);
     return true;
   } catch (error) {
-    console.error("Redis delete failed:", error?.message || error);
+    handleRedisError("Redis delete failed", error);
     return false;
   }
 }
@@ -127,7 +128,7 @@ export async function publishNotificationEvent(userId, type = "changed") {
     if (!client) return false;
 
     await client.publish(
-      "notifications:events",
+      NOTIFICATION_CHANNEL,
       JSON.stringify({
         userId: String(userId),
         type,
@@ -136,7 +137,7 @@ export async function publishNotificationEvent(userId, type = "changed") {
     );
     return true;
   } catch (error) {
-    console.error("Redis publish notification event failed:", error?.message || error);
+    handleRedisError("Redis publish notification event failed", error);
     return false;
   }
 }
@@ -171,26 +172,25 @@ export async function clearUserApiCache(userId) {
       `notifications:${userIdText}:*`,
     ];
 
-    // Slow path: sweep query-variant keys in background so CRUD responses don't block on SCAN.
-    (async () => {
-      try {
-        const keys = [];
-        for (const pattern of patterns) {
-          for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
-            keys.push(String(key));
-          }
+    const keysToDelete = new Set();
+    for (const pattern of patterns) {
+      let cursor = "0";
+      do {
+        const [nextCursor, keys] = await client.scan(cursor, { match: pattern, count: 100 });
+        cursor = String(nextCursor);
+        for (const key of keys || []) {
+          keysToDelete.add(String(key));
         }
-        if (keys.length > 0) {
-          await client.del(...keys);
-        }
-      } catch (error) {
-        console.error("Redis background cache sweep failed:", error?.message || error);
-      }
-    })();
+      } while (cursor !== "0");
+    }
+
+    if (keysToDelete.size > 0) {
+      await client.del(...Array.from(keysToDelete));
+    }
 
     return true;
   } catch (error) {
-    console.error("Redis user cache clear failed:", error?.message || error);
+    handleRedisError("Redis user cache clear failed", error);
     return false;
   }
 }

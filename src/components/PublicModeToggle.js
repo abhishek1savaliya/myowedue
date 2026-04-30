@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { applyThemePreference, getStoredThemePreference } from "@/lib/theme-client";
+import { persistThemePreference } from "@/lib/cookie-preferences";
 
 export default function PublicModeToggle() {
   const [isDark, setIsDark] = useState(false);
@@ -22,6 +23,7 @@ export default function PublicModeToggle() {
     const next = !isDark;
     setIsDark(next);
     applyThemePreference(next, "public");
+    persistThemePreference({ scope: "public", isDarkMode: next });
   };
 
   return (

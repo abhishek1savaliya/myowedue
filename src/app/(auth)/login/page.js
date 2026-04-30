@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
 import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
+import {
+  persistAppearancePreference,
+  persistThemePreference,
+} from "@/lib/cookie-preferences";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,12 +36,19 @@ export default function LoginPage() {
     }
 
     if (data?.user && typeof data.user.darkMode === "boolean") {
-      applyThemePreference(data.user.darkMode);
+      const isDarkMode = Boolean(data.user.darkMode);
+      const isPremium = Boolean(data.user.isPremium);
+      const fontPreset = data.user.fontPreset;
+      const fontSizePreset = data.user.fontSizePreset;
+
+      applyThemePreference(isDarkMode);
       applyAppearancePreference({
-        fontPreset: data.user.fontPreset,
-        fontSizePreset: data.user.fontSizePreset,
-        isPremium: Boolean(data.user.isPremium),
+        fontPreset,
+        fontSizePreset,
+        isPremium,
       });
+      persistThemePreference({ scope: "auth", isDarkMode });
+      persistAppearancePreference({ fontPreset, fontSizePreset, isPremium });
     }
 
     router.push("/dashboard");

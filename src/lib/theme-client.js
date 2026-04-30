@@ -4,6 +4,7 @@ import {
   getFontPreset,
   getFontSizePreset,
 } from "@/lib/appearance";
+import { applyAppearanceDataset } from "@/lib/cookie-preferences";
 
 const THEME_KEYS = {
   auth: "myowedue-theme-auth",
@@ -48,7 +49,7 @@ export function applyAppearancePreference({
   document.documentElement.style.setProperty("--ui-font-size-desktop", `${16 * desktopScale}px`);
   document.documentElement.style.setProperty("--ui-type-scale-mobile", String(mobileScale));
   document.documentElement.style.setProperty("--ui-type-scale-desktop", String(desktopScale));
-  document.documentElement.setAttribute("data-premium-ui", isPremium ? "true" : "false");
+  applyAppearanceDataset({ fontPreset, fontSizePreset, isPremium });
 }
 
 export function resetAppearancePreference() {

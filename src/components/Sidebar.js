@@ -10,12 +10,13 @@ import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash
 const baseLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/people", label: "People", icon: Users },
+  { href: "/cards", label: "Cards", icon: CreditCard },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/events", label: "Events", icon: CalendarDays },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/bin", label: "Bin", icon: Trash2 },
   { href: "/reports", label: "Reports", icon: FileText },
-  { href: "/my-subscription", label: "My Subscription", icon: CreditCard },
+  { href: "/my-subscription", label: "My Subscription", icon: Gem },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

@@ -8,6 +8,10 @@ import {
   getStoredThemePreference,
   resetAppearancePreference,
 } from "@/lib/theme-client";
+import {
+  persistAppearancePreference,
+  persistThemePreference,
+} from "@/lib/cookie-preferences";
 
 export default function ThemeSync() {
   const pathname = usePathname();
@@ -34,12 +38,19 @@ export default function ThemeSync() {
         const res = await fetch("/api/auth/me", { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok && data?.user) {
-          applyThemePreference(Boolean(data.user.darkMode), "auth");
+          const isDarkMode = Boolean(data.user.darkMode);
+          const isPremium = Boolean(data.user.isPremium);
+          const fontPreset = data.user.fontPreset;
+          const fontSizePreset = data.user.fontSizePreset;
+
+          applyThemePreference(isDarkMode, "auth");
           applyAppearancePreference({
-            fontPreset: data.user.fontPreset,
-            fontSizePreset: data.user.fontSizePreset,
-            isPremium: Boolean(data.user.isPremium),
+            fontPreset,
+            fontSizePreset,
+            isPremium,
           });
+          persistThemePreference({ scope: "auth", isDarkMode });
+          persistAppearancePreference({ fontPreset, fontSizePreset, isPremium });
           return;
         }
       } catch {
