@@ -25,9 +25,14 @@ function normalizePrivateNote(value) {
   return String(value || "").trim().slice(0, 1000);
 }
 
+function normalizeCVV(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 4);
+}
+
 export async function resolveStoredCardData(payload = {}, user, existingCard = null) {
-  if (String(payload.cvv || payload.encryptedCvv || "").trim()) {
-    throw new Error("CVV cannot be stored in this app");
+  const cvv = normalizeCVV(payload.cvv || "");
+  if (cvv && (cvv.length < 3 || cvv.length > 4)) {
+    throw new Error("Enter a valid CVV (3 or 4 digits)");
   }
 
   const digits = normalizeCardDigits(payload.cardNumber);
@@ -80,6 +85,7 @@ export async function resolveStoredCardData(payload = {}, user, existingCard = n
   nextData.encryptedExpiryYear = await encryptField(expiryYear, userKey);
   nextData.encryptedNameOnCard = nameOnCard ? await encryptField(nameOnCard, userKey) : "";
   nextData.encryptedPrivateNote = privateNote ? await encryptField(privateNote, userKey) : "";
+  nextData.encryptedCvv = cvv ? await encryptField(cvv, userKey) : "";
 
   return nextData;
 }
@@ -165,10 +171,14 @@ export async function revealStoredCardNumber(card, user) {
   const privateNote = card.encryptedPrivateNote
     ? String(await decryptField(card.encryptedPrivateNote, userKey) || "")
     : "";
+  const cvv = card.encryptedCvv
+    ? String(await decryptField(card.encryptedCvv, userKey) || "")
+    : "";
 
   return {
     id: card._id.toString(),
     cardNumber: String(cardNumber || ""),
+    cvv: cvv,
     expiryMonth,
     expiryYear,
     nameOnCard,

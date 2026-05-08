@@ -11,6 +11,7 @@ const initialForm = {
   nameOnCard: "",
   expiryMonth: "",
   expiryYear: "",
+  cvv: "",
   privateNote: "",
 };
 
@@ -31,6 +32,10 @@ function formatExpiryMonthInput(value) {
 
 function formatExpiryYearInput(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 2);
+}
+
+function formatCVVInput(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 4);
 }
 
 function resolveLookupBin(value) {
@@ -92,6 +97,8 @@ export default function CardsPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [revealedCards, setRevealedCards] = useState({});
   const [revealedCardDetails, setRevealedCardDetails] = useState({});
+  const [revealTimers, setRevealTimers] = useState({});
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, cardId: "", deleting: false });
   const [passwordModal, setPasswordModal] = useState({ open: false, cardId: "" });
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -120,6 +127,13 @@ export default function CardsPage() {
 
   useEffect(() => {
     load();
+    
+    // Cleanup timers on unmount
+    return () => {
+      Object.values(revealTimers).forEach((timerId) => {
+        if (timerId) clearTimeout(timerId);
+      });
+    };
   }, []);
 
   const normalizedCardNumber = normalizeCardNumberInput(form.cardNumber);
@@ -258,6 +272,7 @@ export default function CardsPage() {
       nameOnCard: card.nameOnCard || "",
       expiryMonth: card.expiryMonth || "",
       expiryYear: card.expiryYear || "",
+      cvv: "",
       privateNote: card.privateNote || "",
     });
     setFieldErrors({});
@@ -297,6 +312,71 @@ export default function CardsPage() {
     setVerifyingPassword(false);
   }
 
+  function promptDeleteCard(id) {
+    setDeleteConfirm({ open: true, cardId: id, deleting: false });
+  }
+
+  async function confirmDeleteCard() {
+    if (!deleteConfirm.cardId) return;
+    
+    setDeleteConfirm((prev) => ({ ...prev, deleting: true }));
+    
+    try {
+      const res = await fetch(`/api/cards/${deleteConfirm.cardId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      
+      if (!res.ok) {
+        setMessage(data.message || "Failed to delete card.");
+        setDeleteConfirm({ open: false, cardId: "", deleting: false });
+        return;
+      }
+
+      const cardId = deleteConfirm.cardId;
+      
+      if (editingId === cardId) {
+        cancelEdit();
+      }
+
+      // Clean up timer
+      if (revealTimers[cardId]) {
+        clearTimeout(revealTimers[cardId]);
+      }
+
+      setRevealedCards((prev) => {
+        const next = { ...prev };
+        delete next[cardId];
+        return next;
+      });
+      setRevealedCardDetails((prev) => {
+        const next = { ...prev };
+        delete next[cardId];
+        return next;
+      });
+      setRevealTimers((prev) => {
+        const next = { ...prev };
+        delete next[cardId];
+        return next;
+      });
+      
+      setDeleteConfirm({ open: false, cardId: "", deleting: false });
+      setMessage("Card deleted successfully!");
+      
+      // Auto-clear success message after 3 seconds
+      setTimeout(() => {
+        setMessage("");
+      }, 3000);
+      
+      load();
+    } catch (error) {
+      setMessage("Failed to delete card. Please try again.");
+      setDeleteConfirm({ open: false, cardId: "", deleting: false });
+    }
+  }
+
+  function cancelDeleteConfirm() {
+    setDeleteConfirm({ open: false, cardId: "", deleting: false });
+  }
+
   async function removeCard(id) {
     const res = await fetch(`/api/cards/${id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
@@ -309,12 +389,22 @@ export default function CardsPage() {
       cancelEdit();
     }
 
+    // Clean up timer
+    if (revealTimers[id]) {
+      clearTimeout(revealTimers[id]);
+    }
+
     setRevealedCards((prev) => {
       const next = { ...prev };
       delete next[id];
       return next;
     });
     setRevealedCardDetails((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setRevealTimers((prev) => {
       const next = { ...prev };
       delete next[id];
       return next;
@@ -342,11 +432,21 @@ export default function CardsPage() {
   function requestReveal(cardId) {
     if (revealedCards[cardId]) {
       setRevealedCards((prev) => ({ ...prev, [cardId]: false }));
+      if (revealTimers[cardId]) {
+        clearTimeout(revealTimers[cardId]);
+        setRevealTimers((prev) => ({ ...prev, [cardId]: null }));
+      }
       return;
     }
 
     if (revealedCardDetails[cardId]?.cardNumber) {
       setRevealedCards((prev) => ({ ...prev, [cardId]: true }));
+      // Set auto-hide timer for 3 minutes (180000 ms)
+      const timerId = window.setTimeout(() => {
+        setRevealedCards((prev) => ({ ...prev, [cardId]: false }));
+        setRevealTimers((prev) => ({ ...prev, [cardId]: null }));
+      }, 180000);
+      setRevealTimers((prev) => ({ ...prev, [cardId]: timerId }));
       return;
     }
 
@@ -379,6 +479,14 @@ export default function CardsPage() {
       setRevealedCardDetails((prev) => ({ ...prev, [passwordModal.cardId]: data.card }));
     }
     setRevealedCards((prev) => ({ ...prev, [passwordModal.cardId]: true }));
+    
+    // Set auto-hide timer for 3 minutes (180000 ms)
+    const timerId = window.setTimeout(() => {
+      setRevealedCards((prev) => ({ ...prev, [passwordModal.cardId]: false }));
+      setRevealTimers((prev) => ({ ...prev, [passwordModal.cardId]: null }));
+    }, 180000);
+    setRevealTimers((prev) => ({ ...prev, [passwordModal.cardId]: timerId }));
+    
     closePasswordModal();
   }
 
@@ -447,6 +555,18 @@ export default function CardsPage() {
               {fieldErrors.expiryYear ? <p className="text-sm text-red-600">{fieldErrors.expiryYear}</p> : null}
             </div>
 
+            <div className="space-y-1">
+              <input
+                value={form.cvv ?? ""}
+                onChange={(e) => updateFormField("cvv", formatCVVInput(e.target.value))}
+                placeholder="CVV (optional)"
+                inputMode="numeric"
+                maxLength="4"
+                className="w-full rounded-xl border border-zinc-300 px-3 py-3"
+              />
+              <p className="text-xs text-zinc-500">3 or 4 digits, saved encrypted. Never stored in plain text.</p>
+            </div>
+
             <div className="space-y-1 md:col-span-2">
               <textarea
                 value={form.privateNote ?? ""}
@@ -461,7 +581,7 @@ export default function CardsPage() {
           </div>
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            CVV is intentionally not saved by the app, even though the card record stores the rest of your reference details in encrypted form.
+            All card details including card number and CVV are saved encrypted in your account. They can only be viewed after password confirmation and will automatically hide after 3 minutes.
           </div>
 
           {showDetectedDetails ? (
@@ -586,6 +706,9 @@ export default function CardsPage() {
                       <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Expires</p>
                       <p className="mt-2 font-semibold tracking-[0.14em]">{`${card.expiryMonth || "**"}/${card.expiryYear || "**"}`}</p>
                       <p className="mt-2 text-xs text-white/75">{card.nameOnCard || "Stored without cardholder name"}</p>
+                      {revealed && revealedDetails?.cvv ? (
+                        <p className="mt-2 text-xs text-white/75">CVV: {revealedDetails.cvv}</p>
+                      ) : null}
                       {card.privateNote ? <p className="mt-2 text-xs text-white/75">{card.privateNote}</p> : null}
                     </div>
                   </div>
@@ -622,7 +745,7 @@ export default function CardsPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => removeCard(card.id)}
+                      onClick={() => promptDeleteCard(card.id)}
                       className="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
                     >
                       Delete
@@ -641,7 +764,7 @@ export default function CardsPage() {
           <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-black">Confirm Password</h2>
             <p className="mt-2 text-sm text-zinc-600">
-              Enter your login password to reveal the full card number. CVV is not collected or stored.
+              Enter your login password to reveal the full card number and CVV. Details will automatically hide after 3 minutes.
             </p>
 
             <form onSubmit={confirmPasswordAndReveal} className="mt-4 space-y-3">
@@ -664,6 +787,38 @@ export default function CardsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+        </ModalPortal>
+      ) : null}
+
+      {deleteConfirm.open ? (
+        <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+            <h2 className="text-lg font-semibold text-black">Delete Card</h2>
+            <p className="mt-2 text-sm text-zinc-600">
+              Are you sure you want to delete this card? This action cannot be undone.
+            </p>
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={cancelDeleteConfirm}
+                disabled={deleteConfirm.deleting}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteCard}
+                disabled={deleteConfirm.deleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleteConfirm.deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
           </div>
         </div>
         </ModalPortal>
