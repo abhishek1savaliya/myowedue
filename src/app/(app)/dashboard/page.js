@@ -96,6 +96,8 @@ export default function DashboardPage() {
         <StatCard
           title="Total Given"
           value={formatCurrency(data?.totals?.totalGiven || 0, dashboardCurrency)}
+          numericValue={Number(data?.totals?.totalGiven || 0)}
+          formatValue={(amount) => formatCurrency(amount, dashboardCurrency)}
           className="border-emerald-200 bg-linear-to-br from-emerald-50 to-white"
           titleClassName="text-emerald-700"
           valueClassName="text-emerald-800"
@@ -103,6 +105,8 @@ export default function DashboardPage() {
         <StatCard
           title="Total Received Back"
           value={formatCurrency(data?.totals?.totalReceivedBack || 0, dashboardCurrency)}
+          numericValue={Number(data?.totals?.totalReceivedBack || 0)}
+          formatValue={(amount) => formatCurrency(amount, dashboardCurrency)}
           className="border-rose-200 bg-linear-to-br from-rose-50 to-white"
           titleClassName="text-rose-700"
           valueClassName="text-rose-800"
@@ -110,6 +114,8 @@ export default function DashboardPage() {
         <StatCard
           title="Net (Received - Given)"
           value={`${netBalance >= 0 ? "+" : ""}${formatCurrency(netBalance, dashboardCurrency)}`}
+          numericValue={netBalance}
+          formatValue={(amount) => `${amount >= 0 ? "+" : ""}${formatCurrency(amount, dashboardCurrency)}`}
           subtitle={netBalance >= 0 ? "You owe person" : "Person owes you"}
           className="border-sky-200 bg-linear-to-br from-sky-50 via-cyan-50 to-white"
           titleClassName="text-sky-700"
@@ -119,6 +125,8 @@ export default function DashboardPage() {
         <StatCard
           title="Pending Dues"
           value={String(dueSummary.count)}
+          numericValue={Number(dueSummary.count || 0)}
+          formatValue={(amount) => String(Math.round(amount))}
           subtitle={dueSummary.text}
           className="border-amber-200 bg-linear-to-br from-amber-50 to-white"
           titleClassName="text-amber-700"
@@ -127,6 +135,8 @@ export default function DashboardPage() {
         <StatCard
           title="People"
           value={String(data?.peopleCount || 0)}
+          numericValue={Number(data?.peopleCount || 0)}
+          formatValue={(amount) => String(Math.round(amount))}
           subtitle="Tracked contacts"
           className="border-violet-200 bg-linear-to-br from-violet-50 to-white"
           titleClassName="text-violet-700"

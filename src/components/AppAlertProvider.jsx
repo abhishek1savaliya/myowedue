@@ -22,7 +22,7 @@ export function AppAlertProvider({ children }) {
     open: false,
     message: "",
     severity: "info",
-    autoHideDuration: 4200,
+    autoHideDuration: 3200,
   });
 
   const showAlert = useCallback((message, options = {}) => {
@@ -33,7 +33,7 @@ export function AppAlertProvider({ children }) {
       open: true,
       message: text,
       severity: normalizeSeverity(options.severity),
-      autoHideDuration: Number(options.autoHideDuration || 4200),
+      autoHideDuration: Number(options.autoHideDuration || 3200),
     });
   }, []);
 
@@ -71,13 +71,14 @@ export function AppAlertProvider({ children }) {
         TransitionComponent={SlideUp}
         anchorOrigin={isDesktop ? { vertical: "top", horizontal: "right" } : { vertical: "bottom", horizontal: "center" }}
         sx={{
-          width: { xs: "calc(100% - 24px)", sm: "auto" },
-          maxWidth: { xs: "calc(100% - 24px)", sm: 460 },
+          left: { xs: 12, sm: "auto" },
+          right: { xs: 12, sm: 24 },
+          width: { xs: "auto", sm: "min(460px, calc(100vw - 48px))" },
+          maxWidth: "calc(100vw - 24px)",
           zIndex: 9999,
         }}
       >
         <Alert
-          onClose={closeAlert}
           severity={alertState.severity}
           variant="filled"
           elevation={6}
@@ -86,6 +87,9 @@ export function AppAlertProvider({ children }) {
             borderRadius: 2,
             alignItems: "center",
             boxShadow: "0 18px 45px rgba(15, 23, 42, 0.22)",
+            "& .MuiAlert-message": {
+              overflowWrap: "anywhere",
+            },
           }}
         >
           {alertState.message}

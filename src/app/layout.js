@@ -1,5 +1,6 @@
 import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "./globals.css";
+import "@vidstack/react/player/styles/base.css";
 import ThemeSync from "@/components/ThemeSync";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { AppAlertProvider } from "@/components/AppAlertProvider";

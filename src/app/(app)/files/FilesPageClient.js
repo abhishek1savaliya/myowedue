@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MediaPlayer, MediaProvider } from "@vidstack/react";
 import {
   Check,
   Copy,
@@ -15,6 +16,7 @@ import {
   LoaderCircle,
   Lock,
   MoreVertical,
+  Play,
   Plus,
   Rows3,
   Trash2,
@@ -63,15 +65,21 @@ function isPdfFile(file) {
 }
 
 function isImageFile(file) {
-  return !isPdfFile(file) && (file?.resourceType === "image" || String(file?.mimeType || "").startsWith("image/"));
+  const extension = String(file?.extension || file?.originalName?.split(".").pop() || "").toLowerCase();
+  return !isPdfFile(file) && (file?.resourceType === "image" || String(file?.mimeType || "").startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif"].includes(extension));
 }
 
 function isVideoFile(file) {
-  return file?.resourceType === "video" || String(file?.mimeType || "").startsWith("video/");
+  const extension = String(file?.extension || file?.originalName?.split(".").pop() || "").toLowerCase();
+  return file?.resourceType === "video" || String(file?.mimeType || "").startsWith("video/") || ["mp4", "webm", "mov", "m4v", "avi"].includes(extension);
 }
 
 function canPreviewFile(file) {
   return Boolean(file?.secureUrl && (isImageFile(file) || isVideoFile(file)));
+}
+
+function previewSource(file) {
+  return file?.previewUrl || file?.thumbnailUrl || file?.secureUrl || "";
 }
 
 const initialUploadState = {
@@ -260,6 +268,16 @@ export default function FilesPageClient() {
   );
 
   const fileViewClasses = FILE_VIEW_CLASSES[fileView] || FILE_VIEW_CLASSES.medium;
+
+  useEffect(() => {
+    if (!message) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      setMessage("");
+    }, 3200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [message]);
 
   // Load functions
   async function loadFiles() {
@@ -960,18 +978,36 @@ export default function FilesPageClient() {
                 <div key={file.id} className={fileViewClasses.card}>
                   {/* Preview Thumbnail */}
                   {canPreviewFile(file) ? (
-                    <div
+                    <button
+                      type="button"
                       onClick={() => setPreviewFile(file)}
-                      className={fileViewClasses.previewWrap}
+                      className={`${fileViewClasses.previewWrap} relative block text-left focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2`}
+                      aria-label={`Preview ${file.title || file.originalName}`}
                     >
-                      <img
-                        src={file.previewUrl || file.thumbnailUrl || file.secureUrl}
-                        alt={file.originalName}
-                        loading="lazy"
-                        decoding="async"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
+                      {isVideoFile(file) ? (
+                        <>
+                          <video
+                            src={file.secureUrl}
+                            muted
+                            preload="metadata"
+                            className="h-full w-full object-cover"
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/10">
+                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/75 text-white shadow-lg">
+                              <Play className="h-5 w-5 fill-current" />
+                            </span>
+                          </span>
+                        </>
+                      ) : (
+                        <img
+                          src={previewSource(file)}
+                          alt={file.originalName}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                    </button>
                   ) : (
                     <div className={fileViewClasses.fallbackWrap}>
                       <Folder className="h-8 w-8 text-zinc-400" />
@@ -979,8 +1015,18 @@ export default function FilesPageClient() {
                   )}
 
                   {/* File Info */}
-                  <div className={fileViewClasses.info}>
-                    <p className={fileViewClasses.title}>{file.title || file.originalName}</p>
+                  <div className={`${fileViewClasses.info} ${canPreviewFile(file) ? "cursor-pointer" : ""}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (canPreviewFile(file)) setPreviewFile(file);
+                      }}
+                      disabled={!canPreviewFile(file)}
+                      className="block min-w-0 max-w-full text-left disabled:cursor-default"
+                      aria-label={canPreviewFile(file) ? `Preview ${file.title || file.originalName}` : undefined}
+                    >
+                      <span className={`block ${fileViewClasses.title}`}>{file.title || file.originalName}</span>
+                    </button>
                     <p className="text-xs text-zinc-500">{formatBytes(file.bytes)}</p>
                   </div>
 
@@ -1039,6 +1085,61 @@ export default function FilesPageClient() {
       </div>
 
       {/* Modals */}
+      {previewFile && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex min-h-dvh items-center justify-center bg-black/80 p-3 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="file-preview-title"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setPreviewFile(null);
+            }}
+          >
+            <div className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
+                <div className="min-w-0">
+                  <h2 id="file-preview-title" className="truncate text-sm font-semibold text-black">
+                    {previewFile.title || previewFile.originalName}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {fileLabel(previewFile)} · {formatBytes(previewFile.bytes)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewFile(null)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+                  aria-label="Close preview"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex min-h-0 flex-1 items-center justify-center bg-zinc-950 p-2 sm:p-4">
+                {isVideoFile(previewFile) ? (
+                  <MediaPlayer
+                    title={previewFile.title || previewFile.originalName}
+                    src={previewFile.secureUrl}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="aspect-video max-h-[calc(94dvh-5.5rem)] w-full max-w-full overflow-hidden rounded-lg bg-black text-white"
+                  >
+                    <MediaProvider />
+                  </MediaPlayer>
+                ) : (
+                  <img
+                    src={previewSource(previewFile)}
+                    alt={previewFile.originalName}
+                    className="max-h-[calc(94dvh-5.5rem)] max-w-full rounded-lg object-contain"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
       {/* Upload Modal */}
       {uploadModalOpen && (
         <ModalPortal>
@@ -1397,7 +1498,7 @@ export default function FilesPageClient() {
       )}
 
       {message && (
-        <div className="fixed bottom-6 left-6 right-6 rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 shadow-lg">
+        <div className="fixed inset-x-3 bottom-4 z-50 mx-auto max-w-md rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 shadow-lg sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[min(28rem,calc(100vw-3rem))]">
           {message}
         </div>
       )}
