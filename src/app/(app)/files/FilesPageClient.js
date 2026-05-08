@@ -9,10 +9,14 @@ import {
   FolderOpen,
   FolderPlus,
   Globe,
+  Grid2x2,
+  LayoutGrid,
+  List,
   LoaderCircle,
   Lock,
   MoreVertical,
   Plus,
+  Rows3,
   Trash2,
   Upload,
   X,
@@ -77,6 +81,49 @@ const initialUploadState = {
 
 const FILE_PAGE_SIZE = 12;
 const MAX_UPLOAD_FILES = 15;
+const FILE_VIEW_STORAGE_KEY = "owedue:file-view";
+
+const FILE_VIEW_OPTIONS = [
+  { key: "list", label: "List", icon: List },
+  { key: "small", label: "Small", icon: Rows3 },
+  { key: "medium", label: "Medium", icon: Grid2x2 },
+  { key: "large", label: "Large", icon: LayoutGrid },
+];
+
+const FILE_VIEW_CLASSES = {
+  list: {
+    grid: "grid gap-3",
+    card: "group relative flex min-w-0 overflow-visible rounded-lg border border-zinc-200 bg-white shadow-sm [content-visibility:auto] [contain-intrinsic-size:96px]",
+    previewWrap: "h-24 w-24 shrink-0 overflow-hidden rounded-l-lg bg-zinc-100 cursor-pointer",
+    fallbackWrap: "flex h-24 w-24 shrink-0 items-center justify-center rounded-l-lg bg-zinc-100",
+    info: "min-w-0 flex-1 p-3 pr-12",
+    title: "truncate text-sm font-medium text-black",
+  },
+  small: {
+    grid: "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6",
+    card: "group relative overflow-visible rounded-lg border border-zinc-200 bg-white shadow-sm [content-visibility:auto] [contain-intrinsic-size:210px]",
+    previewWrap: "aspect-square overflow-hidden rounded-t-lg bg-zinc-100 cursor-pointer",
+    fallbackWrap: "flex aspect-square items-center justify-center rounded-t-lg bg-zinc-100",
+    info: "p-3",
+    title: "truncate text-sm font-medium text-black",
+  },
+  medium: {
+    grid: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+    card: "group relative overflow-visible rounded-lg border border-zinc-200 bg-white shadow-sm [content-visibility:auto] [contain-intrinsic-size:270px]",
+    previewWrap: "aspect-square overflow-hidden rounded-t-lg bg-zinc-100 cursor-pointer",
+    fallbackWrap: "flex aspect-square items-center justify-center rounded-t-lg bg-zinc-100",
+    info: "p-3",
+    title: "truncate text-sm font-medium text-black",
+  },
+  large: {
+    grid: "grid gap-4 md:grid-cols-2 xl:grid-cols-3",
+    card: "group relative overflow-visible rounded-lg border border-zinc-200 bg-white shadow-sm [content-visibility:auto] [contain-intrinsic-size:360px]",
+    previewWrap: "aspect-[4/3] overflow-hidden rounded-t-lg bg-zinc-100 cursor-pointer",
+    fallbackWrap: "flex aspect-[4/3] items-center justify-center rounded-t-lg bg-zinc-100",
+    info: "p-4",
+    title: "truncate text-base font-semibold text-black",
+  },
+};
 
 const initialUploadProgress = {
   percent: 0,
@@ -165,12 +212,14 @@ export default function FilesPageClient() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploadState, setUploadState] = useState(initialUploadState);
   const [uploadProgress, setUploadProgress] = useState(initialUploadProgress);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [message, setMessage] = useState("");
 
   // File menu states
   const [fileMenuOpenId, setFileMenuOpenId] = useState("");
   const [addToFolderModal, setAddToFolderModal] = useState({ open: false, fileId: "", selectedFolderId: "" });
   const [folderSearchTerm, setFolderSearchTerm] = useState("");
+  const [fileView, setFileView] = useState("medium");
 
   const loadMoreFilesRef = useRef(null);
 
@@ -209,6 +258,8 @@ export default function FilesPageClient() {
     () => (selectedFolderId === "all" ? null : folders.find((folder) => folder.id === selectedFolderId) || null),
     [folders, selectedFolderId]
   );
+
+  const fileViewClasses = FILE_VIEW_CLASSES[fileView] || FILE_VIEW_CLASSES.medium;
 
   // Load functions
   async function loadFiles() {
@@ -274,6 +325,17 @@ export default function FilesPageClient() {
     loadFiles();
     loadFolders();
   }, []);
+
+  useEffect(() => {
+    const savedView = window.localStorage.getItem(FILE_VIEW_STORAGE_KEY);
+    if (FILE_VIEW_OPTIONS.some((option) => option.key === savedView)) {
+      setFileView(savedView);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(FILE_VIEW_STORAGE_KEY, fileView);
+  }, [fileView]);
 
   useEffect(() => {
     if (loading || loadingMoreFiles || !filesHasMore) return;
@@ -419,6 +481,7 @@ export default function FilesPageClient() {
       setFiles((prev) => [...uploadedFiles.reverse(), ...prev]);
       setUsageBytes((prev) => prev + selectedUploadTotalBytes);
       setMessage(selectedUploadFiles.length === 1 ? "File uploaded successfully." : `${selectedUploadFiles.length} files uploaded successfully.`);
+      setUploadModalOpen(false);
 
       const fileInput = document.getElementById("vault-file-input");
       if (fileInput) fileInput.value = "";
@@ -661,10 +724,10 @@ export default function FilesPageClient() {
         </p>
       </header>
 
-      <div className="flex flex-1 gap-6 overflow-hidden">
+      <div className="flex flex-1 flex-col gap-6 lg:flex-row">
         {/* Left Sidebar - Folders */}
-        <aside className="w-64 overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 space-y-2">
+        <aside className="flex w-full flex-col rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm lg:sticky lg:top-4 lg:w-64 lg:shrink-0">
+          <div className="mb-4 shrink-0 space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Folders</h2>
             <button
               onClick={() => setNewFolderModal(true)}
@@ -718,23 +781,24 @@ export default function FilesPageClient() {
                   </button>
 
                   {/* Folder Menu */}
-                  <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100">
+                  <div className="absolute right-0 top-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                     <button
                       onClick={() => setFolderMenuOpenId(folderMenuOpenId === folder.id ? "" : folder.id)}
-                      className="rounded-md p-1 hover:bg-zinc-100"
+                      className="rounded-md border border-zinc-200 bg-white/95 p-1 shadow-sm hover:bg-white"
+                      aria-label={`Open menu for ${folder.name}`}
                     >
                       <MoreVertical className="h-4 w-4 text-zinc-500" />
                     </button>
                   </div>
 
                   {folderMenuOpenId === folder.id && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-lg border border-zinc-200 bg-white shadow-lg">
+                    <div className="absolute right-0 top-full z-10 mt-1 w-48 overflow-hidden rounded-lg border border-[#374151] bg-[#111827] py-1 shadow-lg">
                       <button
                         onClick={() => {
                           setEditFolderModal({ open: true, folder });
                           setFolderMenuOpenId("");
                         }}
-                        className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                        className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
                       >
                         Edit Folder
                       </button>
@@ -744,7 +808,7 @@ export default function FilesPageClient() {
                             copyText(folder.shareUrl, "Folder link copied.");
                             setFolderMenuOpenId("");
                           }}
-                          className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                          className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
                         >
                           Copy Folder Link
                         </button>
@@ -754,14 +818,14 @@ export default function FilesPageClient() {
                           href={folder.sharePath}
                           target="_blank"
                           onClick={() => setFolderMenuOpenId("")}
-                          className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                          className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
                         >
                           View Folder Link
                         </Link>
                       ) : null}
                       <button
                         onClick={() => openFolderPasswords(folder)}
-                        className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                        className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
                       >
                         Manage Passwords
                       </button>
@@ -769,7 +833,7 @@ export default function FilesPageClient() {
                         onClick={() => {
                           deleteFolder(folder.id);
                         }}
-                        className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                        className="block w-full px-4 py-2 text-left text-sm font-medium text-[#fb7185] hover:bg-[#1f2937]"
                       >
                         Delete Folder
                       </button>
@@ -782,9 +846,10 @@ export default function FilesPageClient() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto space-y-6">
-          {/* Storage Info */}
-          <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <main className="min-w-0 flex-1 space-y-6">
+          <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+            {/* Storage Info */}
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Storage</p>
@@ -802,79 +867,28 @@ export default function FilesPageClient() {
                 <p className="mt-2 text-right text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">{usagePercentLabel} used</p>
               </div>
             </div>
-          </section>
-
-          {/* Upload Section */}
-          <form onSubmit={handleUpload} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Upload</p>
-              <h2 className="mt-2 text-xl font-semibold text-black">Add a new file</h2>
             </div>
 
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center">
-              <Upload className="h-7 w-7 text-zinc-500" />
-              <span className="mt-3 text-sm font-medium text-zinc-700">
-                {selectedUploadFiles.length === 1
-                  ? selectedUploadFiles[0].name
-                  : selectedUploadFiles.length > 1
-                    ? `${selectedUploadFiles.length} files selected`
-                    : "Choose photos or files"}
-              </span>
-              <input id="vault-file-input" type="file" multiple onChange={handleFilePick} disabled={uploading} className="hidden" />
-            </label>
-
-            <input
-              value={uploadState.title}
-              onChange={(event) => setUploadState((prev) => ({ ...prev, title: event.target.value }))}
-              placeholder={selectedUploadFiles.length > 1 ? "Titles use each file name for batch uploads" : "Title (optional)"}
-              disabled={selectedUploadFiles.length > 1 || uploading}
-              className="w-full rounded-xl border border-zinc-300 px-3 py-3 disabled:bg-zinc-100 disabled:text-zinc-500"
-            />
-
-            <label className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
               <div>
-                <p className="text-sm font-medium text-black">Make link public</p>
-                <p className="text-xs text-zinc-500">Public links are accessible to anyone.</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Upload</p>
+                <h2 className="mt-2 text-xl font-semibold text-black">Add files</h2>
+                <p className="mt-2 text-sm text-zinc-600">Upload up to {MAX_UPLOAD_FILES} files at once.</p>
               </div>
               <button
                 type="button"
-                onClick={() => setUploadState((prev) => ({ ...prev, isPublic: !prev.isPublic }))}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${
-                  uploadState.isPublic ? "bg-emerald-100 text-emerald-700" : "bg-zinc-900 text-white"
-                }`}
+                onClick={() => {
+                  setMessage("");
+                  if (uploadProgress.status === "complete") setUploadProgress(initialUploadProgress);
+                  setUploadModalOpen(true);
+                }}
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
-                {uploadState.isPublic ? <Globe className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                {uploadState.isPublic ? "Public" : "Private"}
+                <Upload className="h-4 w-4" />
+                Upload Files
               </button>
-            </label>
-
-            {uploadProgress.status !== "idle" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-600">
-                    {uploadProgress.currentFileName}
-                    {uploadProgress.fileCount ? ` (${uploadProgress.currentFileIndex}/${uploadProgress.fileCount})` : ""}
-                  </span>
-                  <span className="font-semibold text-zinc-900">{uploadProgress.percent}%</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
-                  <div className="h-full bg-zinc-900" style={{ width: `${uploadProgress.percent}%` }} />
-                </div>
-              </div>
-            )}
-
-            {message && (
-              <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">{message}</div>
-            )}
-
-            <button
-              type="submit"
-              disabled={selectedUploadFiles.length === 0 || uploading}
-              className="w-full rounded-xl bg-black px-4 py-3 text-white disabled:opacity-60"
-            >
-              {uploading ? "Uploading..." : "Upload"}
-            </button>
-          </form>
+            </div>
+          </section>
 
           {/* Files Grid */}
           {loading ? (
@@ -913,51 +927,82 @@ export default function FilesPageClient() {
                   </div>
                 </section>
               ) : null}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <section className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Display</p>
+                  <p className="mt-1 text-sm text-zinc-600">{filteredFilesForFolder.length} files shown</p>
+                </div>
+                <div className="grid grid-cols-4 gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
+                  {FILE_VIEW_OPTIONS.map((option) => {
+                    const Icon = option.icon;
+                    const active = fileView === option.key;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setFileView(option.key)}
+                        title={`${option.label} view`}
+                        aria-label={`${option.label} view`}
+                        aria-pressed={active}
+                        className={`inline-flex h-9 min-w-10 items-center justify-center rounded-lg px-2 text-xs font-semibold ${
+                          active ? "bg-black text-white shadow-sm" : "text-zinc-600 hover:bg-white"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span className="sr-only">{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            <div className={fileViewClasses.grid}>
               {filteredFilesForFolder.map((file) => (
-                <div key={file.id} className="group relative overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+                <div key={file.id} className={fileViewClasses.card}>
                   {/* Preview Thumbnail */}
                   {canPreviewFile(file) ? (
                     <div
                       onClick={() => setPreviewFile(file)}
-                      className="aspect-square overflow-hidden bg-zinc-100 cursor-pointer"
+                      className={fileViewClasses.previewWrap}
                     >
                       <img
-                        src={file.thumbnailUrl || file.secureUrl}
+                        src={file.previewUrl || file.thumbnailUrl || file.secureUrl}
                         alt={file.originalName}
-                        className="h-full w-full object-cover hover:scale-105 transition-transform"
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover"
                       />
                     </div>
                   ) : (
-                    <div className="aspect-square bg-gradient-to-br from-zinc-100 to-zinc-200 flex items-center justify-center">
+                    <div className={fileViewClasses.fallbackWrap}>
                       <Folder className="h-8 w-8 text-zinc-400" />
                     </div>
                   )}
 
                   {/* File Info */}
-                  <div className="p-3">
-                    <p className="text-sm font-medium text-black truncate">{file.title || file.originalName}</p>
+                  <div className={fileViewClasses.info}>
+                    <p className={fileViewClasses.title}>{file.title || file.originalName}</p>
                     <p className="text-xs text-zinc-500">{formatBytes(file.bytes)}</p>
                   </div>
 
                   {/* File Menu */}
-                  <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100">
+                  <div className="absolute right-2 top-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                     <button
                       onClick={() => setFileMenuOpenId(fileMenuOpenId === file.id ? "" : file.id)}
-                      className="rounded-md bg-white/80 p-1 hover:bg-white"
+                      className="rounded-md border border-zinc-200 bg-white/95 p-1 shadow-sm hover:bg-white"
+                      aria-label={`Open menu for ${file.title || file.originalName}`}
                     >
                       <MoreVertical className="h-4 w-4 text-zinc-500" />
                     </button>
                   </div>
 
                   {fileMenuOpenId === file.id && (
-                    <div className="absolute right-0 top-8 z-10 w-48 rounded-lg border border-zinc-200 bg-white shadow-lg">
+                    <div className="absolute right-0 top-8 z-10 w-48 overflow-hidden rounded-lg border border-[#374151] bg-[#111827] py-1 shadow-lg">
                       <button
                         onClick={() => {
                           setAddToFolderModal({ open: true, fileId: file.id, selectedFolderId: "" });
                           setFileMenuOpenId("");
                         }}
-                        className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                        className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
                       >
                         Add to Folder
                       </button>
@@ -967,7 +1012,7 @@ export default function FilesPageClient() {
                             removeFileFromFolder(file.id, selectedFolderId);
                             setFileMenuOpenId("");
                           }}
-                          className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                          className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
                         >
                           Remove from Folder
                         </button>
@@ -977,7 +1022,7 @@ export default function FilesPageClient() {
                           setDeleteTarget(file);
                           setFileMenuOpenId("");
                         }}
-                        className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                        className="block w-full px-4 py-2 text-left text-sm font-medium text-[#fb7185] hover:bg-[#1f2937]"
                       >
                         Delete
                       </button>
@@ -994,6 +1039,134 @@ export default function FilesPageClient() {
       </div>
 
       {/* Modals */}
+      {/* Upload Modal */}
+      {uploadModalOpen && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex min-h-dvh items-end justify-center overflow-y-auto bg-black/45 px-3 py-0 sm:items-center sm:px-4 sm:py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upload-files-title"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !uploading) setUploadModalOpen(false);
+            }}
+          >
+            <form
+              onSubmit={handleUpload}
+              className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-3xl border border-zinc-200 bg-white p-5 shadow-2xl sm:rounded-3xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Upload</p>
+                  <h2 id="upload-files-title" className="mt-2 text-xl font-semibold text-black">Add files</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUploadModalOpen(false)}
+                  disabled={uploading}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 disabled:opacity-60"
+                  aria-label="Close upload"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center">
+                <Upload className="h-7 w-7 text-zinc-500" />
+                <span className="mt-3 text-sm font-medium text-zinc-700">
+                  {selectedUploadFiles.length === 1
+                    ? selectedUploadFiles[0].name
+                    : selectedUploadFiles.length > 1
+                      ? `${selectedUploadFiles.length} files selected`
+                      : "Choose photos or files"}
+                </span>
+                <span className="mt-1 text-xs text-zinc-500">
+                  {selectedUploadFiles.length > 0
+                    ? `${formatBytes(selectedUploadTotalBytes)} selected`
+                    : `You can upload up to ${MAX_UPLOAD_FILES} files at once.`}
+                </span>
+                <input id="vault-file-input" type="file" multiple onChange={handleFilePick} disabled={uploading} className="hidden" />
+              </label>
+
+              <div className="mt-4 space-y-4">
+                <input
+                  value={uploadState.title}
+                  onChange={(event) => setUploadState((prev) => ({ ...prev, title: event.target.value }))}
+                  placeholder={selectedUploadFiles.length > 1 ? "Titles use each file name for batch uploads" : "Title (optional)"}
+                  disabled={selectedUploadFiles.length > 1 || uploading}
+                  className="w-full rounded-xl border border-zinc-300 px-3 py-3 disabled:bg-zinc-100 disabled:text-zinc-500"
+                />
+
+                <label className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-black">Make link public</p>
+                    <p className="text-xs text-zinc-500">Public links are accessible to anyone.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setUploadState((prev) => ({ ...prev, isPublic: !prev.isPublic }))}
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${
+                      uploadState.isPublic ? "bg-emerald-100 text-emerald-700" : "bg-zinc-900 text-white"
+                    }`}
+                  >
+                    {uploadState.isPublic ? <Globe className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                    {uploadState.isPublic ? "Public" : "Private"}
+                  </button>
+                </label>
+
+                {uploadProgress.status !== "idle" && (
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="min-w-0 truncate text-zinc-600">
+                        {uploadProgress.currentFileName || "Preparing upload"}
+                        {uploadProgress.fileCount ? ` (${uploadProgress.currentFileIndex}/${uploadProgress.fileCount})` : ""}
+                      </span>
+                      <span className="shrink-0 font-semibold text-zinc-900">{uploadProgress.percent}%</span>
+                    </div>
+                    <ProgressBar value={uploadProgress.percent} label="Upload progress" size="sm" className="mt-3" />
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                      <span>{formatBytes(uploadProgress.loaded || 0)} of {formatBytes(uploadProgress.total || selectedUploadTotalBytes || 0)}</span>
+                      <span>
+                        {uploadProgress.status === "saving"
+                          ? "Almost done..."
+                          : uploadProgress.status === "complete"
+                            ? "Done"
+                            : uploadProgress.remainingSeconds == null
+                              ? "Calculating time..."
+                              : `${formatDuration(uploadProgress.remainingSeconds)} left`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {message && (
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">{message}</div>
+                )}
+
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setUploadModalOpen(false)}
+                    disabled={uploading}
+                    className="inline-flex items-center justify-center rounded-xl border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-700 disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={selectedUploadFiles.length === 0 || uploading}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {uploading ? "Uploading..." : selectedUploadFiles.length > 1 ? `Upload ${selectedUploadFiles.length} Files` : "Upload File"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </ModalPortal>
+      )}
+
       {/* New Folder Modal */}
       {newFolderModal && (
         <ModalPortal>

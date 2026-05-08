@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAppAlert } from "@/components/AppAlertProvider";
 
 const ROLES = ["support", "manager", "superadmin"];
 
@@ -44,6 +45,7 @@ function CredsBox({ creds, onDismiss, title = "✅ Credentials — share with em
 }
 
 export default function AdminTeamPage() {
+  const { showAlert } = useAppAlert();
   const router = useRouter();
   const [team, setTeam] = useState([]);
   const [managers, setManagers] = useState([]);
@@ -131,19 +133,20 @@ export default function AdminTeamPage() {
       const res = await fetch(`/api/admin/team/${member.id}/reset-password`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) {
-        alert(json.message || "Failed to reset password.");
+        showAlert(json.message || "Failed to reset password.", { severity: "error" });
         return;
       }
       const newPassword = json?.newPassword || json?.data?.newPassword || "";
       if (!newPassword) {
-        alert("Password reset succeeded, but password value was not returned.");
+        showAlert("Password reset succeeded, but password value was not returned.", { severity: "warning" });
         return;
       }
       // Show password inline in the row immediately.
       setRowPasswords((prev) => ({ ...prev, [member.id]: newPassword }));
       setRowPasswordVisible((prev) => ({ ...prev, [member.id]: true }));
+      showAlert("Password reset successfully.", { severity: "success" });
     } catch {
-      alert("Network error — could not reset password.");
+      showAlert("Network error - could not reset password.", { severity: "error" });
     } finally {
       setResetLoading(null);
     }
@@ -164,19 +167,20 @@ export default function AdminTeamPage() {
       const res = await fetch(`/api/admin/team/${member.id}/reset-password`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) {
-        alert(json.message || "Unable to generate password.");
+        showAlert(json.message || "Unable to generate password.", { severity: "error" });
         return;
       }
       const newPassword = json?.newPassword || json?.data?.newPassword || "";
       if (!newPassword) {
-        alert("Password generated but not returned by server.");
+        showAlert("Password generated but not returned by server.", { severity: "warning" });
         return;
       }
 
       setRowPasswords((prev) => ({ ...prev, [member.id]: newPassword }));
       setRowPasswordVisible((prev) => ({ ...prev, [member.id]: true }));
+      showAlert("Password generated.", { severity: "success" });
     } catch {
-      alert("Network error while generating password.");
+      showAlert("Network error while generating password.", { severity: "error" });
     } finally {
       setEyeLoading((prev) => ({ ...prev, [member.id]: false }));
     }

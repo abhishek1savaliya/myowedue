@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import CmsEditor from "@/components/CmsEditor";
+import { useAppAlert } from "@/components/AppAlertProvider";
 
 const PAGE_LABELS = {
   home: "Home Page",
@@ -10,6 +11,7 @@ const PAGE_LABELS = {
 };
 
 export default function AdminContentEditorPage() {
+  const { showAlert } = useAppAlert();
   const [selectedPage, setSelectedPage] = useState("home");
   const [adminRole, setAdminRole] = useState("");
   const [pages, setPages] = useState([]);
@@ -87,7 +89,7 @@ export default function AdminContentEditorPage() {
       ""
     );
     if (decision === "reject" && !String(feedback || "").trim()) {
-      window.alert("Feedback is required when rejecting.");
+      showAlert("Feedback is required when rejecting.", { severity: "warning" });
       return;
     }
     try {
@@ -98,12 +100,12 @@ export default function AdminContentEditorPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        window.alert(data?.message || "Failed to review submission");
+        showAlert(data?.message || "Failed to review submission", { severity: "error" });
         return;
       }
       await loadEditor(selectedPage);
     } catch {
-      window.alert("Failed to review submission");
+      showAlert("Failed to review submission", { severity: "error" });
     }
   }
 

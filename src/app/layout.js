@@ -2,6 +2,7 @@ import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "./globals.css";
 import ThemeSync from "@/components/ThemeSync";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
+import { AppAlertProvider } from "@/components/AppAlertProvider";
 import { getUiPreferenceBootstrapScript } from "@/lib/cookie-preferences";
 import { DEFAULT_FONT_PRESET, DEFAULT_FONT_SIZE_PRESET, getFontPreset, getFontSizePreset } from "@/lib/appearance";
 
@@ -104,8 +105,10 @@ export default function RootLayout({ children }) {
           dangerouslySetInnerHTML={{ __html: uiPreferenceBootstrapScript }}
         />
         <ThemeSync />
-        {children}
-        <CookieConsentBanner />
+        <AppAlertProvider>
+          {children}
+          <CookieConsentBanner />
+        </AppAlertProvider>
       </body>
     </html>
   );

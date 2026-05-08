@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { FolderOpen, Globe, LoaderCircle, Lock, PlayCircle } from "lucide-react";
+import { FolderOpen, Globe, Grid2x2, LayoutGrid, List, LoaderCircle, Lock, PlayCircle, Rows3 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 
@@ -27,12 +26,53 @@ function isVideoFile(file) {
   return file?.resourceType === "video" || String(file?.mimeType || "").startsWith("video/");
 }
 
+const FOLDER_SHARE_VIEW_STORAGE_KEY = "owedue:folder-share-file-view";
+
+const FILE_VIEW_OPTIONS = [
+  { key: "list", label: "List", icon: List },
+  { key: "small", label: "Small", icon: Rows3 },
+  { key: "medium", label: "Medium", icon: Grid2x2 },
+  { key: "large", label: "Large", icon: LayoutGrid },
+];
+
+const FILE_VIEW_CLASSES = {
+  list: {
+    grid: "grid gap-3",
+    card: "flex min-w-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]",
+    preview: "h-24 w-24 shrink-0",
+    info: "min-w-0 flex-1 p-4",
+    title: "truncate text-base font-semibold text-black",
+  },
+  small: {
+    grid: "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6",
+    card: "overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]",
+    preview: "aspect-square w-full",
+    info: "space-y-2 p-3",
+    title: "truncate text-sm font-semibold text-black",
+  },
+  medium: {
+    grid: "grid gap-4 md:grid-cols-2 xl:grid-cols-3",
+    card: "overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.05)]",
+    preview: "aspect-[4/3] w-full",
+    info: "space-y-3 p-4",
+    title: "truncate text-lg font-semibold text-black",
+  },
+  large: {
+    grid: "grid gap-5 lg:grid-cols-2",
+    card: "overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.05)]",
+    preview: "aspect-video w-full",
+    info: "space-y-3 p-5",
+    title: "truncate text-xl font-semibold text-black",
+  },
+};
+
 export default function FolderShareClient({ token }) {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [fileView, setFileView] = useState("medium");
 
   async function load() {
     setLoading(true);
@@ -73,6 +113,17 @@ export default function FolderShareClient({ token }) {
     load();
   }, [token]);
 
+  useEffect(() => {
+    const savedView = window.localStorage.getItem(FOLDER_SHARE_VIEW_STORAGE_KEY);
+    if (FILE_VIEW_OPTIONS.some((option) => option.key === savedView)) {
+      setFileView(savedView);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(FOLDER_SHARE_VIEW_STORAGE_KEY, fileView);
+  }, [fileView]);
+
   if (loading) {
     return (
       <main className="min-h-screen bg-stone-100 px-6 py-16">
@@ -95,6 +146,7 @@ export default function FolderShareClient({ token }) {
   }
 
   const { folder, access } = payload;
+  const fileViewClasses = FILE_VIEW_CLASSES[fileView] || FILE_VIEW_CLASSES.medium;
 
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-10 sm:px-6 sm:py-14">
@@ -148,43 +200,77 @@ export default function FolderShareClient({ token }) {
         ) : folder.files.length === 0 ? (
           <EmptyState text="No files are linked in this folder." />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <>
+            <section className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Display</p>
+                <p className="mt-1 text-sm text-zinc-600">{folder.files.length} files shown</p>
+              </div>
+              <div className="grid grid-cols-4 gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
+                {FILE_VIEW_OPTIONS.map((option) => {
+                  const Icon = option.icon;
+                  const active = fileView === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => setFileView(option.key)}
+                      title={`${option.label} view`}
+                      aria-label={`${option.label} view`}
+                      aria-pressed={active}
+                      className={`inline-flex h-9 min-w-10 items-center justify-center rounded-lg px-2 text-xs font-semibold ${
+                        active ? "bg-black text-white shadow-sm" : "text-zinc-600 hover:bg-white"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="sr-only">{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+          <div className={fileViewClasses.grid}>
             {folder.files.map((file) => (
-              <article key={file.id} className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+              <article key={file.id} className={fileViewClasses.card}>
                 {file.previewUrl && isImageFile(file) ? (
-                  <img src={file.previewUrl} alt={file.title} className="aspect-[4/3] w-full object-cover" />
+                  <img src={file.previewUrl} alt={file.title} loading="lazy" decoding="async" className={`${fileViewClasses.preview} object-cover`} />
                 ) : isVideoFile(file) ? (
-                  <div className="relative aspect-[4/3] bg-zinc-900">
+                  <div className={`relative bg-zinc-900 ${fileViewClasses.preview}`}>
                     <video src={file.secureUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                     <span className="absolute inset-0 flex items-center justify-center bg-black/20">
                       <PlayCircle className="h-14 w-14 text-white drop-shadow" />
                     </span>
                   </div>
                 ) : (
-                  <div className="flex aspect-[4/3] items-center justify-center bg-zinc-900 text-white">
+                  <div className={`flex items-center justify-center bg-zinc-900 text-white ${fileViewClasses.preview}`}>
                     <p className="text-xs uppercase tracking-[0.22em] text-white/70">{file.extension ? `.${file.extension}` : "File"}</p>
                   </div>
                 )}
-                <div className="space-y-3 p-4">
+                <div className={fileViewClasses.info}>
                   <div>
-                    <h2 className="truncate text-lg font-semibold text-black">{file.title}</h2>
+                    <h2 className={fileViewClasses.title}>{file.title}</h2>
                     <p className="mt-1 truncate text-sm text-zinc-500">{file.originalName}</p>
                   </div>
                   <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">{formatBytes(file.bytes)}</p>
                   <div className="flex flex-wrap gap-2">
-                    <Link href={file.sharePath} target="_blank" className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700">
-                      View File Link
-                    </Link>
-                    {file.isPublic ? (
-                      <a href={`/api/file-share/${file.shareToken}/download`} className="rounded-full bg-black px-3 py-2 text-xs font-semibold text-white">
-                        Download
-                      </a>
-                    ) : null}
+                    <a
+                      href={file.folderOpenUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700"
+                    >
+                      Open File
+                    </a>
+                    <a href={file.folderDownloadUrl} className="rounded-full bg-black px-3 py-2 text-xs font-semibold text-white">
+                      Download
+                    </a>
                   </div>
                 </div>
               </article>
             ))}
           </div>
+          </>
         )}
       </section>
     </main>

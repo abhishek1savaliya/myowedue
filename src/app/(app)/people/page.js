@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
+import { useAppAlert } from "@/components/AppAlertProvider";
 import { normalizeCurrency, convertFromUSD, formatCurrency, DEFAULT_FX } from "@/lib/currency";
 
 const initial = { name: "", email: "", phone: "" };
 
 export default function PeoplePage() {
+  const { showAlert } = useAppAlert();
   const [form, setForm] = useState(initial);
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +109,7 @@ export default function PeoplePage() {
       setDeleteTarget(null);
       await load(true);
     } else {
-      window.alert(data.message || "Failed to delete person");
+      showAlert(data.message || "Failed to delete person", { severity: "error" });
     }
   }
 

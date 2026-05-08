@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toJpeg } from "html-to-image";
+import { useAppAlert } from "@/components/AppAlertProvider";
 import { formatCurrency } from "@/lib/currency";
 
 export default function ReportsPage() {
+  const { showAlert } = useAppAlert();
   const cardRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -60,7 +62,7 @@ export default function ReportsPage() {
       link.click();
     } catch (error) {
       console.error("JPG export failed:", error);
-      window.alert("Could not generate JPG right now. Please try again.");
+      showAlert("Could not generate JPG right now. Please try again.", { severity: "error" });
     } finally {
       setDownloading(false);
     }

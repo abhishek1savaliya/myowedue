@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import CmsEditor from "@/components/CmsEditor";
+import { useAppAlert } from "@/components/AppAlertProvider";
 
 const PAGE_LABELS = {
   home: "Home Page",
@@ -12,6 +13,7 @@ const PAGE_LABELS = {
 };
 
 export default function ContentEditorPage() {
+  const { showAlert } = useAppAlert();
   const [selectedPage, setSelectedPage] = useState("home");
   const [role, setRole] = useState("");
   const [pages, setPages] = useState([]);
@@ -145,7 +147,7 @@ export default function ContentEditorPage() {
     );
 
     if (decision === "reject" && !String(feedback || "").trim()) {
-      window.alert("Feedback is required when rejecting a change.");
+      showAlert("Feedback is required when rejecting a change.", { severity: "warning" });
       return;
     }
 
@@ -157,13 +159,13 @@ export default function ContentEditorPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        window.alert(data?.message || "Failed to review submission");
+        showAlert(data?.message || "Failed to review submission", { severity: "error" });
         return;
       }
       await loadEditor(selectedPage);
       if (role === "super_admin") await loadAudit();
     } catch {
-      window.alert("Failed to review submission");
+      showAlert("Failed to review submission", { severity: "error" });
     }
   }
 
@@ -181,7 +183,7 @@ export default function ContentEditorPage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        window.alert(data?.message || "Failed to update permission");
+        showAlert(data?.message || "Failed to update permission", { severity: "error" });
         return;
       }
 
@@ -197,7 +199,7 @@ export default function ContentEditorPage() {
         await loadAudit();
       }
     } catch {
-      window.alert("Failed to update permission");
+      showAlert("Failed to update permission", { severity: "error" });
     }
   }
 
