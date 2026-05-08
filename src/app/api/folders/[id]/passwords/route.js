@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { fail, logActivity, ok } from "@/lib/api";
+import { clearUserApiCache } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import { hashPassword } from "@/lib/auth";
 import Folder from "@/models/Folder";
@@ -63,7 +64,15 @@ export async function POST(request, { params }) {
       hint: hint.slice(0, 100),
     });
 
-    await logActivity(user._id, "folder_password_created", `Added password to folder: ${folder.name}`);
+    if (folder.permissionType !== "password") {
+      folder.permissionType = "password";
+      await folder.save();
+    }
+
+    await Promise.all([
+      clearUserApiCache(user._id),
+      logActivity(user._id, "folder_password_created", `Added password to folder: ${folder.name}`),
+    ]);
 
     return ok(
       {

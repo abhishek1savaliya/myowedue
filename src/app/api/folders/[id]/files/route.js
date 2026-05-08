@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { fail, logActivity, ok } from "@/lib/api";
+import { clearUserApiCache } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import Folder from "@/models/Folder";
 import StoredFile from "@/models/StoredFile";
@@ -28,10 +29,13 @@ export async function POST(request, { params }) {
     if (!file) return fail("File not found", 404);
 
     // Add file to folder if not already present
-    if (!folder.fileIds.includes(fileId)) {
+    if (!folder.fileIds.some((id) => id.toString() === fileId)) {
       folder.fileIds.push(fileId);
       await folder.save();
-      await logActivity(user._id, "file_added_to_folder", `Added file to folder: ${folder.name}`);
+      await Promise.all([
+        clearUserApiCache(user._id),
+        logActivity(user._id, "file_added_to_folder", `Added file to folder: ${folder.name}`),
+      ]);
     }
 
     return ok({ message: "File added to folder successfully" }, 200);
@@ -63,7 +67,10 @@ export async function DELETE(request, { params }) {
     folder.fileIds = folder.fileIds.filter((fId) => fId.toString() !== fileId);
     await folder.save();
 
-    await logActivity(user._id, "file_removed_from_folder", `Removed file from folder: ${folder.name}`);
+    await Promise.all([
+      clearUserApiCache(user._id),
+      logActivity(user._id, "file_removed_from_folder", `Removed file from folder: ${folder.name}`),
+    ]);
     return ok({ message: "File removed from folder successfully" });
   } catch (caughtError) {
     return fail(caughtError?.message || "Failed to remove file from folder", 500);

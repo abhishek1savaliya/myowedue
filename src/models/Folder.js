@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import mongoose, { Schema } from "mongoose";
 
 const FolderSchema = new Schema(
@@ -7,6 +8,7 @@ const FolderSchema = new Schema(
     description: { type: String, trim: true, default: "" },
     permissionType: { type: String, enum: ["public", "password", "private"], default: "private", index: true }, // public: anyone, password: requires password, private: owner only
     fileIds: [{ type: Schema.Types.ObjectId, ref: "StoredFile" }], // Files in this folder (linked)
+    shareToken: { type: String, required: true, trim: true, unique: true, index: true, default: () => crypto.randomBytes(18).toString("hex") },
   },
   { timestamps: true }
 );
@@ -19,13 +21,22 @@ let Folder;
 if (mongoose.models.Folder) {
   Folder = mongoose.models.Folder;
 
-  // Migration: convert old isPublic to permissionType
-  if (Folder.schema.path("isPublic")) {
-    // This would need to be handled in a migration script
-    // For now, we'll assume the field is updated
+  const missingPaths = {};
+  if (!Folder.schema.path("permissionType")) {
+    missingPaths.permissionType = { type: String, enum: ["public", "password", "private"], default: "private", index: true };
+  }
+  if (!Folder.schema.path("shareToken")) {
+    missingPaths.shareToken = { type: String, required: true, trim: true, unique: true, index: true };
+  }
+  if (Object.keys(missingPaths).length > 0) {
+    Folder.schema.add(missingPaths);
   }
 } else {
   Folder = mongoose.model("Folder", FolderSchema);
+}
+
+export function generateFolderShareToken() {
+  return crypto.randomBytes(18).toString("hex");
 }
 
 export default Folder;

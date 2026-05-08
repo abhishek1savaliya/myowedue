@@ -15,6 +15,7 @@ import { clearUserApiCache, filesCacheKey, getRedisJSON, setRedisJSON } from "@/
 import { getStorageQuotaBytes } from "@/lib/subscription";
 import { requireUser } from "@/lib/session";
 import FileAccessRequest from "@/models/FileAccessRequest";
+import Folder from "@/models/Folder";
 import StoredFile from "@/models/StoredFile";
 
 const DEFAULT_FILE_LIMIT = 12;
@@ -138,6 +139,7 @@ export async function DELETE(request) {
 
     await Promise.all([
       FileAccessRequest.deleteMany({ fileId: { $in: fileIds } }),
+      Folder.updateMany({ userId: user._id }, { $pull: { fileIds: { $in: fileIds } } }),
       ...files.map((file) => destroyCloudinaryAsset(file).catch(() => false)),
       clearUserApiCache(user._id),
       logActivity(user._id, "files_deleted", `Deleted ${files.length} files`),

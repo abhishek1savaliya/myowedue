@@ -5,6 +5,7 @@ import { serializeStoredFile } from "@/lib/file-storage";
 import { clearUserApiCache } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import FileAccessRequest from "@/models/FileAccessRequest";
+import Folder from "@/models/Folder";
 import StoredFile from "@/models/StoredFile";
 
 export async function PATCH(request, { params }) {
@@ -51,6 +52,7 @@ export async function DELETE(request, { params }) {
 
     await Promise.all([
       FileAccessRequest.deleteMany({ fileId: file._id }),
+      Folder.updateMany({ userId: user._id }, { $pull: { fileIds: file._id } }),
       destroyCloudinaryAsset(file).catch(() => false),
       clearUserApiCache(user._id),
       logActivity(user._id, "file_deleted", `Deleted ${file.originalName}`),

@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { fail, logActivity, ok } from "@/lib/api";
+import { clearUserApiCache } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import Folder from "@/models/Folder";
 import FolderPassword from "@/models/FolderPassword";
@@ -23,7 +24,10 @@ export async function DELETE(request, { params }) {
 
     if (!password) return fail("Password not found", 404);
 
-    await logActivity(user._id, "folder_password_deleted", `Deleted password from folder: ${folder.name}`);
+    await Promise.all([
+      clearUserApiCache(user._id),
+      logActivity(user._id, "folder_password_deleted", `Deleted password from folder: ${folder.name}`),
+    ]);
 
     return ok({ message: "Password deleted successfully" });
   } catch (caughtError) {

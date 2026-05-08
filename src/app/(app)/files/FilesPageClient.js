@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
@@ -203,6 +204,11 @@ export default function FilesPageClient() {
     if (!folderSearchTerm) return folders;
     return folders.filter((f) => f.name.toLowerCase().includes(folderSearchTerm.toLowerCase()));
   }, [folders, folderSearchTerm]);
+
+  const selectedFolder = useMemo(
+    () => (selectedFolderId === "all" ? null : folders.find((folder) => folder.id === selectedFolderId) || null),
+    [folders, selectedFolderId]
+  );
 
   // Load functions
   async function loadFiles() {
@@ -472,6 +478,15 @@ export default function FilesPageClient() {
     loadFolders();
   }
 
+  async function copyText(text, successMessage) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage(successMessage);
+    } catch {
+      setMessage("Copy failed on this browser.");
+    }
+  }
+
   async function deleteFolder(folderId) {
     setWorkingId(`delete-${folderId}`);
     const response = await fetch(`/api/folders/${folderId}`, { method: "DELETE" });
@@ -565,7 +580,9 @@ export default function FilesPageClient() {
     setAddPasswordInput("");
     setAddPasswordHint("");
     setMessage(data.message || "Password added successfully");
-    loadFolderPasswords(folderId);
+    await loadFolderPasswords(folderId);
+    setFolderPasswordsModal((prev) => ({ ...prev, loading: false }));
+    loadFolders();
   }
 
   async function deleteFolderPassword(folderId, passwordId) {
@@ -620,6 +637,18 @@ export default function FilesPageClient() {
     setUsageBytes((prev) => Math.max(0, prev - Number(file.bytes || 0)));
     setMessage(data.message || "File deleted.");
     loadFiles();
+  }
+
+  function openFolderPasswords(folder) {
+    setFolderPasswordsModal({ open: true, folderId: folder.id, passwords: [], loading: false });
+    loadFolderPasswords(folder.id);
+    setFolderMenuOpenId("");
+  }
+
+  function permissionLabel(permissionType) {
+    if (permissionType === "public") return "Public";
+    if (permissionType === "password") return "Password";
+    return "Private";
   }
 
   return (
@@ -683,9 +712,9 @@ export default function FilesPageClient() {
                   >
                     <span className="flex items-center gap-2">
                       <Folder className="h-4 w-4" />
-                      {folder.name}
+                      <span className="truncate">{folder.name}</span>
                     </span>
-                    <span className="text-xs text-zinc-500">({folder.fileCount})</span>
+                    <span className="text-xs text-zinc-500">{folder.fileCount}</span>
                   </button>
 
                   {/* Folder Menu */}
@@ -709,12 +738,29 @@ export default function FilesPageClient() {
                       >
                         Edit Folder
                       </button>
+                      {folder.shareUrl ? (
+                        <button
+                          onClick={() => {
+                            copyText(folder.shareUrl, "Folder link copied.");
+                            setFolderMenuOpenId("");
+                          }}
+                          className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                        >
+                          Copy Folder Link
+                        </button>
+                      ) : null}
+                      {folder.sharePath ? (
+                        <Link
+                          href={folder.sharePath}
+                          target="_blank"
+                          onClick={() => setFolderMenuOpenId("")}
+                          className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                        >
+                          View Folder Link
+                        </Link>
+                      ) : null}
                       <button
-                        onClick={() => {
-                          setFolderPasswordsModal({ open: true, folderId: folder.id, passwords: [], loading: false });
-                          loadFolderPasswords(folder.id);
-                          setFolderMenuOpenId("");
-                        }}
+                        onClick={() => openFolderPasswords(folder)}
                         className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
                       >
                         Manage Passwords
@@ -836,6 +882,37 @@ export default function FilesPageClient() {
           ) : filteredFilesForFolder.length === 0 ? (
             <EmptyState text={selectedFolderId === "all" ? "No files uploaded yet." : "No files in this folder."} />
           ) : (
+            <>
+              {selectedFolder ? (
+                <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Selected Folder</p>
+                      <h2 className="mt-2 text-xl font-semibold text-black">{selectedFolder.name}</h2>
+                      <p className="mt-1 text-sm text-zinc-600">
+                        {permissionLabel(selectedFolder.permissionType)} folder with {selectedFolder.fileCount || 0} linked files.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => copyText(selectedFolder.shareUrl, "Folder link copied.")}
+                        className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy Link
+                      </button>
+                      <Link
+                        href={selectedFolder.sharePath}
+                        target="_blank"
+                        className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700"
+                      >
+                        View Link
+                      </Link>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredFilesForFolder.map((file) => (
                 <div key={file.id} className="group relative overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow">
@@ -884,6 +961,17 @@ export default function FilesPageClient() {
                       >
                         Add to Folder
                       </button>
+                      {selectedFolderId !== "all" ? (
+                        <button
+                          onClick={() => {
+                            removeFileFromFolder(file.id, selectedFolderId);
+                            setFileMenuOpenId("");
+                          }}
+                          className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                        >
+                          Remove from Folder
+                        </button>
+                      ) : null}
                       <button
                         onClick={() => {
                           setDeleteTarget(file);
@@ -898,6 +986,7 @@ export default function FilesPageClient() {
                 </div>
               ))}
             </div>
+            </>
           )}
 
           {filesHasMore && <div ref={loadMoreFilesRef} className="py-8 text-center text-sm text-zinc-500">Loading more files...</div>}
@@ -953,14 +1042,20 @@ export default function FilesPageClient() {
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2"
                 />
                 <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    defaultChecked={editFolderModal.folder.isPublic}
-                    id="edit-folder-public"
-                    className="rounded"
-                  />
-                  <span className="text-sm text-zinc-700">Make this folder public</span>
+                  <span className="text-sm text-zinc-700">Permission</span>
+                  <select
+                    id="edit-folder-permission"
+                    defaultValue={editFolderModal.folder.permissionType || "private"}
+                    className="ml-auto rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                  >
+                    <option value="private">Private</option>
+                    <option value="password">Password protected</option>
+                    <option value="public">Public</option>
+                  </select>
                 </label>
+                <p className="text-xs text-zinc-500">
+                  Public folders open by link. Password folders accept any active folder password.
+                </p>
               </div>
               <div className="mt-4 flex gap-2 justify-end">
                 <button
@@ -972,8 +1067,8 @@ export default function FilesPageClient() {
                 <button
                   onClick={() => {
                     const name = document.getElementById("edit-folder-name").value;
-                    const isPublic = document.getElementById("edit-folder-public").checked;
-                    updateFolder(editFolderModal.folder, { name, isPublic });
+                    const permissionType = document.getElementById("edit-folder-permission").value;
+                    updateFolder(editFolderModal.folder, { name, permissionType });
                   }}
                   disabled={workingId === `edit-${editFolderModal.folder.id}`}
                   className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
