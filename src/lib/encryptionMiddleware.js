@@ -7,7 +7,7 @@ import { deriveUserKey } from "@/lib/crypto";
  */
 export async function withEncryption(request) {
   try {
-    const user = await getSessionUser();
+    const user = await getSessionUser(request);
     if (!user) {
       return { error: "Unauthorized", status: 401 };
     }

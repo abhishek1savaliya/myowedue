@@ -50,7 +50,7 @@ export async function GET(_request, { params }) {
     if (canDownload && (file.resourceType === "image" || isPdfFile(file))) {
       publicFile.previewUrl = buildFileThumbnailUrl(file);
     }
-    if (canDownload && (["image", "video"].includes(file.resourceType) || isPdfFile(file))) {
+    if (canDownload && ["image", "video"].includes(file.resourceType)) {
       publicFile.mediaUrl = file.secureUrl || "";
     }
 

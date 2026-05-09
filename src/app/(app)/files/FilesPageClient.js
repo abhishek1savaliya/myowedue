@@ -1328,7 +1328,7 @@ export default function FilesPageClient() {
                           >
                             <button
                               onClick={() => {
-                                setAddToFolderModal({ open: true, fileId: file.id, selectedFolderId: "" });
+                                setAddToFolderModal({ open: true, fileIds: [file.id], selectedFolderId: "" });
                                 setFileMenuOpenId("");
                               }}
                               className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
@@ -1438,7 +1438,7 @@ export default function FilesPageClient() {
               <div className="flex min-h-0 flex-1 items-center justify-center bg-zinc-950 p-2 sm:p-4">
                 {isPdfFile(previewFile) ? (
                   <PdfViewer
-                    fileUrl={previewFile.secureUrl}
+                    fileUrl={`/api/files/${previewFile.id}/content`}
                     className="h-[calc(94dvh-5.5rem)] w-full overflow-hidden rounded-lg bg-zinc-900"
                   />
                 ) : isVideoFile(previewFile) ? (

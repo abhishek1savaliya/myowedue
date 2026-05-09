@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import cloudinary from "cloudinary";
 
 function getCloudinaryConfig() {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME || "";
@@ -10,6 +11,16 @@ function getCloudinaryConfig() {
   }
 
   return { cloudName, apiKey, apiSecret };
+}
+
+function ensureCloudinaryConfigured() {
+  const { cloudName, apiKey, apiSecret } = getCloudinaryConfig();
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+  });
 }
 
 function buildSignature(params, apiSecret) {
@@ -55,6 +66,90 @@ export function createSignedUploadPayload({ userId, filename = "", mimeType = ""
     uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
     filenameOverride,
   };
+}
+
+function parseVersionFromSecureUrl(secureUrl) {
+  const match = String(secureUrl || "").match(/\/v(\d+)\//);
+  return match ? Number(match[1]) : 0;
+}
+
+/**
+ * Signed delivery URL via official SDK (handles account-specific signing rules).
+ */
+export function buildSignedDeliveryUrl(file = {}, options = {}) {
+  try {
+    ensureCloudinaryConfigured();
+    const publicId = String(file.publicId || "").trim();
+    if (!publicId) return "";
+
+    const resourceType = String(file.resourceType || "image").trim() || "image";
+    const type = String(file.cloudinaryType || "upload").trim() || "upload";
+    let format = String(file.format || "").trim();
+    if (!format && file.secureUrl) {
+      const ext = String(file.secureUrl).match(/\.([a-z0-9]{2,5})(?:\?|#|$)/i);
+      if (ext) format = ext[1].toLowerCase();
+    }
+
+    let version = Number(file.version || 0);
+    if (!version) version = parseVersionFromSecureUrl(file.secureUrl);
+
+    const urlOpts = {
+      resource_type: resourceType,
+      type,
+      sign_url: true,
+      secure: true,
+    };
+    if (version > 0) urlOpts.version = version;
+    if (format) urlOpts.format = format;
+    if (options.longSignature === true) urlOpts.long_url_signature = true;
+
+    return cloudinary.url(publicId, urlOpts);
+  } catch {
+    return "";
+  }
+}
+
+function collectDeliveryUrlCandidates(file) {
+  const urls = [];
+  const push = (u) => {
+    const s = String(u || "").trim();
+    if (s && !urls.includes(s)) urls.push(s);
+  };
+
+  push(file.secureUrl);
+  push(buildSignedDeliveryUrl(file));
+  push(buildSignedDeliveryUrl(file, { longSignature: true }));
+
+  return urls;
+}
+
+/**
+ * Fetch bytes from Cloudinary. Tries stored secure URL, then SDK-signed URLs (short + long signature).
+ */
+export async function fetchCloudinaryBinary(file, requestInit = {}) {
+  const { range, headers: inputHeaders, ...rest } = requestInit;
+  const headers = new Headers(inputHeaders ?? undefined);
+  if (range) headers.set("Range", range);
+  if (!headers.has("User-Agent")) {
+    headers.set("User-Agent", "MyOwedueStorageProxy/1.0");
+  }
+
+  const attempt = (url) =>
+    fetch(url, {
+      redirect: "follow",
+      ...rest,
+      headers,
+    });
+
+  const candidates = collectDeliveryUrlCandidates(file);
+  let lastResponse = null;
+
+  for (const url of candidates) {
+    lastResponse = await attempt(url);
+    if (lastResponse.ok) return lastResponse;
+  }
+
+  return lastResponse;
 }
 
 export async function destroyCloudinaryAsset({ publicId, resourceType = "raw", cloudinaryType = "upload" }) {

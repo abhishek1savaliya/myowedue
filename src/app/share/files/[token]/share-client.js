@@ -107,7 +107,10 @@ export default function FileShareClient({ token }) {
 
   const { file, access } = payload;
   const loginHref = `/login?next=${encodeURIComponent(`/share/files/${token}`)}`;
-  const canPreview = Boolean(file.mediaUrl && (isPdfFile(file) || isImageFile(file) || isVideoFile(file)));
+  const pdfViewerUrl = isPdfFile(file) && access?.canDownload ? `/api/file-share/${token}/content` : "";
+  const canPreview = Boolean(
+    pdfViewerUrl || (file.mediaUrl && (isImageFile(file) || isVideoFile(file)))
+  );
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(34,197,94,0.12),transparent_35%),#f5f5f4] px-6 py-14">
@@ -252,7 +255,7 @@ export default function FileShareClient({ token }) {
             <div className="max-h-[85vh] overflow-hidden rounded-2xl bg-black shadow-2xl">
               {isPdfFile(file) ? (
                 <PdfViewer
-                  fileUrl={file.mediaUrl}
+                  fileUrl={pdfViewerUrl}
                   className="h-[85vh] w-full overflow-hidden rounded-2xl bg-zinc-900"
                 />
               ) : isVideoFile(file) ? (

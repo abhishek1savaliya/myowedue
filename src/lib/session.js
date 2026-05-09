@@ -5,9 +5,24 @@ import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import UserSession from "@/models/UserSession";
 
-export async function getSessionUser() {
+/** Fallback when `cookies()` and the incoming Request diverge (some Route Handler + fetch combinations). */
+function sessionTokenFromCookieHeader(header) {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const entry = part.trim();
+    if (entry.startsWith("session_token=")) {
+      return decodeURIComponent(entry.slice("session_token=".length));
+    }
+  }
+  return null;
+}
+
+export async function getSessionUser(request) {
   const store = await cookies();
-  const token = store.get("session_token")?.value;
+  let token = store.get("session_token")?.value;
+  if (!token && request?.headers?.get) {
+    token = sessionTokenFromCookieHeader(request.headers.get("cookie"));
+  }
 
   if (!token) return null;
 
@@ -35,8 +50,8 @@ export async function getSessionUser() {
   return user;
 }
 
-export async function requireUser() {
-  const user = await getSessionUser();
+export async function requireUser(request) {
+  const user = await getSessionUser(request);
   if (!user) {
     return {
       error: NextResponse.json({ message: "Unauthorized" }, { status: 401 }),
