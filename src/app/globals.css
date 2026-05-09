@@ -485,6 +485,157 @@ main > * {
   animation: rise 340ms ease-out;
 }
 
+@keyframes frontpageReveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes frontpageAurora {
+  0%,
+  100% {
+    opacity: 0.74;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate3d(0, -18px, 0) scale(1.04);
+  }
+}
+
+@keyframes frontpageBadgeGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(16, 185, 129, 0.24);
+  }
+}
+
+@keyframes frontpageShimmer {
+  from {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(180%) skewX(-18deg);
+  }
+}
+
+@keyframes frontpageStatIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.frontpage-aurora {
+  animation: frontpageAurora 10s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.frontpage-reveal {
+  animation: frontpageReveal 620ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.frontpage-delay-1 {
+  animation-delay: 90ms;
+}
+
+.frontpage-delay-2 {
+  animation-delay: 180ms;
+}
+
+.frontpage-badge {
+  animation: frontpageBadgeGlow 3.8s ease-in-out infinite;
+}
+
+.frontpage-primary-cta,
+.frontpage-pro-card,
+.frontpage-final-cta {
+  position: relative;
+  overflow: hidden;
+}
+
+.frontpage-primary-cta::after,
+.frontpage-pro-card::after,
+.frontpage-final-cta::after {
+  content: "";
+  position: absolute;
+  inset: -35% auto -35% -45%;
+  width: 38%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: frontpageShimmer 4.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.frontpage-lift {
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+}
+
+.frontpage-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 46px rgba(28, 25, 23, 0.1);
+  border-color: rgba(245, 158, 11, 0.38);
+}
+
+.frontpage-stat {
+  opacity: 0;
+  animation: frontpageStatIn 520ms ease-out var(--frontpage-delay, 0ms) forwards;
+}
+
+.frontpage-highlight {
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.frontpage-highlight:hover {
+  transform: translateX(3px);
+  border-color: rgba(16, 185, 129, 0.35);
+  background-color: rgba(236, 253, 245, 0.72);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frontpage-aurora,
+  .frontpage-reveal,
+  .frontpage-badge,
+  .frontpage-primary-cta::after,
+  .frontpage-pro-card::after,
+  .frontpage-final-cta::after,
+  .frontpage-stat,
+  main > * {
+    animation: none !important;
+  }
+
+  .frontpage-reveal,
+  .frontpage-stat {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  .frontpage-lift,
+  .frontpage-highlight {
+    transition: none;
+  }
+}
+
 /* Render CMS HTML content (from Quill) */
 .cms-html strong { font-weight: 700; }
 .cms-html em { font-style: italic; }

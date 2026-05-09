@@ -1,4 +1,12 @@
-import { Cormorant_Garamond, Manrope } from "next/font/google";
+import {
+  Cormorant_Garamond,
+  Inter,
+  Manrope,
+  Montserrat,
+  Playfair_Display,
+  Poppins,
+  Roboto,
+} from "next/font/google";
 import "./globals.css";
 import "@vidstack/react/player/styles/base.css";
 import ThemeSync from "@/components/ThemeSync";
@@ -15,6 +23,32 @@ const display = Cormorant_Garamond({
 
 const body = Manrope({
   variable: "--font-body",
+  subsets: ["latin"],
+});
+
+const googleInter = Inter({
+  variable: "--font-google-inter",
+  subsets: ["latin"],
+});
+
+const googleRoboto = Roboto({
+  variable: "--font-google-roboto",
+  subsets: ["latin"],
+});
+
+const googlePoppins = Poppins({
+  variable: "--font-google-poppins",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const googleMontserrat = Montserrat({
+  variable: "--font-google-montserrat",
+  subsets: ["latin"],
+});
+
+const googlePlayfair = Playfair_Display({
+  variable: "--font-google-playfair",
   subsets: ["latin"],
 });
 
@@ -86,7 +120,7 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${display.variable} ${body.variable} h-full antialiased`}
+      className={`${display.variable} ${body.variable} ${googleInter.variable} ${googleRoboto.variable} ${googlePoppins.variable} ${googleMontserrat.variable} ${googlePlayfair.variable} h-full antialiased`}
       data-premium-ui="false"
       data-font-preset={DEFAULT_FONT_PRESET}
       data-font-size-preset={DEFAULT_FONT_SIZE_PRESET}

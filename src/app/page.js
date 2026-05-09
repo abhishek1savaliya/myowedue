@@ -82,10 +82,10 @@ export default async function Home() {
   return (
     <main className="relative overflow-hidden bg-linear-to-b from-background via-background to-background text-foreground">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(245,158,11,0.14),transparent_34%),radial-gradient(circle_at_84%_84%,rgba(16,185,129,0.12),transparent_34%)]" />
+      <div className="frontpage-aurora pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(245,158,11,0.14),transparent_34%),radial-gradient(circle_at_84%_84%,rgba(16,185,129,0.12),transparent_34%)]" />
 
       <section className="relative mx-auto max-w-6xl px-4 pb-16 pt-10 sm:px-6 md:pb-20 md:pt-14">
-        <header className="flex items-center justify-between gap-3">
+        <header className="frontpage-reveal flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <Image
               src="/owedue-logo.svg"
@@ -112,8 +112,8 @@ export default async function Home() {
         </header>
 
         <div className="mt-12 grid gap-10 md:mt-16 md:grid-cols-[1.2fr_0.8fr] md:items-end">
-          <div>
-            <p className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+          <div className="frontpage-reveal frontpage-delay-1">
+            <p className="frontpage-badge inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
               {content.heroBadge || "Built for independent earners"}
             </p>
             <h1 className="mt-5 max-w-3xl text-4xl leading-tight text-black md:text-5xl">
@@ -124,7 +124,7 @@ export default async function Home() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
                 href="/signup"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-amber-400 to-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600 sm:w-auto"
+                className="frontpage-primary-cta inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-amber-400 to-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600 sm:w-auto"
               >
                 {content.ctaPrimary || "Create your account"}
                 <ArrowRight className="h-4 w-4" />
@@ -140,7 +140,11 @@ export default async function Home() {
             {heroStats.length ? (
               <div className="mt-8 grid gap-3 sm:grid-cols-3">
                 {heroStats.map((stat, idx) => (
-                  <div key={`${stat.label || "stat"}-${idx}`} className="rounded-2xl border border-zinc-200 bg-white/80 px-4 py-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+                  <div
+                    key={`${stat.label || "stat"}-${idx}`}
+                    className="frontpage-lift frontpage-stat rounded-2xl border border-zinc-200 bg-white/80 px-4 py-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)]"
+                    style={{ "--frontpage-delay": `${180 + idx * 90}ms` }}
+                  >
                     <p className="text-2xl font-bold text-black">{stat.value || "-"}</p>
                     <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{stat.label || "Label"}</p>
                   </div>
@@ -149,12 +153,12 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:p-6">
+          <div className="frontpage-reveal frontpage-delay-2 frontpage-lift rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:p-6">
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{content.highlightTitle || "Try now"}</p>
             <div className="mt-4 space-y-3 text-sm text-zinc-700">
               {highlightItems.length ? (
                 highlightItems.map((item, idx) => (
-                  <p key={`${item}-${idx}`} className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p key={`${item}-${idx}`} className="frontpage-highlight rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
                     {item}
                   </p>
                 ))
@@ -176,7 +180,7 @@ export default async function Home() {
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {features.length ? (
               features.map((feature, idx) => (
-                <article key={`${feature.title || "feature"}-${idx}`} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+                <article key={`${feature.title || "feature"}-${idx}`} className="frontpage-lift rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-600">{feature.eyebrow || "Feature"}</p>
                   <h3 className="text-lg font-bold text-black">{feature.title || "Feature"}</h3>
                   <div className="mt-2 text-sm leading-6 text-zinc-600 cms-html" dangerouslySetInnerHTML={{ __html: feature.description || "Description" }} />
@@ -191,7 +195,7 @@ export default async function Home() {
 
       <section className="relative mx-auto max-w-6xl px-6 py-14 md:py-16">
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+          <div className="frontpage-lift rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">{content.howItWorksEyebrow || "How it works"}</p>
             <h2 className="mt-2 text-3xl font-bold text-black">{content.howItWorksTitle || "From signup to control"}</h2>
           </div>
@@ -199,7 +203,7 @@ export default async function Home() {
           <div className="grid gap-4 md:grid-cols-2">
             {howItWorksSteps.length ? (
               howItWorksSteps.map((step, idx) => (
-                <div key={`${step}-${idx}`} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+                <div key={`${step}-${idx}`} className="frontpage-lift rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Step {idx + 1}</p>
                   <p className="mt-3 text-base font-semibold text-black">{step}</p>
                 </div>
@@ -218,7 +222,7 @@ export default async function Home() {
           <div className="grid gap-3">
             {whyChooseItems.length ? (
               whyChooseItems.map((item, idx) => (
-                <div key={`${item}-${idx}`} className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+                <div key={`${item}-${idx}`} className="frontpage-lift rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
                   <p className="text-sm font-semibold text-black">{`✓ ${item}`}</p>
                 </div>
               ))
@@ -234,7 +238,7 @@ export default async function Home() {
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {securityItems.length ? (
             securityItems.map((item, idx) => (
-              <article key={`${item.title || "security"}-${idx}`} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <article key={`${item.title || "security"}-${idx}`} className="frontpage-lift rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
                 <h3 className="text-lg font-bold text-black">{item.title || "Security item"}</h3>
                 <div className="mt-2 text-sm leading-6 text-zinc-600 cms-html" dangerouslySetInnerHTML={{ __html: item.description || "" }} />
               </article>
@@ -263,7 +267,7 @@ export default async function Home() {
           </div>
 
           <div className="mt-8 grid gap-5 lg:grid-cols-2">
-            <article className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:p-7">
+            <article className="frontpage-lift rounded-3xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:p-7">
               <p className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
                 {freePlan.badge || "Free Plan"}
               </p>
@@ -295,7 +299,7 @@ export default async function Home() {
               </Link>
             </article>
 
-            <article className="rounded-3xl border border-amber-200 bg-linear-to-br from-amber-50 via-white to-emerald-50 p-6 shadow-[0_14px_36px_rgba(245,158,11,0.12)] md:p-7">
+            <article className="frontpage-lift frontpage-pro-card rounded-3xl border border-amber-200 bg-linear-to-br from-amber-50 via-white to-emerald-50 p-6 shadow-[0_14px_36px_rgba(245,158,11,0.12)] md:p-7">
               <p className="inline-flex rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">
                 {paidPlan.badge || "Pro Plan"}
               </p>
@@ -336,7 +340,7 @@ export default async function Home() {
       </section>
 
       <section className="relative mx-auto max-w-6xl px-6 py-14 md:py-20">
-        <div className="rounded-2xl border border-zinc-200 bg-linear-to-br from-white to-amber-50 p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:flex md:items-center md:justify-between md:p-10">
+        <div className="frontpage-lift frontpage-final-cta rounded-2xl border border-zinc-200 bg-linear-to-br from-white to-amber-50 p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:flex md:items-center md:justify-between md:p-10">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">Ready to get started?</p>
             <h2 className="mt-2 text-2xl font-bold text-black md:text-3xl">

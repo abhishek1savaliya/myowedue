@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, version as reactVersion } from "react";
 import { MediaPlayer, MediaProvider } from "@vidstack/react";
 import {
   Check,
@@ -90,6 +90,7 @@ const initialUploadState = {
 const FILE_PAGE_SIZE = 12;
 const MAX_UPLOAD_FILES = 15;
 const FILE_VIEW_STORAGE_KEY = "owedue:file-view";
+const CAN_USE_VIDSTACK_PLAYER = !String(reactVersion || "").startsWith("19.");
 
 const FILE_VIEW_OPTIONS = [
   { key: "list", label: "List", icon: List },
@@ -140,6 +141,9 @@ const initialUploadProgress = {
   remainingSeconds: null,
   status: "idle",
 };
+
+const BULK_ADD_WORKING_ID = "add-to-folder-bulk";
+const BULK_DELETE_WORKING_ID = "delete-files-bulk";
 
 function uploadToCloudinary(uploadUrl, formData, onProgress) {
   return new Promise((resolve, reject) => {
@@ -209,6 +213,7 @@ export default function FilesPageClient() {
   const [newFolderModal, setNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [folderPasswordsModal, setFolderPasswordsModal] = useState({ open: false, folderId: "", passwords: [], loading: false });
+  const [folderPasswordEvents, setFolderPasswordEvents] = useState({ events: [], loading: false });
   const [addPasswordInput, setAddPasswordInput] = useState("");
   const [addPasswordHint, setAddPasswordHint] = useState("");
 
@@ -225,9 +230,19 @@ export default function FilesPageClient() {
 
   // File menu states
   const [fileMenuOpenId, setFileMenuOpenId] = useState("");
-  const [addToFolderModal, setAddToFolderModal] = useState({ open: false, fileId: "", selectedFolderId: "" });
+  const [addToFolderModal, setAddToFolderModal] = useState({ open: false, fileIds: [], selectedFolderId: "" });
   const [folderSearchTerm, setFolderSearchTerm] = useState("");
   const [fileView, setFileView] = useState("medium");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedFileIds, setSelectedFileIds] = useState([]);
+  const [existingInFolderConfirm, setExistingInFolderConfirm] = useState({
+    open: false,
+    folderId: "",
+    folderName: "",
+    duplicates: [],
+    fileIds: [],
+  });
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState({ open: false, fileIds: [] });
 
   const loadMoreFilesRef = useRef(null);
 
@@ -269,6 +284,8 @@ export default function FilesPageClient() {
 
   const fileViewClasses = FILE_VIEW_CLASSES[fileView] || FILE_VIEW_CLASSES.medium;
 
+  const selectedCount = selectedFileIds.length;
+
   useEffect(() => {
     if (!message) return undefined;
 
@@ -278,6 +295,75 @@ export default function FilesPageClient() {
 
     return () => window.clearTimeout(timeoutId);
   }, [message]);
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key !== "Escape") return;
+      setFolderMenuOpenId("");
+      setFileMenuOpenId("");
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!folderMenuOpenId && !fileMenuOpenId) return undefined;
+
+    function handleDocumentClick(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-files-menu-root]")) return;
+
+      setFolderMenuOpenId("");
+      setFileMenuOpenId("");
+    }
+
+    document.addEventListener("click", handleDocumentClick);
+    return () => document.removeEventListener("click", handleDocumentClick);
+  }, [folderMenuOpenId, fileMenuOpenId]);
+
+  useEffect(() => {
+    if (!folderMenuOpenId && !fileMenuOpenId) return undefined;
+
+    // Use position:fixed scroll lock to avoid layout shifts.
+    const scrollY = window.scrollY || 0;
+    const previousBodyPosition = document.body.style.position;
+    const previousBodyTop = document.body.style.top;
+    const previousBodyWidth = document.body.style.width;
+    const previousBodyOverflow = document.body.style.overflow;
+
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+
+    function preventBackgroundScroll(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-files-menu-root]")) return;
+      event.preventDefault();
+    }
+
+    // Prevent iOS overscroll bounce behind the sheet.
+    document.addEventListener("touchmove", preventBackgroundScroll, { passive: false });
+
+    return () => {
+      document.removeEventListener("touchmove", preventBackgroundScroll);
+      document.body.style.position = previousBodyPosition;
+      document.body.style.top = previousBodyTop;
+      document.body.style.width = previousBodyWidth;
+      document.body.style.overflow = previousBodyOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [folderMenuOpenId, fileMenuOpenId]);
+
+  function toggleSelectedFile(fileId) {
+    setSelectedFileIds((prev) => {
+      if (prev.includes(fileId)) return prev.filter((id) => id !== fileId);
+      return [...prev, fileId];
+    });
+  }
 
   // Load functions
   async function loadFiles() {
@@ -588,26 +674,41 @@ export default function FilesPageClient() {
   }
 
   async function addFileToFolder(fileId, folderId) {
-    if (!folderId || folderId === "all") return;
+    return addFilesToFolder([fileId], folderId);
+  }
 
-    setWorkingId(`add-to-folder-${fileId}`);
-    const response = await fetch(`/api/folders/${folderId}/files`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileId }),
-    });
-    const data = await response.json().catch(() => ({}));
-    setWorkingId("");
+  async function addFilesToFolder(fileIds, folderId) {
+    const ids = Array.from(new Set((fileIds || []).filter(Boolean)));
+    if (!folderId || folderId === "all" || ids.length === 0) return;
 
-    if (!response.ok) {
-      setMessage(data.message || "Failed to add file to folder");
-      return;
+    setWorkingId(BULK_ADD_WORKING_ID);
+    setAddToFolderModal({ open: false, fileIds: [], selectedFolderId: "" });
+    setFolderSearchTerm("");
+    setMessage(ids.length === 1 ? "Adding file to folder..." : `Adding ${ids.length} files to folder...`);
+
+    try {
+      for (const id of ids) {
+        // eslint-disable-next-line no-await-in-loop
+        const response = await fetch(`/api/folders/${folderId}/files`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileId: id }),
+        });
+        // eslint-disable-next-line no-await-in-loop
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || "Failed to add file to folder");
+      }
+
+      setFileMenuOpenId("");
+      setSelectedFileIds([]);
+      setSelectionMode(false);
+      setMessage(ids.length === 1 ? "File added to folder successfully" : `${ids.length} files added to folder successfully`);
+      loadFolders();
+    } catch (caughtError) {
+      setMessage(caughtError?.message || "Failed to add file to folder");
+    } finally {
+      setWorkingId("");
     }
-
-    setAddToFolderModal({ open: false, fileId: "", selectedFolderId: "" });
-    setFileMenuOpenId("");
-    setMessage("File added to folder successfully");
-    loadFolders();
   }
 
   async function removeFileFromFolder(fileId, folderId) {
@@ -636,6 +737,13 @@ export default function FilesPageClient() {
     if (response.ok) {
       setFolderPasswordsModal((prev) => ({ ...prev, passwords: data.passwords || [] }));
     }
+  }
+
+  async function loadFolderPasswordEvents(folderId) {
+    setFolderPasswordEvents((prev) => ({ ...prev, loading: true }));
+    const response = await fetch(`/api/folders/${folderId}/password-events`, { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    setFolderPasswordEvents({ events: response.ok ? data.events || [] : [], loading: false });
   }
 
   async function addFolderPassword(folderId) {
@@ -720,9 +828,46 @@ export default function FilesPageClient() {
     loadFiles();
   }
 
+  async function deleteFilesBulk(fileIds) {
+    const ids = Array.from(new Set((fileIds || []).filter(Boolean)));
+    if (ids.length === 0) return;
+
+    setWorkingId(BULK_DELETE_WORKING_ID);
+    setBulkDeleteConfirm({ open: false, fileIds: [] });
+    setMessage(ids.length === 1 ? "Deleting file..." : `Deleting ${ids.length} files...`);
+
+    const filesById = new Map(files.map((f) => [f.id, f]));
+
+    try {
+      for (const id of ids) {
+        const response = await fetch(`/api/files/${id}`, { method: "DELETE" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || "Failed to delete file.");
+
+        const deletedFile = filesById.get(id);
+        if (deletedFile) {
+          setUsageBytes((prev) => Math.max(0, prev - Number(deletedFile.bytes || 0)));
+        }
+      }
+
+      setDeleteTarget(null);
+      setFileMenuOpenId("");
+      setSelectedFileIds([]);
+      setSelectionMode(false);
+      setFiles((prev) => prev.filter((file) => !ids.includes(file.id)));
+      setMessage(ids.length === 1 ? "File deleted." : `${ids.length} files deleted.`);
+      loadFiles();
+    } catch (caughtError) {
+      setMessage(caughtError?.message || "Failed to delete files.");
+    } finally {
+      setWorkingId("");
+    }
+  }
+
   function openFolderPasswords(folder) {
     setFolderPasswordsModal({ open: true, folderId: folder.id, passwords: [], loading: false });
     loadFolderPasswords(folder.id);
+    loadFolderPasswordEvents(folder.id);
     setFolderMenuOpenId("");
   }
 
@@ -804,13 +949,77 @@ export default function FilesPageClient() {
                       onClick={() => setFolderMenuOpenId(folderMenuOpenId === folder.id ? "" : folder.id)}
                       className="rounded-md border border-zinc-200 bg-white/95 p-1 shadow-sm hover:bg-white"
                       aria-label={`Open menu for ${folder.name}`}
+                      data-files-menu-root
                     >
                       <MoreVertical className="h-4 w-4 text-zinc-500" />
                     </button>
                   </div>
 
                   {folderMenuOpenId === folder.id && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-48 overflow-hidden rounded-lg border border-[#374151] bg-[#111827] py-1 shadow-lg">
+                    <>
+                      <ModalPortal>
+                        <div
+                          className="fixed inset-0 z-[2147483647] md:hidden"
+                          onMouseDown={(event) => {
+                            if (event.target === event.currentTarget) setFolderMenuOpenId("");
+                          }}
+                        >
+                          <div
+                            className="absolute inset-x-0 bottom-0 max-h-[70dvh] overflow-auto overscroll-contain rounded-t-2xl border border-[#374151] bg-[#111827] py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-2xl touch-pan-y"
+                            data-files-menu-root
+                            onMouseDown={(event) => event.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => {
+                                setEditFolderModal({ open: true, folder });
+                                setFolderMenuOpenId("");
+                              }}
+                              className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
+                            >
+                              Edit Folder
+                            </button>
+                            {folder.shareUrl ? (
+                              <button
+                                onClick={() => {
+                                  copyText(folder.shareUrl, "Folder link copied.");
+                                  setFolderMenuOpenId("");
+                                }}
+                                className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
+                              >
+                                Copy Folder Link
+                              </button>
+                            ) : null}
+                            {folder.sharePath ? (
+                              <Link
+                                href={folder.sharePath}
+                                target="_blank"
+                                onClick={() => setFolderMenuOpenId("")}
+                                className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
+                              >
+                                View Folder Link
+                              </Link>
+                            ) : null}
+                            <button
+                              onClick={() => openFolderPasswords(folder)}
+                              className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
+                            >
+                              Manage Passwords
+                            </button>
+                            <button
+                              onClick={() => {
+                                deleteFolder(folder.id);
+                              }}
+                              className="block w-full px-4 py-2 text-left text-sm font-medium text-[#fb7185] hover:bg-[#1f2937]"
+                            >
+                              Delete Folder
+                            </button>
+                          </div>
+                        </div>
+                      </ModalPortal>
+                      <div
+                        className="absolute right-0 top-full z-[2147483647] mt-1 hidden w-48 overflow-hidden rounded-lg border border-[#374151] bg-[#111827] py-1 shadow-lg md:block"
+                        data-files-menu-root
+                      >
                       <button
                         onClick={() => {
                           setEditFolderModal({ open: true, folder });
@@ -855,7 +1064,8 @@ export default function FilesPageClient() {
                       >
                         Delete Folder
                       </button>
-                    </div>
+                      </div>
+                    </>
                   )}
                 </div>
               ))
@@ -950,32 +1160,91 @@ export default function FilesPageClient() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Display</p>
                   <p className="mt-1 text-sm text-zinc-600">{filteredFilesForFolder.length} files shown</p>
                 </div>
-                <div className="grid grid-cols-4 gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
-                  {FILE_VIEW_OPTIONS.map((option) => {
-                    const Icon = option.icon;
-                    const active = fileView === option.key;
-                    return (
+                <div className="flex flex-wrap items-center gap-2 justify-end">
+                  {selectionMode ? (
+                    <>
                       <button
-                        key={option.key}
                         type="button"
-                        onClick={() => setFileView(option.key)}
-                        title={`${option.label} view`}
-                        aria-label={`${option.label} view`}
-                        aria-pressed={active}
-                        className={`inline-flex h-9 min-w-10 items-center justify-center rounded-lg px-2 text-xs font-semibold ${
-                          active ? "bg-black text-white shadow-sm" : "text-zinc-600 hover:bg-white"
-                        }`}
+                        onClick={() => {
+                          setSelectionMode(false);
+                          setSelectedFileIds([]);
+                        }}
+                        className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
                       >
-                        <Icon className="h-4 w-4" />
-                        <span className="sr-only">{option.label}</span>
+                        Cancel
                       </button>
-                    );
-                  })}
+                      <button
+                        type="button"
+                        disabled={selectedCount === 0 || workingId === BULK_DELETE_WORKING_ID}
+                        onClick={() => setBulkDeleteConfirm({ open: true, fileIds: selectedFileIds })}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                      >
+                        {workingId === BULK_DELETE_WORKING_ID ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        Delete {selectedCount ? `(${selectedCount})` : ""}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={selectedCount === 0 || workingId === BULK_ADD_WORKING_ID}
+                        onClick={() => {
+                          setAddToFolderModal({ open: true, fileIds: selectedFileIds, selectedFolderId: "" });
+                          setMessage("");
+                        }}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                      >
+                        {workingId === BULK_ADD_WORKING_ID ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Folder className="h-4 w-4" />}
+                        Move to folder {selectedCount ? `(${selectedCount})` : ""}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectionMode(true);
+                        setSelectedFileIds([]);
+                      }}
+                      className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Select
+                    </button>
+                  )}
+
+                  <div className="grid grid-cols-4 gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
+                    {FILE_VIEW_OPTIONS.map((option) => {
+                      const Icon = option.icon;
+                      const active = fileView === option.key;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => setFileView(option.key)}
+                          title={`${option.label} view`}
+                          aria-label={`${option.label} view`}
+                          aria-pressed={active}
+                          className={`inline-flex h-9 min-w-10 items-center justify-center rounded-lg px-2 text-xs font-semibold ${
+                            active ? "bg-black text-white shadow-sm" : "text-zinc-600 hover:bg-white"
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span className="sr-only">{option.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </section>
             <div className={fileViewClasses.grid}>
               {filteredFilesForFolder.map((file) => (
                 <div key={file.id} className={fileViewClasses.card}>
+                  {selectionMode ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleSelectedFile(file.id)}
+                      className="absolute left-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white/95 shadow-sm"
+                      aria-label={selectedFileIds.includes(file.id) ? "Deselect file" : "Select file"}
+                    >
+                      {selectedFileIds.includes(file.id) ? <Check className="h-4 w-4 text-emerald-600" /> : <span className="h-4 w-4 rounded-sm border border-zinc-300" />}
+                    </button>
+                  ) : null}
                   {/* Preview Thumbnail */}
                   {canPreviewFile(file) ? (
                     <button
@@ -1036,16 +1305,65 @@ export default function FilesPageClient() {
                       onClick={() => setFileMenuOpenId(fileMenuOpenId === file.id ? "" : file.id)}
                       className="rounded-md border border-zinc-200 bg-white/95 p-1 shadow-sm hover:bg-white"
                       aria-label={`Open menu for ${file.title || file.originalName}`}
+                      data-files-menu-root
                     >
                       <MoreVertical className="h-4 w-4 text-zinc-500" />
                     </button>
                   </div>
 
                   {fileMenuOpenId === file.id && (
-                    <div className="absolute right-0 top-8 z-10 w-48 overflow-hidden rounded-lg border border-[#374151] bg-[#111827] py-1 shadow-lg">
+                    <>
+                      <ModalPortal>
+                        <div
+                          className="fixed inset-0 z-[2147483647] md:hidden"
+                          onMouseDown={(event) => {
+                            if (event.target === event.currentTarget) setFileMenuOpenId("");
+                          }}
+                        >
+                          <div
+                            className="absolute inset-x-0 bottom-0 max-h-[70dvh] overflow-auto overscroll-contain rounded-t-2xl border border-[#374151] bg-[#111827] py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-2xl touch-pan-y"
+                            data-files-menu-root
+                            onMouseDown={(event) => event.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => {
+                                setAddToFolderModal({ open: true, fileId: file.id, selectedFolderId: "" });
+                                setFileMenuOpenId("");
+                              }}
+                              className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
+                            >
+                              Add to Folder
+                            </button>
+                            {selectedFolderId !== "all" ? (
+                              <button
+                                onClick={() => {
+                                  removeFileFromFolder(file.id, selectedFolderId);
+                                  setFileMenuOpenId("");
+                                }}
+                                className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
+                              >
+                                Remove from Folder
+                              </button>
+                            ) : null}
+                            <button
+                              onClick={() => {
+                                setDeleteTarget(file);
+                                setFileMenuOpenId("");
+                              }}
+                              className="block w-full px-4 py-2 text-left text-sm font-medium text-[#fb7185] hover:bg-[#1f2937]"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </ModalPortal>
+                      <div
+                        className="absolute right-0 top-8 z-[2147483647] hidden w-48 overflow-hidden rounded-lg border border-[#374151] bg-[#111827] py-1 shadow-lg md:block"
+                        data-files-menu-root
+                      >
                       <button
                         onClick={() => {
-                          setAddToFolderModal({ open: true, fileId: file.id, selectedFolderId: "" });
+                          setAddToFolderModal({ open: true, fileIds: [file.id], selectedFolderId: "" });
                           setFileMenuOpenId("");
                         }}
                         className="block w-full px-4 py-2 text-left text-sm font-medium text-[#e5e7eb] hover:bg-[#1f2937]"
@@ -1072,7 +1390,8 @@ export default function FilesPageClient() {
                       >
                         Delete
                       </button>
-                    </div>
+                      </div>
+                    </>
                   )}
                 </div>
               ))}
@@ -1088,7 +1407,7 @@ export default function FilesPageClient() {
       {previewFile && (
         <ModalPortal>
           <div
-            className="fixed inset-0 z-50 flex min-h-dvh items-center justify-center bg-black/80 p-3 sm:p-6"
+            className="fixed inset-0 z-[2147483647] flex min-h-dvh items-center justify-center bg-black/80 p-3 sm:p-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="file-preview-title"
@@ -1117,16 +1436,26 @@ export default function FilesPageClient() {
               </div>
               <div className="flex min-h-0 flex-1 items-center justify-center bg-zinc-950 p-2 sm:p-4">
                 {isVideoFile(previewFile) ? (
-                  <MediaPlayer
-                    title={previewFile.title || previewFile.originalName}
-                    src={previewFile.secureUrl}
-                    controls
-                    autoPlay
-                    playsInline
-                    className="aspect-video max-h-[calc(94dvh-5.5rem)] w-full max-w-full overflow-hidden rounded-lg bg-black text-white"
-                  >
-                    <MediaProvider />
-                  </MediaPlayer>
+                  CAN_USE_VIDSTACK_PLAYER ? (
+                    <MediaPlayer
+                      title={previewFile.title || previewFile.originalName}
+                      src={previewFile.secureUrl}
+                      controls
+                      autoPlay
+                      playsInline
+                      className="aspect-video max-h-[calc(94dvh-5.5rem)] w-full max-w-full overflow-hidden rounded-lg bg-black text-white"
+                    >
+                      <MediaProvider />
+                    </MediaPlayer>
+                  ) : (
+                    <video
+                      src={previewFile.secureUrl}
+                      controls
+                      autoPlay
+                      playsInline
+                      className="max-h-[calc(94dvh-5.5rem)] w-full max-w-full rounded-lg bg-black object-contain"
+                    />
+                  )
                 ) : (
                   <img
                     src={previewSource(previewFile)}
@@ -1144,7 +1473,7 @@ export default function FilesPageClient() {
       {uploadModalOpen && (
         <ModalPortal>
           <div
-            className="fixed inset-0 z-50 flex min-h-dvh items-end justify-center overflow-y-auto bg-black/45 px-3 py-0 sm:items-center sm:px-4 sm:py-6"
+            className="fixed inset-0 z-[2147483647] flex min-h-dvh items-end justify-center overflow-y-auto bg-black/45 px-3 py-0 sm:items-center sm:px-4 sm:py-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="upload-files-title"
@@ -1271,7 +1600,7 @@ export default function FilesPageClient() {
       {/* New Folder Modal */}
       {newFolderModal && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 p-4">
             <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
               <h2 className="text-lg font-semibold text-black">Create New Folder</h2>
               <input
@@ -1304,7 +1633,7 @@ export default function FilesPageClient() {
       {/* Edit Folder Modal */}
       {editFolderModal.open && editFolderModal.folder && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 p-4">
             <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
               <h2 className="text-lg font-semibold text-black">Edit Folder</h2>
               <div className="mt-4 space-y-3">
@@ -1358,12 +1687,14 @@ export default function FilesPageClient() {
       {/* Folder Passwords Modal */}
       {folderPasswordsModal.open && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl max-h-96 overflow-y-auto">
-              <h2 className="text-lg font-semibold text-black">Folder Passwords</h2>
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 p-4">
+            <div className="flex w-full max-w-md flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl max-h-[82dvh] overflow-hidden">
+              <h2 className="text-lg font-semibold text-black shrink-0">Folder Passwords</h2>
+
+              <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
 
               {/* Password List */}
-              <div className="mt-4 space-y-2 max-h-40 overflow-y-auto">
+              <div className="space-y-2">
                 {folderPasswordsModal.passwords.length === 0 ? (
                   <p className="text-sm text-zinc-500">No passwords yet</p>
                 ) : (
@@ -1404,6 +1735,59 @@ export default function FilesPageClient() {
                 />
               </div>
 
+              {/* Unlock Activity */}
+              <div className="mt-4 space-y-2 border-t border-zinc-200 pt-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-medium text-black">Unlock activity</h3>
+                  <button
+                    type="button"
+                    onClick={() => loadFolderPasswordEvents(folderPasswordsModal.folderId)}
+                    className="text-xs font-semibold text-zinc-700 underline underline-offset-4"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                {folderPasswordEvents.loading ? (
+                  <div className="py-2 text-center text-xs text-zinc-500">Loading activity...</div>
+                ) : folderPasswordEvents.events.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No activity yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {folderPasswordEvents.events.map((event) => {
+                      const matched = folderPasswordsModal.passwords.find((p) => p.id === event.matchedPasswordId);
+                      const when = event.createdAt ? new Date(event.createdAt).toLocaleString() : "";
+                      return (
+                        <div key={event.id} className="rounded-lg border border-zinc-200 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-black">
+                                {event.status === "success" ? "Unlocked" : "Failed unlock"}
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-500">
+                                {when}
+                                {event.ip ? ` · ${event.ip}` : ""}
+                              </p>
+                              {event.status === "success" ? (
+                                <p className="mt-1 text-xs text-zinc-600">
+                                  Password: <span className="font-semibold text-black">{matched?.hint || "No hint"}</span>
+                                </p>
+                              ) : null}
+                            </div>
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                                event.status === "success" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                              }`}
+                            >
+                              {event.status}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div className="mt-4 flex gap-2 justify-end">
                 <button
                   onClick={() => setFolderPasswordsModal({ open: false, folderId: "", passwords: [], loading: false })}
@@ -1419,6 +1803,7 @@ export default function FilesPageClient() {
                   Add Password
                 </button>
               </div>
+              </div>
             </div>
           </div>
         </ModalPortal>
@@ -1427,9 +1812,11 @@ export default function FilesPageClient() {
       {/* Add to Folder Modal */}
       {addToFolderModal.open && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 p-4">
             <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
-              <h2 className="text-lg font-semibold text-black">Add File to Folder</h2>
+              <h2 className="text-lg font-semibold text-black">
+                {addToFolderModal.fileIds.length > 1 ? `Move ${addToFolderModal.fileIds.length} files to folder` : "Add File to Folder"}
+              </h2>
 
               <input
                 type="text"
@@ -1446,22 +1833,105 @@ export default function FilesPageClient() {
                   filteredFolders.map((folder) => (
                     <button
                       key={folder.id}
-                      onClick={() => addFileToFolder(addToFolderModal.fileId, folder.id)}
-                      disabled={workingId === `add-to-folder-${addToFolderModal.fileId}`}
-                      className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                      type="button"
+                      onClick={() => setAddToFolderModal((prev) => ({ ...prev, selectedFolderId: folder.id }))}
+                      disabled={workingId === BULK_ADD_WORKING_ID}
+                      className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm disabled:opacity-60 ${
+                        addToFolderModal.selectedFolderId === folder.id
+                          ? "border-black bg-zinc-50 text-black"
+                          : "border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                      }`}
                     >
-                      {folder.name}
+                      {workingId === BULK_ADD_WORKING_ID ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin text-zinc-500" />
+                      ) : (
+                        <Folder className="h-4 w-4 text-zinc-400" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                      {addToFolderModal.selectedFolderId === folder.id ? <Check className="h-4 w-4 text-emerald-600" /> : null}
                     </button>
                   ))
                 )}
               </div>
 
-              <div className="mt-4 flex gap-2 justify-end">
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button
-                  onClick={() => setAddToFolderModal({ open: false, fileId: "", selectedFolderId: "" })}
+                  onClick={() => setAddToFolderModal({ open: false, fileIds: [], selectedFolderId: "" })}
                   className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700"
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!addToFolderModal.selectedFolderId || workingId === BULK_ADD_WORKING_ID}
+                  onClick={() => {
+                    const folder = folders.find((f) => f.id === addToFolderModal.selectedFolderId);
+                    const existingIds = new Set(folder?.fileIds || []);
+                    const duplicates = addToFolderModal.fileIds.filter((id) => existingIds.has(id));
+                    if (duplicates.length > 0) {
+                      setExistingInFolderConfirm({
+                        open: true,
+                        folderId: folder?.id || addToFolderModal.selectedFolderId,
+                        folderName: folder?.name || "this folder",
+                        duplicates,
+                        fileIds: addToFolderModal.fileIds,
+                      });
+                      return;
+                    }
+                    addFilesToFolder(addToFolderModal.fileIds, addToFolderModal.selectedFolderId);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {workingId === BULK_ADD_WORKING_ID ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                  Move
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {existingInFolderConfirm.open && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+              <h2 className="text-lg font-semibold text-black">Some files already exist</h2>
+              <p className="mt-2 text-sm text-zinc-600">
+                {existingInFolderConfirm.duplicates.length} of {existingInFolderConfirm.fileIds.length} selected files are already in{" "}
+                <span className="font-semibold text-black">{existingInFolderConfirm.folderName}</span>.
+              </p>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setExistingInFolderConfirm({ open: false, folderId: "", folderName: "", duplicates: [], fileIds: [] })}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={workingId === BULK_ADD_WORKING_ID}
+                  onClick={() => {
+                    const toAdd = existingInFolderConfirm.fileIds.filter((id) => !existingInFolderConfirm.duplicates.includes(id));
+                    setExistingInFolderConfirm({ open: false, folderId: "", folderName: "", duplicates: [], fileIds: [] });
+                    addFilesToFolder(toAdd, existingInFolderConfirm.folderId);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
+                >
+                  {workingId === BULK_ADD_WORKING_ID ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                  Skip existing
+                </button>
+                <button
+                  type="button"
+                  disabled={workingId === BULK_ADD_WORKING_ID}
+                  onClick={() => {
+                    setExistingInFolderConfirm({ open: false, folderId: "", folderName: "", duplicates: [], fileIds: [] });
+                    addFilesToFolder(existingInFolderConfirm.fileIds, existingInFolderConfirm.folderId);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {workingId === BULK_ADD_WORKING_ID ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                  Replace
                 </button>
               </div>
             </div>
@@ -1472,7 +1942,7 @@ export default function FilesPageClient() {
       {/* Delete File Confirmation */}
       {deleteTarget && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 p-4">
             <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
               <h2 className="text-lg font-semibold text-black">Delete File</h2>
               <p className="mt-2 text-sm text-zinc-600">Are you sure you want to delete this file? This action cannot be undone.</p>
@@ -1497,8 +1967,42 @@ export default function FilesPageClient() {
         </ModalPortal>
       )}
 
+      {bulkDeleteConfirm.open && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+              <h2 className="text-lg font-semibold text-black">Delete files</h2>
+              <p className="mt-2 text-sm text-zinc-600">
+                Are you sure you want to delete {bulkDeleteConfirm.fileIds.length} selected file{bulkDeleteConfirm.fileIds.length === 1 ? "" : "s"}?
+                This action cannot be undone.
+              </p>
+
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setBulkDeleteConfirm({ open: false, fileIds: [] })}
+                  disabled={workingId === BULK_DELETE_WORKING_ID}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteFilesBulk(bulkDeleteConfirm.fileIds)}
+                  disabled={workingId === BULK_DELETE_WORKING_ID}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                >
+                  {workingId === BULK_DELETE_WORKING_ID ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
       {message && (
-        <div className="fixed inset-x-3 bottom-4 z-50 mx-auto max-w-md rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 shadow-lg sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[min(28rem,calc(100vw-3rem))]">
+        <div className="fixed inset-x-3 bottom-4 z-[2147483647] mx-auto max-w-md rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 shadow-lg sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[min(28rem,calc(100vw-3rem))]">
           {message}
         </div>
       )}

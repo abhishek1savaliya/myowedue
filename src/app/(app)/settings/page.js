@@ -250,7 +250,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-black">Premium Typography</p>
-              <p className="text-xs text-zinc-500">Choose from 10 font families and 10 size presets. Export styling follows your selection.</p>
+              <p className="text-xs text-zinc-500">Choose from {FONT_PRESETS.length} font families, including Google fonts, and 10 size presets. Export styling follows your selection.</p>
             </div>
             {!isPremium ? <Lock className="h-4 w-4 text-zinc-400" /> : null}
           </div>

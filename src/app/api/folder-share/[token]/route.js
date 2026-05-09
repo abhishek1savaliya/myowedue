@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import Folder from "@/models/Folder";
 import FolderPassword from "@/models/FolderPassword";
+import FolderAccessEvent from "@/models/FolderAccessEvent";
 
 function folderAccessCookieName(token) {
   return `folder_access_${token}`;
@@ -38,9 +39,9 @@ async function passwordMatches(folderId, candidate) {
   const password = String(candidate || "");
   if (!password) return false;
 
-  const passwords = await FolderPassword.find({ folderId }).select("passwordHash").lean();
+  const passwords = await FolderPassword.find({ folderId }).select("_id passwordHash").lean();
   for (const item of passwords) {
-    if (await comparePassword(password, item.passwordHash)) return true;
+    if (await comparePassword(password, item.passwordHash)) return item._id?.toString() || true;
   }
   return false;
 }
@@ -103,7 +104,23 @@ export async function POST(request, { params }) {
       return fail("This folder is private.", 403);
     }
 
-    const valid = await passwordMatches(folder._id, body.password);
+    const match = await passwordMatches(folder._id, body.password);
+    const matchedPasswordId = typeof match === "string" ? match : "";
+    const valid = Boolean(match);
+
+    const forwardedFor = request.headers.get("x-forwarded-for") || "";
+    const ip = forwardedFor.split(",")[0].trim() || request.headers.get("x-real-ip") || "";
+    const userAgent = request.headers.get("user-agent") || "";
+
+    await FolderAccessEvent.create({
+      folderId: folder._id,
+      shareToken: token,
+      status: valid ? "success" : "failure",
+      matchedPasswordId: valid && matchedPasswordId ? matchedPasswordId : null,
+      ip: String(ip || "").slice(0, 96),
+      userAgent: String(userAgent || "").slice(0, 240),
+    }).catch(() => {});
+
     if (!valid) return fail("Incorrect folder password.", 401);
 
     const response = ok({
