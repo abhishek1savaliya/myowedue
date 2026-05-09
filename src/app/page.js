@@ -247,16 +247,18 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="relative border-y border-zinc-200 bg-white/60">
+      <section className="relative border-y border-zinc-200/90 bg-[color-mix(in_srgb,var(--surface)_82%,var(--background))] dark:border-zinc-800/90 dark:bg-[color-mix(in_srgb,var(--surface)_55%,var(--background))]">
         <div className="mx-auto max-w-6xl px-6 py-14 md:py-16">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">{content.plansEyebrow || "Plans"}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+            {content.plansEyebrow || "Plans"}
+          </p>
           <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-3xl font-bold text-black md:text-4xl">
+              <h2 className="text-3xl font-bold text-foreground md:text-4xl">
                 {content.plansTitle || "Choose the plan that fits your workflow"}
               </h2>
               <div
-                className="mt-3 max-w-2xl text-sm leading-7 text-zinc-600 md:text-base cms-html"
+                className="mt-3 max-w-2xl text-sm leading-7 text-zinc-600 dark:text-zinc-400 md:text-base cms-html"
                 dangerouslySetInnerHTML={{
                   __html:
                     content.plansDescription ||
@@ -267,17 +269,17 @@ export default async function Home() {
           </div>
 
           <div className="mt-8 grid gap-5 lg:grid-cols-2">
-            <article className="frontpage-lift rounded-3xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:p-7">
-              <p className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+            <article className="frontpage-lift rounded-3xl border border-zinc-200 bg-[var(--surface)] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-zinc-700 dark:shadow-[0_12px_40px_rgba(0,0,0,0.25)] md:p-7">
+              <p className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:border-zinc-600 dark:bg-slate-800/80 dark:text-zinc-300">
                 {freePlan.badge || "Free Plan"}
               </p>
-              <h3 className="mt-4 text-2xl font-bold text-black">{freePlan.name || "Free"}</h3>
+              <h3 className="mt-4 text-2xl font-bold text-foreground">{freePlan.name || "Free"}</h3>
               <div className="mt-3 flex items-end gap-2">
-                <span className="text-4xl font-bold text-black">{freePlan.price || "$0"}</span>
-                <span className="pb-1 text-sm font-semibold text-zinc-500">{freePlan.billing || "/forever"}</span>
+                <span className="text-4xl font-bold text-foreground">{freePlan.price || "$0"}</span>
+                <span className="pb-1 text-sm font-semibold text-zinc-500 dark:text-zinc-400">{freePlan.billing || "/forever"}</span>
               </div>
               <div
-                className="mt-4 text-sm leading-7 text-zinc-600 cms-html"
+                className="mt-4 text-sm leading-7 text-zinc-600 dark:text-zinc-400 cms-html"
                 dangerouslySetInnerHTML={{
                   __html:
                     freePlan.description ||
@@ -286,30 +288,34 @@ export default async function Home() {
               />
               <div className="mt-5 space-y-3">
                 {freePlanFeatures.map((item, idx) => (
-                  <div key={`${item}-${idx}`} className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-700">
+                  <div
+                    key={`${item}-${idx}`}
+                    className="rounded-2xl border border-zinc-200 bg-zinc-50/90 px-4 py-3 text-sm font-medium text-zinc-800 dark:border-zinc-600/90 dark:bg-slate-800/70 dark:text-zinc-200"
+                  >
                     {item}
                   </div>
                 ))}
               </div>
               <Link
                 href={freePlan.ctaHref || "/signup"}
-                className="mt-6 inline-flex items-center gap-2 rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                className="mt-6 inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-[var(--surface)] px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-slate-800/80"
               >
                 {freePlan.ctaLabel || "Get started free"}
               </Link>
             </article>
 
-            <article className="frontpage-lift frontpage-pro-card rounded-3xl border border-amber-200 bg-linear-to-br from-amber-50 via-white to-emerald-50 p-6 shadow-[0_14px_36px_rgba(245,158,11,0.12)] md:p-7">
-              <p className="inline-flex rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+            <article className="frontpage-lift frontpage-pro-card relative overflow-hidden rounded-3xl border-2 border-amber-400/50 bg-[var(--surface)] p-6 shadow-[0_10px_36px_rgba(245,158,11,0.14)] dark:border-amber-500/40 dark:shadow-[0_12px_44px_rgba(245,158,11,0.18)] md:p-7">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-linear-to-r from-amber-500 via-amber-400 to-emerald-500 opacity-90" />
+              <p className="inline-flex rounded-full border border-amber-300/80 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-800 dark:border-amber-500/45 dark:bg-amber-500/15 dark:text-amber-300">
                 {paidPlan.badge || "Pro Plan"}
               </p>
-              <h3 className="mt-4 text-2xl font-bold text-black">{paidPlan.name || "Pro"}</h3>
+              <h3 className="mt-4 text-2xl font-bold text-foreground">{paidPlan.name || "Pro"}</h3>
               <div className="mt-3 flex items-end gap-2">
-                <span className="text-4xl font-bold text-black">{paidPlan.price || "$7"}</span>
-                <span className="pb-1 text-sm font-semibold text-zinc-500">{paidPlan.billing || "/month or $70/year"}</span>
+                <span className="text-4xl font-bold text-foreground">{paidPlan.price || "$7"}</span>
+                <span className="pb-1 text-sm font-semibold text-zinc-500 dark:text-zinc-400">{paidPlan.billing || "/month or $70/year"}</span>
               </div>
               <div
-                className="mt-4 text-sm leading-7 text-zinc-700 cms-html"
+                className="mt-4 text-sm leading-7 text-zinc-600 dark:text-zinc-300 cms-html"
                 dangerouslySetInnerHTML={{
                   __html:
                     paidPlan.description ||
@@ -318,14 +324,17 @@ export default async function Home() {
               />
               <div className="mt-5 space-y-3">
                 {paidPlanFeatures.map((item, idx) => (
-                  <div key={`${item}-${idx}`} className="rounded-2xl border border-amber-200 bg-white/90 px-4 py-3 text-sm font-medium text-zinc-800">
+                  <div
+                    key={`${item}-${idx}`}
+                    className="rounded-2xl border border-amber-200/90 bg-amber-500/[0.06] px-4 py-3 text-sm font-medium text-zinc-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-zinc-100"
+                  >
                     {item}
                   </div>
                 ))}
               </div>
               <Link
                 href={paidPlan.ctaHref || "/signup"}
-                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-amber-400 to-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600"
+                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-amber-600 hover:to-amber-700"
               >
                 {paidPlan.ctaLabel || "View Pro options"}
                 <ArrowRight className="h-4 w-4" />
@@ -333,30 +342,31 @@ export default async function Home() {
             </article>
           </div>
 
-          <p className="mt-5 text-sm text-zinc-500">
+          <p className="mt-5 text-sm text-zinc-500 dark:text-zinc-500">
             {content.plansFootnote || "This section can be managed from the admin content editor."}
           </p>
         </div>
       </section>
 
       <section className="relative mx-auto max-w-6xl px-6 py-14 md:py-20">
-        <div className="frontpage-lift frontpage-final-cta rounded-2xl border border-zinc-200 bg-linear-to-br from-white to-amber-50 p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:flex md:items-center md:justify-between md:p-10">
+        <div className="frontpage-lift frontpage-final-cta relative overflow-hidden rounded-2xl border border-zinc-200 bg-[var(--surface)] p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-zinc-700 dark:shadow-[0_12px_40px_rgba(0,0,0,0.3)] md:flex md:items-center md:justify-between md:p-10">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-linear-to-r from-amber-500 via-amber-400 to-emerald-500 opacity-85" />
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">Ready to get started?</p>
-            <h2 className="mt-2 text-2xl font-bold text-black md:text-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">Ready to get started?</p>
+            <h2 className="mt-2 text-2xl font-bold text-foreground md:text-3xl">
               {content.finalCtaTitle || "Join thousands of users tracking dues effortlessly."}
             </h2>
           </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap md:mt-0 md:flex-nowrap">
             <Link
               href="/signup"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-400 to-emerald-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-emerald-500 hover:to-emerald-600 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-amber-600 hover:to-amber-700 sm:w-auto"
             >
               Get started free
             </Link>
             <Link
               href="/login"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-[var(--surface)] px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-slate-800/80 sm:w-auto"
             >
               Sign in
             </Link>

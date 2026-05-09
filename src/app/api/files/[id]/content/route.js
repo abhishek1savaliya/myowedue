@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
 
     if (!upstream.ok) {
       const status = upstream.status === 404 ? 404 : 502;
-      return fail("Could not load file from storage.", status);
+      return fail(`Could not load file from storage (Cloudinary HTTP ${upstream.status}).`, status);
     }
 
     const outHeaders = new Headers();

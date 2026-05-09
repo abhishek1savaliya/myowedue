@@ -20,6 +20,7 @@ function ensureCloudinaryConfigured() {
     api_key: apiKey,
     api_secret: apiSecret,
     secure: true,
+    analytics: false,
   });
 }
 
@@ -74,6 +75,42 @@ function parseVersionFromSecureUrl(secureUrl) {
 }
 
 /**
+ * Recover full public_id from a delivery URL when DB only has a short id or data is stale.
+ * Path pattern: .../upload/[s--sig--/]v123/folder/asset.ext
+ */
+export function parsePublicIdFromSecureUrl(secureUrl) {
+  const raw = String(secureUrl || "").trim();
+  if (!raw) return "";
+  try {
+    const path = new URL(raw).pathname;
+    const key = "/upload/";
+    const idx = path.indexOf(key);
+    if (idx === -1) return "";
+    let rest = path.slice(idx + key.length);
+    if (rest.startsWith("s--")) {
+      const end = rest.indexOf("--/");
+      if (end !== -1) rest = rest.slice(end + 3);
+    }
+    const vm = rest.match(/^v\d+\/(.+)$/);
+    if (vm) rest = vm[1];
+    const lastDot = rest.lastIndexOf(".");
+    if (lastDot > 0) rest = rest.slice(0, lastDot);
+    return decodeURIComponent(rest.replace(/\+/g, " "));
+  } catch {
+    return "";
+  }
+}
+
+function mergePublicIdHints(file = {}) {
+  const fromDb = String(file.publicId || "").trim();
+  const fromUrl = parsePublicIdFromSecureUrl(file.secureUrl);
+  const out = [];
+  if (fromDb) out.push(fromDb);
+  if (fromUrl && fromUrl !== fromDb) out.push(fromUrl);
+  return [...new Set(out)];
+}
+
+/**
  * Signed delivery URL via official SDK (handles account-specific signing rules).
  */
 export function buildSignedDeliveryUrl(file = {}, options = {}) {
@@ -98,12 +135,41 @@ export function buildSignedDeliveryUrl(file = {}, options = {}) {
       type,
       sign_url: true,
       secure: true,
+      analytics: false,
+      urlAnalytics: false,
     };
     if (version > 0) urlOpts.version = version;
+    else urlOpts.force_version = false;
     if (format) urlOpts.format = format;
     if (options.longSignature === true) urlOpts.long_url_signature = true;
 
     return cloudinary.url(publicId, urlOpts);
+  } catch {
+    return "";
+  }
+}
+
+/** API-key-signed download URL (api.cloudinary.com) — works when CDN returns 401 for unsigned/signed res.cloudinary.com URLs. */
+function buildAuthenticatedDownloadUrl(file) {
+  try {
+    ensureCloudinaryConfigured();
+    const publicId = String(file.publicId || "").trim();
+    if (!publicId) return "";
+
+    let format = String(file.format || "").trim();
+    if (!format && file.secureUrl) {
+      const ext = String(file.secureUrl).match(/\.([a-z0-9]{2,5})(?:\?|#|$)/i);
+      if (ext) format = ext[1].toLowerCase();
+    }
+    if (!format && String(file.mimeType || "").toLowerCase() === "application/pdf") format = "pdf";
+
+    const resourceType = String(file.resourceType || "image").trim() || "image";
+    const type = String(file.cloudinaryType || "upload").trim() || "upload";
+
+    return cloudinary.utils.private_download_url(publicId, format, {
+      resource_type: resourceType,
+      type,
+    });
   } catch {
     return "";
   }
@@ -117,14 +183,29 @@ function collectDeliveryUrlCandidates(file) {
   };
 
   push(file.secureUrl);
+  push(buildAuthenticatedDownloadUrl(file));
   push(buildSignedDeliveryUrl(file));
   push(buildSignedDeliveryUrl(file, { longSignature: true }));
 
   return urls;
 }
 
+function promisifyResource(publicId, options) {
+  ensureCloudinaryConfigured();
+  return new Promise((resolve, reject) => {
+    cloudinary.api.resource(
+      publicId,
+      (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      },
+      options
+    );
+  });
+}
+
 /**
- * Fetch bytes from Cloudinary. Tries stored secure URL, then SDK-signed URLs (short + long signature).
+ * Fetch bytes from Cloudinary: try stored URLs + signed variants, then Admin API metadata to reconcile.
  */
 export async function fetchCloudinaryBinary(file, requestInit = {}) {
   const { range, headers: inputHeaders, ...rest } = requestInit;
@@ -141,12 +222,54 @@ export async function fetchCloudinaryBinary(file, requestInit = {}) {
       headers,
     });
 
-  const candidates = collectDeliveryUrlCandidates(file);
+  async function tryUrlsForFile(f) {
+    let last = null;
+    for (const url of collectDeliveryUrlCandidates(f)) {
+      last = await attempt(url);
+      if (last.ok) return last;
+    }
+    return last;
+  }
+
+  const deliveryTypes = [...new Set([String(file.cloudinaryType || "upload").trim() || "upload", "upload"])];
+  const resourceTypes = [...new Set([String(file.resourceType || "").trim() || "image", "image", "raw"])];
+  const publicIds = mergePublicIdHints(file);
+
   let lastResponse = null;
 
-  for (const url of candidates) {
-    lastResponse = await attempt(url);
-    if (lastResponse.ok) return lastResponse;
+  for (const pid of publicIds.length ? publicIds : [""]) {
+    if (!pid) continue;
+    const slice = { ...file, publicId: pid };
+    lastResponse = await tryUrlsForFile(slice);
+    if (lastResponse?.ok) return lastResponse;
+  }
+
+  if (!publicIds.length) {
+    lastResponse = await tryUrlsForFile(file);
+    if (lastResponse?.ok) return lastResponse;
+  }
+
+  for (const pid of publicIds) {
+    for (const rt of resourceTypes) {
+      for (const dt of deliveryTypes) {
+        try {
+          const meta = await promisifyResource(pid, { resource_type: rt, type: dt });
+          const reconciled = {
+            ...file,
+            publicId: meta.public_id || pid,
+            resourceType: meta.resource_type || rt,
+            format: meta.format || file.format,
+            version: Number(meta.version) || Number(file.version) || 0,
+            secureUrl: meta.secure_url || file.secureUrl,
+            cloudinaryType: meta.type || file.cloudinaryType,
+          };
+          lastResponse = await tryUrlsForFile(reconciled);
+          if (lastResponse?.ok) return lastResponse;
+        } catch {
+          /* not found for this combo */
+        }
+      }
+    }
   }
 
   return lastResponse;

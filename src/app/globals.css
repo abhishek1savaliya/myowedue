@@ -581,6 +581,13 @@ main > * {
   pointer-events: none;
 }
 
+/* Light glossy shimmer reads as “metallic” on dark surfaces and hurts contrast — keep it subtle in dark mode */
+:root[data-theme="dark"] .frontpage-pro-card::after,
+:root[data-theme="dark"] .frontpage-final-cta::after {
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.12), transparent);
+  opacity: 0.35;
+}
+
 .frontpage-lift {
   transition:
     transform 220ms ease,
