@@ -26,6 +26,7 @@ import {
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
+import PdfViewer from "@/components/PdfViewer";
 import ProgressBar from "@/components/ProgressBar";
 
 function formatBytes(bytes) {
@@ -75,7 +76,7 @@ function isVideoFile(file) {
 }
 
 function canPreviewFile(file) {
-  return Boolean(file?.secureUrl && (isImageFile(file) || isVideoFile(file)));
+  return Boolean(file?.secureUrl && (isPdfFile(file) || isImageFile(file) || isVideoFile(file)));
 }
 
 function previewSource(file) {
@@ -1435,7 +1436,12 @@ export default function FilesPageClient() {
                 </button>
               </div>
               <div className="flex min-h-0 flex-1 items-center justify-center bg-zinc-950 p-2 sm:p-4">
-                {isVideoFile(previewFile) ? (
+                {isPdfFile(previewFile) ? (
+                  <PdfViewer
+                    fileUrl={previewFile.secureUrl}
+                    className="h-[calc(94dvh-5.5rem)] w-full overflow-hidden rounded-lg bg-zinc-900"
+                  />
+                ) : isVideoFile(previewFile) ? (
                   CAN_USE_VIDSTACK_PLAYER ? (
                     <MediaPlayer
                       title={previewFile.title || previewFile.originalName}

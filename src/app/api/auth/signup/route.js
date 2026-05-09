@@ -3,6 +3,9 @@ import User from "@/models/User";
 import Notification from "@/models/Notification";
 import { hashPassword, safeUser, signToken } from "@/lib/auth";
 import { fail, ok } from "@/lib/api";
+import { randomUUID } from "crypto";
+import UserSession from "@/models/UserSession";
+import { enforceConcurrentSessionLimit, extractClientIp } from "@/lib/session";
 
 export async function POST(request) {
   try {
@@ -38,7 +41,22 @@ export async function POST(request) {
       expiresAt,
     });
 
-    const token = signToken({ userId: user._id.toString() });
+    const sessionId = randomUUID();
+    const ip = extractClientIp(request);
+    const userAgent = String(request.headers.get("user-agent") || "").slice(0, 240);
+
+    await UserSession.create({
+      userId: user._id,
+      sessionId,
+      ip,
+      userAgent,
+      rememberMe: true,
+      status: "active",
+      lastSeenAt: new Date(),
+    });
+    await enforceConcurrentSessionLimit(user._id, user.concurrentSessionLimit || 1);
+
+    const token = signToken({ userId: user._id.toString(), sessionId });
     const res = ok({ user: safeUser(user), message: "Signup successful" }, 201);
     res.cookies.set("session_token", token, {
       httpOnly: true,

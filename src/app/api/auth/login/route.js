@@ -2,6 +2,9 @@ import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import { comparePassword, safeUser, signToken } from "@/lib/auth";
 import { fail, ok } from "@/lib/api";
+import { randomUUID } from "crypto";
+import UserSession from "@/models/UserSession";
+import { enforceConcurrentSessionLimit, extractClientIp } from "@/lib/session";
 
 export async function POST(request) {
   try {
@@ -19,8 +22,22 @@ export async function POST(request) {
     // 7 days if rememberMe is true, 4 hours if false
     const expiresIn = rememberMe ? "7d" : "4h";
     const maxAge = rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 4;
+    const sessionId = randomUUID();
+    const ip = extractClientIp(request);
+    const userAgent = String(request.headers.get("user-agent") || "").slice(0, 240);
 
-    const token = signToken({ userId: user._id.toString() }, expiresIn);
+    await UserSession.create({
+      userId: user._id,
+      sessionId,
+      ip,
+      userAgent,
+      rememberMe: Boolean(rememberMe),
+      status: "active",
+      lastSeenAt: new Date(),
+    });
+    await enforceConcurrentSessionLimit(user._id, user.concurrentSessionLimit || 1);
+
+    const token = signToken({ userId: user._id.toString(), sessionId }, expiresIn);
     const res = ok({ user: safeUser(user), message: "Login successful" });
     res.cookies.set("session_token", token, {
       httpOnly: true,

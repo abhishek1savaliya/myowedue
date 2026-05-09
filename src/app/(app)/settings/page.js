@@ -29,6 +29,10 @@ export default function SettingsPage() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileMessage, setProfileMessage] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
+  const [concurrentSessionLimit, setConcurrentSessionLimit] = useState(1);
+  const [recentLogins, setRecentLogins] = useState([]);
+  const [loadingLoginActivity, setLoadingLoginActivity] = useState(true);
+  const [loginActivityMessage, setLoginActivityMessage] = useState("");
 
   async function loadProfile() {
     setLoadingProfile(true);
@@ -71,8 +75,22 @@ export default function SettingsPage() {
     setLoadingProfile(false);
   }
 
+  async function loadLoginActivity() {
+    setLoadingLoginActivity(true);
+    const res = await fetch("/api/auth/login-activity", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setConcurrentSessionLimit(Math.min(5, Math.max(1, Number(data.concurrentSessionLimit || 1))));
+      setRecentLogins(Array.isArray(data.recentLogins) ? data.recentLogins : []);
+    } else {
+      setLoginActivityMessage(data.message || "Failed to load login activity");
+    }
+    setLoadingLoginActivity(false);
+  }
+
   useEffect(() => {
     loadProfile();
+    loadLoginActivity();
   }, []);
 
   async function saveProfile(e) {
@@ -138,6 +156,22 @@ export default function SettingsPage() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
+  }
+
+  async function saveLoginActivitySettings() {
+    setLoginActivityMessage("Saving...");
+    const res = await fetch("/api/auth/login-activity", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ concurrentSessionLimit }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setLoginActivityMessage(data.message || "Failed to update concurrent device limit");
+      return;
+    }
+    setLoginActivityMessage("Concurrent device limit updated");
+    await loadLoginActivity();
   }
 
   return (
@@ -257,52 +291,44 @@ export default function SettingsPage() {
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Font Family</p>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <select
+              value={fontPreset}
+              disabled={!isPremium}
+              onChange={(e) => {
+                if (!isPremium) return;
+                const nextFontPreset = e.target.value;
+                setFontPreset(nextFontPreset);
+                applyAppearancePreference({ fontPreset: nextFontPreset, fontSizePreset, isPremium });
+              }}
+              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
               {FONT_PRESETS.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  disabled={!isPremium}
-                  onClick={() => {
-                    if (!isPremium) return;
-                    setFontPreset(option.key);
-                    applyAppearancePreference({ fontPreset: option.key, fontSizePreset, isPremium });
-                  }}
-                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                    fontPreset === option.key
-                      ? "border-black bg-black text-white"
-                      : "border-zinc-300 bg-white text-zinc-700"
-                  } ${!isPremium ? "cursor-not-allowed opacity-50" : "hover:border-black"}`}
-                >
+                <option key={option.key} value={option.key}>
                   {option.label}
-                </button>
+                </option>
               ))}
-            </div>
+            </select>
           </div>
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Font Size</p>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <select
+              value={fontSizePreset}
+              disabled={!isPremium}
+              onChange={(e) => {
+                if (!isPremium) return;
+                const nextFontSizePreset = e.target.value;
+                setFontSizePreset(nextFontSizePreset);
+                applyAppearancePreference({ fontPreset, fontSizePreset: nextFontSizePreset, isPremium });
+              }}
+              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
               {FONT_SIZE_PRESETS.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  disabled={!isPremium}
-                  onClick={() => {
-                    if (!isPremium) return;
-                    setFontSizePreset(option.key);
-                    applyAppearancePreference({ fontPreset, fontSizePreset: option.key, isPremium });
-                  }}
-                  className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                    fontSizePreset === option.key
-                      ? "border-black bg-black text-white"
-                      : "border-zinc-300 bg-white text-zinc-700"
-                  } ${!isPremium ? "cursor-not-allowed opacity-50" : "hover:border-black"}`}
-                >
+                <option key={option.key} value={option.key}>
                   {option.label}
-                </button>
+                </option>
               ))}
-            </div>
+            </select>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
@@ -330,6 +356,75 @@ export default function SettingsPage() {
         </div>
 
         {settingsMessage ? <p className="text-sm text-zinc-600">{settingsMessage}</p> : null}
+      </section>
+
+      <section className="max-w-3xl space-y-4 rounded-2xl border border-zinc-200 bg-white p-5">
+        <h2 className="text-base font-semibold text-black">Login Activity</h2>
+        <p className="text-sm text-zinc-600">
+          Set how many devices can stay logged in at the same time. Maximum 5 devices.
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-[220px_auto] sm:items-end">
+          <div>
+            <label className="block text-sm text-zinc-700">Concurrent devices</label>
+            <select
+              value={concurrentSessionLimit}
+              onChange={(e) => setConcurrentSessionLimit(Math.min(5, Math.max(1, Number(e.target.value))))}
+              className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2"
+            >
+              <option value={1}>1 device</option>
+              <option value={2}>2 devices</option>
+              <option value={3}>3 devices</option>
+              <option value={4}>4 devices</option>
+              <option value={5}>5 devices</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={saveLoginActivitySettings}
+              className="rounded-xl border border-black bg-black px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
+            >
+              Save Device Limit
+            </button>
+            <button
+              type="button"
+              onClick={loadLoginActivity}
+              className="rounded-xl border border-zinc-400 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-black hover:bg-zinc-50"
+            >
+              Refresh Activity
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Recent login activity (last 5)</p>
+          {loadingLoginActivity ? (
+            <Loader className="mt-3" />
+          ) : recentLogins.length === 0 ? (
+            <p className="mt-3 text-sm text-zinc-500">No recent login activity available.</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {recentLogins.map((item) => (
+                <div key={item.sessionId} className="rounded-xl border border-zinc-200 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-black">{new Date(item.createdAt).toLocaleString()}</p>
+                    <span
+                      className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                        item.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-700"
+                      }`}
+                    >
+                      {item.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-600">IP: {item.ip || "Unknown"}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {loginActivityMessage ? <p className="text-sm text-zinc-600">{loginActivityMessage}</p> : null}
       </section>
     </div>
   );

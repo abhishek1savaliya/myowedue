@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Globe, LoaderCircle, Lock, PlayCircle, X } from "lucide-react";
 import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
+import PdfViewer from "@/components/PdfViewer";
 
 function formatBytes(bytes) {
   const value = Number(bytes || 0);
@@ -106,7 +107,7 @@ export default function FileShareClient({ token }) {
 
   const { file, access } = payload;
   const loginHref = `/login?next=${encodeURIComponent(`/share/files/${token}`)}`;
-  const canPreview = Boolean(file.mediaUrl && (isImageFile(file) || isVideoFile(file)));
+  const canPreview = Boolean(file.mediaUrl && (isPdfFile(file) || isImageFile(file) || isVideoFile(file)));
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(34,197,94,0.12),transparent_35%),#f5f5f4] px-6 py-14">
@@ -249,7 +250,12 @@ export default function FileShareClient({ token }) {
             </button>
 
             <div className="max-h-[85vh] overflow-hidden rounded-2xl bg-black shadow-2xl">
-              {isVideoFile(file) ? (
+              {isPdfFile(file) ? (
+                <PdfViewer
+                  fileUrl={file.mediaUrl}
+                  className="h-[85vh] w-full overflow-hidden rounded-2xl bg-zinc-900"
+                />
+              ) : isVideoFile(file) ? (
                 <video key={file.mediaUrl} src={file.mediaUrl} controls autoPlay playsInline className="max-h-[85vh] w-full bg-black object-contain" />
               ) : (
                 <img src={file.mediaUrl} alt={file.title} className="max-h-[85vh] w-full object-contain" />

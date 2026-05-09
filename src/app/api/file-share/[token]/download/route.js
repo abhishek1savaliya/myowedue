@@ -5,6 +5,12 @@ import { getSessionUser } from "@/lib/session";
 import FileAccessRequest from "@/models/FileAccessRequest";
 import StoredFile from "@/models/StoredFile";
 
+function withAttachment(url) {
+  const value = String(url || "");
+  if (!value.includes("/upload/")) return value;
+  return value.replace("/upload/", "/upload/fl_attachment/");
+}
+
 export async function GET(request, { params }) {
   try {
     const { token } = await params;
@@ -14,7 +20,7 @@ export async function GET(request, { params }) {
     if (!file) return fail("File not found", 404);
 
     if (file.isPublic) {
-      return NextResponse.redirect(file.secureUrl);
+      return NextResponse.redirect(withAttachment(file.secureUrl));
     }
 
     const user = await getSessionUser();
@@ -24,7 +30,7 @@ export async function GET(request, { params }) {
     }
 
     if (String(file.userId) === String(user._id)) {
-      return NextResponse.redirect(file.secureUrl);
+      return NextResponse.redirect(withAttachment(file.secureUrl));
     }
 
     const accessRequest = await FileAccessRequest.findOne({
@@ -37,7 +43,7 @@ export async function GET(request, { params }) {
       return fail("You do not have access to this file yet.", 403);
     }
 
-    return NextResponse.redirect(file.secureUrl);
+    return NextResponse.redirect(withAttachment(file.secureUrl));
   } catch (caughtError) {
     return fail(caughtError?.message || "Failed to open file", 500);
   }

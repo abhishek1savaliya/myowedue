@@ -9,11 +9,10 @@ function folderAccessCookieName(token) {
   return `folder_access_${token}`;
 }
 
-function withAttachment(url, filename) {
+function withAttachment(url) {
   const value = String(url || "");
   if (!value.includes("/upload/")) return value;
-  const safeName = String(filename || "download").replace(/[^\w.\- ]+/g, "").trim() || "download";
-  return value.replace("/upload/", `/upload/fl_attachment:${encodeURIComponent(safeName)}/`);
+  return value.replace("/upload/", "/upload/fl_attachment/");
 }
 
 export async function GET(request, { params }) {
@@ -41,7 +40,7 @@ export async function GET(request, { params }) {
       return fail(permissionType === "password" ? "Enter the folder password first." : "This folder is private.", 403);
     }
 
-    const targetUrl = disposition === "attachment" ? withAttachment(file.secureUrl, file.originalName) : file.secureUrl;
+    const targetUrl = disposition === "attachment" ? withAttachment(file.secureUrl) : file.secureUrl;
     return NextResponse.redirect(targetUrl);
   } catch (caughtError) {
     return fail(caughtError?.message || "Failed to open folder file", 500);

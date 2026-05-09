@@ -38,6 +38,7 @@ const UserSchema = new Schema(
     appliedVoucherCode: { type: String, trim: true, default: null },
     fontPreset: { type: String, default: "manrope" },
     fontSizePreset: { type: String, default: "size-4" },
+    concurrentSessionLimit: { type: Number, min: 1, max: 5, default: 1 },
   },
   { timestamps: true }
 );
@@ -84,6 +85,7 @@ if (mongoose.models.User) {
   if (!User.schema.path("appliedVoucherCode")) missingPaths.appliedVoucherCode = { type: String, trim: true, default: null };
   if (!User.schema.path("fontPreset")) missingPaths.fontPreset = { type: String, default: "manrope" };
   if (!User.schema.path("fontSizePreset")) missingPaths.fontSizePreset = { type: String, default: "size-4" };
+  if (!User.schema.path("concurrentSessionLimit")) missingPaths.concurrentSessionLimit = { type: Number, min: 1, max: 5, default: 1 };
 
   if (Object.keys(missingPaths).length > 0) {
     User.schema.add(missingPaths);
