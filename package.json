@@ -6,6 +6,7 @@
     "postinstall": "node scripts/copy-pdf-worker.mjs",
     "dev": "next dev",
     "build": "next build",
+    "verify": "npm run build",
     "start": "next start",
     "alive": "node alive.mjs",
     "socket": "node socket-server.mjs",
