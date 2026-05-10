@@ -1,22 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SpecialZoomLevel, Viewer, Worker } from "@react-pdf-viewer/core";
+import { zoomPlugin } from "@react-pdf-viewer/zoom";
+import "@react-pdf-viewer/zoom/lib/styles/index.css";
 
 /** Prefer same-origin worker (see `scripts/copy-pdf-worker.mjs` + postinstall). Must match `pdfjs-dist` in package.json. */
 const PDF_WORKER_LOCAL = "/pdf.worker.min.js";
 const PDF_WORKER_CDN = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4;
+
+function clampScale(scale) {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+}
+
+function pinchDistance(touches) {
+  if (touches.length < 2) return 0;
+  const a = touches[0];
+  const b = touches[1];
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
 /**
  * Loads PDF bytes on the main thread (with cookies) then hands them to PDF.js.
- * Relying on the worker to fetch same-origin /api/... URLs often omits auth cookies and returns 401.
- * Uses a blob: URL so mobile Safari and strict embed policies handle the document reliably.
+ * Uses a blob: URL for reliable loading. Zoom: Ctrl/Cmd + scroll (via zoom plugin + Meta wheel),
+ * keyboard shortcuts (Ctrl/Cmd +/-, 0), and two-finger pinch on touch devices.
  */
 export default function PdfViewer({ fileUrl, className = "" }) {
   const [docUrl, setDocUrl] = useState(null);
   const [error, setError] = useState(null);
   /** null until we know whether `public/pdf.worker.min.js` exists (never mount Worker with a missing URL). */
   const [workerUrl, setWorkerUrl] = useState(null);
+
+  /** Must be top-level (not inside useMemo): zoomPlugin uses Hooks internally. */
+  const zoomPluginInstance = zoomPlugin({ enableShortcuts: true });
+  const zoomRef = useRef(zoomPluginInstance);
+  zoomRef.current = zoomPluginInstance;
+  const scaleRef = useRef(1);
+  const pinchRef = useRef(null);
+  const scrollRef = useRef(null);
+  const rafPinchRef = useRef(0);
+
+  const onZoom = useCallback((e) => {
+    scaleRef.current = e.scale;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +120,74 @@ export default function PdfViewer({ fileUrl, className = "" }) {
     };
   }, [fileUrl]);
 
+  /** Cmd/Ctrl + wheel where the plugin only listens for Ctrl (e.g. some Safari cases). */
+  useEffect(() => {
+    if (!docUrl || !workerUrl) return undefined;
+    const el = scrollRef.current;
+    if (!el) return undefined;
+
+    const onWheelMeta = (e) => {
+      if (!e.metaKey || e.ctrlKey) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      zoomRef.current.zoomTo(clampScale(scaleRef.current * factor));
+    };
+
+    el.addEventListener("wheel", onWheelMeta, { passive: false });
+    return () => el.removeEventListener("wheel", onWheelMeta);
+  }, [docUrl, workerUrl]);
+
+  /** Two-finger pinch → zoom (plugin handles Ctrl + scroll on desktop). */
+  useEffect(() => {
+    if (!docUrl || !workerUrl) return undefined;
+    const el = scrollRef.current;
+    if (!el) return undefined;
+
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        const dist = pinchDistance(e.touches);
+        if (dist > 1) {
+          pinchRef.current = { dist, scale: scaleRef.current };
+        }
+      }
+    };
+
+    const onTouchMove = (e) => {
+      if (e.touches.length !== 2 || !pinchRef.current) return;
+      e.preventDefault();
+      const dist = pinchDistance(e.touches);
+      const { dist: d0, scale: s0 } = pinchRef.current;
+      if (dist < 1 || d0 < 1) return;
+      const next = clampScale((s0 * dist) / d0);
+      if (rafPinchRef.current) cancelAnimationFrame(rafPinchRef.current);
+      rafPinchRef.current = requestAnimationFrame(() => {
+        rafPinchRef.current = 0;
+        zoomRef.current.zoomTo(next);
+      });
+    };
+
+    const endPinch = () => {
+      pinchRef.current = null;
+      if (rafPinchRef.current) {
+        cancelAnimationFrame(rafPinchRef.current);
+        rafPinchRef.current = 0;
+      }
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", endPinch);
+    el.addEventListener("touchcancel", endPinch);
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", endPinch);
+      el.removeEventListener("touchcancel", endPinch);
+      endPinch();
+    };
+  }, [docUrl, workerUrl]);
+
   if (!fileUrl) return null;
 
   if (error) {
@@ -118,10 +215,18 @@ export default function PdfViewer({ fileUrl, className = "" }) {
   }
 
   return (
-    <div className={`relative h-full min-h-[50dvh] w-full min-w-0 touch-pan-y ${className}`}>
+    <div className={`relative h-full min-h-[50dvh] w-full min-w-0 ${className}`}>
       <Worker key={workerUrl} workerUrl={workerUrl}>
-        <div className="absolute inset-0 min-h-0 overflow-auto [-webkit-overflow-scrolling:touch]">
-          <Viewer fileUrl={docUrl} defaultScale={SpecialZoomLevel.PageFit} />
+        <div
+          ref={scrollRef}
+          className="absolute inset-0 min-h-0 touch-pan-x touch-pan-y overflow-auto [-webkit-overflow-scrolling:touch]"
+        >
+          <Viewer
+            fileUrl={docUrl}
+            defaultScale={SpecialZoomLevel.PageFit}
+            plugins={[zoomPluginInstance]}
+            onZoom={onZoom}
+          />
         </div>
       </Worker>
     </div>
