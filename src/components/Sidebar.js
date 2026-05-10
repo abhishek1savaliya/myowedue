@@ -101,7 +101,7 @@ export default function Sidebar({ notificationCount = 0 }) {
   }
 
   return (
-    <aside className="sticky top-0 z-30 w-full border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur md:h-screen md:w-72 md:border-b-0 md:border-r md:px-6 md:py-8">
+    <aside className="sticky top-0 z-30 w-full border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-700 dark:bg-zinc-950/95 md:h-screen md:w-72 md:border-b-0 md:border-r md:px-6 md:py-8">
       <div className="mb-4 flex items-start justify-between gap-3 md:mb-8">
         <div className="inline-flex min-w-0 items-start gap-2 p-1">
           <Link href="/dashboard" aria-label="Go to dashboard" className="rounded-xl">
@@ -115,19 +115,21 @@ export default function Sidebar({ notificationCount = 0 }) {
             />
           </Link>
           <div className="min-w-0">
-            <Link href="/dashboard" className="truncate text-base font-bold tracking-widest text-black sm:text-lg md:text-xl">OWE DUE</Link>
+            <Link href="/dashboard" className="truncate text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-lg md:text-xl">
+              OWE DUE
+            </Link>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               {isPremium ? (
                 <Link
                   href="/my-subscription"
-                  className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700 hover:bg-amber-100"
+                  className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
                 >
                   <Gem size={10} />
                   Pro
                 </Link>
               ) : (
-                <span className="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-700">
-                  FREE
+                <span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-300">
+                  Free
                 </span>
               )}
             </div>
@@ -136,10 +138,10 @@ export default function Sidebar({ notificationCount = 0 }) {
         <Link
           href="/notifications"
           aria-label="Open notifications"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 transition hover:border-black hover:text-black md:h-10 md:w-10"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 md:h-10 md:w-10"
         >
           <Bell size={16} />
-          <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-black px-1 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-zinc-900 px-1 text-[10px] font-semibold leading-none text-white dark:bg-zinc-100 dark:text-zinc-950">
             {liveNotificationCount > 99 ? "99+" : liveNotificationCount}
           </span>
         </Link>
@@ -153,12 +155,10 @@ export default function Sidebar({ notificationCount = 0 }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`group flex min-w-33 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition md:min-w-0 md:justify-start md:gap-3 md:py-3 md:text-sm ${
+              className={`group flex min-w-33 shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium transition md:min-w-0 md:justify-start md:gap-3 md:py-3 md:text-sm ${
                 active
-                  ? isPremium
-                    ? "border-amber-500 bg-linear-to-r from-zinc-950 via-zinc-900 to-amber-900 text-white"
-                    : "border-black bg-black text-white"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:border-black hover:text-black"
+                  ? "border-zinc-900 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
+                  : "border-zinc-200 bg-white text-zinc-700 shadow-sm hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/80"
               }`}
             >
               <Icon size={16} />
@@ -170,7 +170,7 @@ export default function Sidebar({ notificationCount = 0 }) {
 
       <button
         onClick={logout}
-        className="mt-4 w-full rounded-xl border border-black px-3 py-2.5 text-sm font-medium text-black transition hover:bg-black hover:text-white md:mt-8 md:py-3"
+        className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 md:mt-8 md:py-3"
       >
         Logout
       </button>

@@ -91,13 +91,13 @@ function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, current
         className={
           isX
             ? "rounded-lg border border-zinc-800 bg-zinc-950/80 py-2 pl-2 pr-2"
-            : "rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-zinc-700 dark:bg-slate-800/60"
+            : "rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60"
         }
       >
         <p className={`text-xs font-semibold ${isX ? "text-zinc-100" : "text-zinc-800 dark:text-zinc-200"}`}>
           {node.author_name}
           {node.author_id === currentUserId ? (
-            <span className={`ml-1 font-normal ${isX ? "text-sky-400" : "text-amber-600 dark:text-amber-400"}`}>(you)</span>
+            <span className={`ml-1 font-normal ${isX ? "text-sky-400" : "text-zinc-500 dark:text-zinc-400"}`}>(you)</span>
           ) : null}
         </p>
         <p className={`mt-1 whitespace-pre-wrap text-sm ${isX ? "text-zinc-200" : "text-zinc-700 dark:text-zinc-300"}`}>{node.body}</p>
@@ -113,7 +113,7 @@ function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, current
             }
             setReplyOpen((v) => !v);
           }}
-          className={`mt-2 text-xs font-semibold ${isX ? "text-sky-500 hover:underline" : "text-amber-700 hover:underline dark:text-amber-400"}`}
+          className={`mt-2 text-xs font-semibold ${isX ? "text-sky-500 hover:underline" : "text-zinc-700 hover:underline dark:text-zinc-300"}`}
         >
           {!canInteract ? "Sign in to reply" : replyOpen ? "Cancel" : "Reply"}
         </button>
@@ -127,7 +127,7 @@ function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, current
               className={
                 isX
                   ? "min-w-0 flex-1 rounded-full border border-zinc-700 bg-black px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
-                  : "min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-100"
+                  : "min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
               }
             />
             <button
@@ -136,7 +136,7 @@ function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, current
               className={
                 isX
                   ? "inline-flex items-center justify-center gap-1 rounded-full bg-sky-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                  : "inline-flex items-center justify-center gap-1 rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  : "inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
               }
             >
               {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
@@ -444,7 +444,7 @@ export function PostCard({
               <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" title="Verified" />
             ) : null}
             {post.author_id === currentUserId ? (
-              <span className="text-xs font-normal text-amber-600 dark:text-amber-400">(you)</span>
+              <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">(you)</span>
             ) : null}
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -457,7 +457,7 @@ export function PostCard({
 
   function renderReadonlyPostBlock(forX) {
     const linkClass = forX
-      ? "-m-1 block rounded-xl p-1 outline-offset-2 hover:bg-stone-50/80 dark:hover:bg-zinc-800/50"
+      ? "-m-1 block rounded-xl p-1 outline-offset-2 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50"
       : "-m-1 block rounded-xl p-1 outline-offset-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50";
     const bodyClass =
       "mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-800 dark:text-zinc-200";
@@ -479,14 +479,14 @@ export function PostCard({
 
   function renderEditingBlock(forX) {
     const taClass = forX
-      ? "mt-3 w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400 focus:border-amber-400 focus:outline-none dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-100"
-      : "mt-3 w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400 focus:border-amber-400 focus:outline-none dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-100";
+      ? "mt-3 w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500"
+      : "mt-3 w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500";
     const saveClass = forX
-      ? "inline-flex items-center justify-center gap-1 rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
-      : "inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 dark:bg-amber-600";
+      ? "inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+      : "inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900";
     const cancelClass = forX
-      ? "inline-flex items-center justify-center gap-1 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-stone-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-200 dark:hover:bg-slate-800"
-      : "inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-200";
+      ? "inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      : "inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200";
     return (
       <>
         {renderAuthorHeader()}
@@ -515,8 +515,8 @@ export function PostCard({
   function renderOwnerControls(forX) {
     if (!isOwnPost || editing) return null;
     const iconBtn = forX
-      ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-zinc-600 shadow-sm transition hover:bg-stone-100 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-300 dark:hover:bg-slate-800 dark:hover:text-zinc-100"
-      : "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-100 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-300 dark:hover:bg-slate-800 dark:hover:text-zinc-100";
+      ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-100 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+      : "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-100 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
     const delBtn = forX
       ? `${iconBtn} border-rose-200/90 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/40`
       : `${iconBtn} border-rose-200/90 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/40`;
@@ -544,11 +544,11 @@ export function PostCard({
   function renderDeleteModal() {
     if (!deleteModalOpen || typeof document === "undefined") return null;
     const panel = isX
-      ? "rounded-2xl border border-stone-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-slate-900"
-      : "rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-slate-900";
+      ? "rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+      : "rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900";
     const cancelBtn = isX
-      ? "inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:bg-stone-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-100 dark:hover:bg-slate-800"
-      : "inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-100 dark:hover:bg-slate-800";
+      ? "inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+      : "inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800";
     const deleteBtn =
       "inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full bg-rose-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60 dark:bg-rose-600 dark:hover:bg-rose-500";
 
@@ -566,12 +566,9 @@ export function PostCard({
           onClick={(e) => e.stopPropagation()}
         >
           {isX ? (
-            <div
-              className="h-1 w-full bg-linear-to-r from-amber-400 via-emerald-500 to-sky-500"
-              aria-hidden
-            />
+            <div className="h-1 w-full bg-linear-to-r from-zinc-300 via-zinc-400 to-zinc-300 dark:from-zinc-600 dark:via-zinc-500 dark:to-zinc-600" aria-hidden />
           ) : (
-            <div className="h-1 w-full bg-amber-500" aria-hidden />
+            <div className="h-1 w-full bg-zinc-400 dark:bg-zinc-600" aria-hidden />
           )}
           <div className="p-5 sm:p-6">
             <h2 id="delete-post-dialog-title" className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
@@ -603,14 +600,11 @@ export function PostCard({
 
   if (isX) {
     return (
-      <article className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-slate-900/80">
-        <div
-          className="h-1 w-full bg-linear-to-r from-amber-400 via-emerald-500 to-sky-500"
-          aria-hidden
-        />
+      <article className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80">
+        <div className="h-1 w-full bg-linear-to-r from-zinc-300 via-zinc-400 to-zinc-300 dark:from-zinc-600 dark:via-zinc-500 dark:to-zinc-600" aria-hidden />
         <div className="p-4 md:p-5">
           {editing ? renderEditingBlock(true) : renderReadonlyPostBlock(true)}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-y-2 border-t border-stone-100 pt-3 dark:border-zinc-800">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <div className="flex min-w-0 flex-wrap items-center gap-1">
               <button
                 type="button"
@@ -624,7 +618,7 @@ export function PostCard({
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                   post.liked
                     ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
-                    : "text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                 }`}
               >
                 <Heart className={`h-4 w-4 ${post.liked ? "fill-current" : ""}`} strokeWidth={2} />
@@ -640,7 +634,7 @@ export function PostCard({
                     return next;
                   });
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
                 <MessageCircle className="h-4 w-4" strokeWidth={2} />
                 {post.commentCount || 0}
@@ -648,7 +642,7 @@ export function PostCard({
               <button
                 type="button"
                 onClick={() => onRequestShare(post)}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
                 <Repeat2 className="h-4 w-4" strokeWidth={2} />
                 {post.share_count ?? 0}
@@ -657,7 +651,7 @@ export function PostCard({
             {renderOwnerControls(true)}
           </div>
           {commentsOpen || isDetail ? (
-            <div className="mt-4 border-t border-stone-100 pt-4 dark:border-zinc-800">
+            <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
               {canInteract ? (
                 <form onSubmit={submitTopComment} className="mb-4 flex flex-col gap-2 sm:flex-row">
                   <input
@@ -665,12 +659,12 @@ export function PostCard({
                     onChange={(e) => setCommentText(e.target.value)}
                     maxLength={500}
                     placeholder="Add a comment…"
-                    className="min-w-0 flex-1 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-100"
+                    className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
                   />
                   <button
                     type="submit"
                     disabled={postingComment || !commentText.trim()}
-                    className="inline-flex items-center justify-center gap-1 rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
                   >
                     {postingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     Comment
@@ -678,7 +672,7 @@ export function PostCard({
                 </form>
               ) : (
                 <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-                  <button type="button" onClick={goLogin} className="font-semibold text-amber-700 underline dark:text-amber-400">
+                  <button type="button" onClick={goLogin} className="font-semibold text-zinc-800 underline decoration-zinc-400 hover:text-zinc-950 dark:text-zinc-200 dark:decoration-zinc-500">
                     Sign in
                   </button>{" "}
                   to join the conversation.
@@ -729,7 +723,7 @@ export function PostCard({
   }
 
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80 md:p-5">
+    <article className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80 md:p-5">
       {editing ? renderEditingBlock(false) : renderReadonlyPostBlock(false)}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
         <div className="flex min-w-0 flex-wrap items-center gap-1">
@@ -745,7 +739,7 @@ export function PostCard({
             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
               post.liked
                 ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
-                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800/80"
             }`}
           >
             <Heart className={`h-4 w-4 ${post.liked ? "fill-current" : ""}`} strokeWidth={2} />
@@ -761,7 +755,7 @@ export function PostCard({
                 return next;
               });
             }}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800/80"
           >
             <MessageCircle className="h-4 w-4" strokeWidth={2} />
             {post.commentCount || 0}
@@ -769,7 +763,7 @@ export function PostCard({
           <button
             type="button"
             onClick={() => onRequestShare(post)}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800/80"
           >
             <Repeat2 className="h-4 w-4" strokeWidth={2} />
             {post.share_count ?? 0}
@@ -786,12 +780,12 @@ export function PostCard({
                 onChange={(e) => setCommentText(e.target.value)}
                 maxLength={500}
                 placeholder="Add a comment…"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-100"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               />
               <button
                 type="submit"
                 disabled={postingComment || !commentText.trim()}
-                className="inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 dark:bg-amber-600"
+                className="inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
               >
                 {postingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Comment
@@ -799,7 +793,7 @@ export function PostCard({
             </form>
           ) : (
             <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-              <button type="button" onClick={goLogin} className="font-semibold text-amber-700 underline dark:text-amber-400">
+              <button type="button" onClick={goLogin} className="font-semibold text-zinc-800 underline decoration-zinc-400 hover:text-zinc-950 dark:text-zinc-200 dark:decoration-zinc-500">
                 Sign in
               </button>{" "}
               to join the conversation.
@@ -1181,17 +1175,17 @@ export default function CommunityFeedClient({
       <div
         className={
           isX
-            ? "rounded-2xl border border-amber-400/60 bg-white p-6 text-stone-900 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/90 dark:text-amber-50"
-            : "rounded-2xl border border-amber-400/60 bg-white p-6 text-stone-900 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/90 dark:text-amber-50"
+            ? "rounded-xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-50"
+            : "rounded-xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-50"
         }
       >
-        <h1 className="text-lg font-semibold text-amber-900 dark:text-amber-200">Community unavailable</h1>
-        <p className="mt-2 text-sm leading-relaxed text-stone-800 dark:text-amber-100/95">{error}</p>
+        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Community unavailable</h1>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{error}</p>
         {!setupIncluded ? (
-          <p className="mt-3 text-sm leading-relaxed text-stone-700 dark:text-amber-100/90">
-            Add <code className="rounded bg-stone-200 px-1.5 py-0.5 text-xs font-mono text-stone-900 dark:bg-amber-900/60 dark:text-amber-50">NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
-            <code className="rounded bg-stone-200 px-1.5 py-0.5 text-xs font-mono text-stone-900 dark:bg-amber-900/60 dark:text-amber-50">SUPABASE_SERVICE_ROLE_KEY</code> (or <code className="rounded bg-stone-200 px-1.5 py-0.5 text-xs font-mono text-stone-900 dark:bg-amber-900/60 dark:text-amber-50">SUPABASE_SECRET_KEY</code>) from Supabase Dashboard → Settings → API,
-            and run the SQL in <code className="rounded bg-stone-200 px-1.5 py-0.5 text-xs font-mono text-stone-900 dark:bg-amber-900/60 dark:text-amber-50">supabase/migrations/001_community.sql</code>.
+          <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            Add <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">SUPABASE_SERVICE_ROLE_KEY</code> (or <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">SUPABASE_SECRET_KEY</code>) from Supabase Dashboard → Settings → API,
+            and run the SQL in <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">supabase/migrations/001_community.sql</code>.
           </p>
         ) : null}
       </div>
@@ -1209,8 +1203,8 @@ export default function CommunityFeedClient({
     <div
       className={
         isX
-          ? "flex gap-1 rounded-2xl border border-stone-200 bg-stone-100/90 p-1 dark:border-zinc-700 dark:bg-slate-800/80"
-          : "flex gap-1 rounded-2xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-slate-900/60"
+          ? "flex gap-1 rounded-xl border border-zinc-200 bg-zinc-100/90 p-1 dark:border-zinc-700 dark:bg-zinc-800/80"
+          : "flex gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-900/60"
       }
       role="tablist"
       aria-label="Feed filter"
@@ -1224,7 +1218,7 @@ export default function CommunityFeedClient({
           onClick={() => setFeedTab(t.id)}
           className={`min-h-[44px] flex-1 rounded-xl px-2 text-center text-xs font-semibold transition sm:text-sm ${
             feedTab === t.id
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-slate-800 dark:text-zinc-100"
+              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-100"
               : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
           }`}
         >
@@ -1239,8 +1233,8 @@ export default function CommunityFeedClient({
       onSubmit={createPost}
       className={
         isX
-          ? "rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80"
-          : "rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-slate-900/80"
+          ? "rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80"
+          : "rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/80"
       }
     >
       <label className="sr-only" htmlFor="community-compose">
@@ -1253,14 +1247,14 @@ export default function CommunityFeedClient({
         maxLength={280}
         rows={3}
         placeholder="What’s happening?"
-        className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-amber-400 focus:outline-none dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-100"
+        className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500"
       />
       <div className="mt-2 flex items-center justify-between gap-3">
         <span className="text-xs text-zinc-500">{composer.length}/280</span>
         <button
           type="submit"
           disabled={posting || !composer.trim()}
-          className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
         >
           {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Post
@@ -1274,18 +1268,18 @@ export default function CommunityFeedClient({
       <div
         className={
           isX
-            ? "rounded-2xl border border-stone-200 bg-stone-50/90 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-slate-800/60 dark:text-zinc-200"
-            : "rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-600 dark:bg-slate-800/60 dark:text-zinc-200"
+            ? "rounded-xl border border-zinc-200 bg-zinc-50/90 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200"
+            : "rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-200"
         }
       >
         <a
           href={`/login?next=${encodeURIComponent(loginNextPath)}`}
-          className="font-semibold text-amber-700 hover:underline dark:text-amber-400"
+          className="font-semibold text-zinc-800 underline decoration-zinc-400 hover:text-zinc-950 dark:text-zinc-200 dark:decoration-zinc-500"
         >
           Sign in
         </a>{" "}
         or{" "}
-        <a href="/signup" className="font-semibold text-amber-700 hover:underline dark:text-amber-400">
+        <a href="/signup" className="font-semibold text-zinc-800 underline decoration-zinc-400 hover:text-zinc-950 dark:text-zinc-200 dark:decoration-zinc-500">
           create an account
         </a>{" "}
         to publish, like, or comment. You can share posts without signing in.
@@ -1340,7 +1334,7 @@ export default function CommunityFeedClient({
               <>
                 <a
                   href={`/login?next=${encodeURIComponent(loginNextPath)}`}
-                  className="font-semibold text-amber-700 underline hover:text-amber-800 dark:text-amber-400"
+                  className="font-semibold text-zinc-800 underline decoration-zinc-400 hover:text-zinc-950 dark:text-zinc-200 dark:decoration-zinc-500"
                 >
                   Sign in
                 </a>{" "}
@@ -1350,7 +1344,7 @@ export default function CommunityFeedClient({
               <>
                 <a
                   href={`/login?next=${encodeURIComponent(loginNextPath)}`}
-                  className="font-semibold text-amber-700 underline hover:text-amber-800 dark:text-amber-400"
+                  className="font-semibold text-zinc-800 underline decoration-zinc-400 hover:text-zinc-950 dark:text-zinc-200 dark:decoration-zinc-500"
                 >
                   Sign in
                 </a>{" "}
@@ -1378,23 +1372,19 @@ export default function CommunityFeedClient({
     <div className={rootShell}>
       {isX ? (
         <header className="space-y-1">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            <span className="bg-linear-to-r from-amber-600 via-emerald-600 to-sky-600 bg-clip-text text-transparent dark:from-amber-400 dark:via-emerald-400 dark:to-sky-400">
-              Community
-            </span>
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">Community</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>
         </header>
       ) : (
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{title}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h1>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>
           </div>
           {isPortal ? (
             <Link
               href="/community"
-              className="inline-flex shrink-0 items-center justify-center gap-0.5 self-start rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-slate-800 dark:text-amber-400 dark:hover:bg-slate-800/90"
+              className="inline-flex shrink-0 items-center justify-center gap-0.5 self-start rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-800/90"
             >
               Open Community
               <ChevronRight className="h-4 w-4" aria-hidden />

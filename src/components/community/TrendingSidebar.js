@@ -58,14 +58,14 @@ export default function TrendingSidebar({ limit = 10, variant = "shell", classNa
 
   const shell = variant === "shell";
   const cardClass = shell
-    ? "rounded-2xl border border-stone-200 bg-white/95 p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80"
-    : "rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80";
+    ? "rounded-xl border border-zinc-200 bg-white/95 p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90"
+    : "rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90";
 
   return (
     <section className={`${cardClass} ${className}`.trim()} aria-labelledby={headingId}>
       <div className="flex items-center gap-2">
-        <TrendingUp className={`h-5 w-5 shrink-0 ${shell ? "text-amber-600 dark:text-amber-400" : "text-amber-600 dark:text-amber-400"}`} aria-hidden />
-        <h2 id={headingId} className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+        <TrendingUp className="h-5 w-5 shrink-0 text-zinc-600 dark:text-zinc-400" aria-hidden />
+        <h2 id={headingId} className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
           Trending
         </h2>
       </div>
