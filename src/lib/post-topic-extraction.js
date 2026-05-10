@@ -42,6 +42,11 @@ export function stripUrls(text) {
   return String(text || "").replace(/\bhttps?:\/\/\S+/gi, " ");
 }
 
+/** Match DB `post_topics` check: char_length(topic) between 2 and 120 (code points). */
+export function topicCodePointCount(topic) {
+  return [...String(topic || "")].length;
+}
+
 function isSpamTopic(topic) {
   const t = String(topic || "")
     .toLowerCase()
@@ -50,7 +55,7 @@ function isSpamTopic(topic) {
   if (SPAM_PHRASES.has(t)) return true;
   if (/https?:\/\//i.test(t)) return true;
   if (/^\d+$/.test(t)) return true;
-  if (t.length > 80) return true;
+  if (topicCodePointCount(t) > 120) return true;
   return false;
 }
 
@@ -93,9 +98,53 @@ function phraseValid(phrase) {
 
 function splitOnConjunctions(chunk) {
   return String(chunk || "")
-    .split(/\s+(?:and|&|und|et|或|和|与|以及)\s+/i)
+    .split(/\s+(?:and|&|und|et|અને|या|और|或|和|与|以及)\s+/i)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/** True when most letters are Latin — safe for Compromise noun phrases. */
+function isMostlyLatinLetters(s) {
+  const letters = String(s || "").match(/\p{L}/gu);
+  if (!letters || letters.length < 2) return true;
+  const latin = letters.filter((c) => /[\u0000-\u024F]/u.test(c)).length;
+  return latin / letters.length > 0.55;
+}
+
+/**
+ * Word-like segments for any script (Gujarati, Hindi, etc.) via ICU; falls back to regex runs.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function extractWordLikeSegments(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return [];
+
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    try {
+      const seg = new Intl.Segmenter("und", { granularity: "word" });
+      const out = [];
+      for (const p of seg.segment(raw)) {
+        if (p.isWordLike) {
+          const s = String(p.segment || "").trim();
+          if (s) out.push(s);
+        }
+      }
+      if (out.length) return out;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const pieces = raw.split(/[\p{Zs}\u0964\u0965\u200C\u200D]+/u).filter(Boolean);
+  const out = [];
+  for (const piece of pieces) {
+    const runs = piece.match(/\p{L}[\p{L}\p{M}\p{N}]*/gu) || [];
+    for (const w of runs) {
+      if (w) out.push(w);
+    }
+  }
+  return out;
 }
 
 /** #tags from original text (case-insensitive, no # in output). */
@@ -124,25 +173,27 @@ export function extractPostTopics(body) {
   const withoutUrls = stripUrls(original);
   const forNlp = stripEmojis(withoutUrls).replace(/#[\p{L}][\p{L}\p{N}_]*/gu, " ");
 
-  const doc = nlp(forNlp);
-  const nounChunks = doc.nouns().out("array");
-
   const candidates = [];
   for (const h of hashtags) {
     candidates.push(normalizeTechPhrase(h));
   }
 
-  for (const chunk of nounChunks) {
-    for (const piece of splitOnConjunctions(chunk)) {
-      const norm = normalizeTechPhrase(piece);
-      if (phraseValid(norm)) candidates.push(norm);
+  if (isMostlyLatinLetters(forNlp)) {
+    const doc = nlp(forNlp);
+    const nounChunks = doc.nouns().out("array");
+    for (const chunk of nounChunks) {
+      for (const piece of splitOnConjunctions(chunk)) {
+        const norm = normalizeTechPhrase(piece);
+        if (phraseValid(norm)) candidates.push(norm);
+      }
     }
   }
 
-  // Any-script word runs (Compromise nouns are English-centric; this seeds trending for all languages.)
-  const wordRuns = forNlp.match(/\p{L}[\p{L}\p{M}\p{N}]*/gu) || [];
-  for (const w of wordRuns) {
-    const norm = normalizeTechPhrase(w);
+  const wordLike = extractWordLikeSegments(forNlp);
+  for (const w of wordLike) {
+    let piece = String(w).trim();
+    if (topicCodePointCount(piece) > 120) piece = [...piece].slice(0, 120).join("");
+    const norm = normalizeTechPhrase(piece);
     if (phraseValid(norm)) candidates.push(norm);
   }
 
@@ -151,6 +202,8 @@ export function extractPostTopics(body) {
   for (const c of candidates) {
     const key = c.toLowerCase().trim();
     if (!key || seen.has(key)) continue;
+    const n = topicCodePointCount(key);
+    if (n < 2 || n > 120) continue;
     seen.add(key);
     out.push(key);
     if (out.length >= 24) break;

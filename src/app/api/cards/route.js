@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { fail, logActivity, ok } from "@/lib/api";
+import { attachBankThemesToCards } from "@/lib/bankCardTheme";
 import { lookupHandyBin } from "@/lib/handyBin";
 import { deriveUserKey } from "@/lib/crypto";
 import { cardsCacheKey, clearUserApiCache, getRedisJSON, setRedisJSON } from "@/lib/redis";
@@ -23,7 +24,8 @@ export async function GET(request) {
   await connectDB();
   const cards = await Card.find({ userId: user._id }).sort({ createdAt: -1 }).lean();
   const userKey = await deriveUserKey(user._id.toString(), user.email);
-  const payload = { cards: await Promise.all(cards.map((card) => serializeCard(card, user, userKey))) };
+  const rows = await Promise.all(cards.map((card) => serializeCard(card, user, userKey)));
+  const payload = { cards: await attachBankThemesToCards(rows) };
   await setRedisJSON(cacheKey, payload, 90);
   return ok(payload);
 }
@@ -46,7 +48,8 @@ export async function POST(request) {
 
     await clearUserApiCache(user._id);
     await logActivity(user._id, "card_created", `Added ${selection.variantLabel} (${selection.issuingBankName})`);
-    return ok({ card: await serializeCard(card, user), message: "Card added successfully" }, 201);
+    const [withTheme] = await attachBankThemesToCards([await serializeCard(card, user)]);
+    return ok({ card: withTheme, message: "Card added successfully" }, 201);
   } catch (caughtError) {
     return fail(caughtError?.message || "Failed to create card", 422);
   }

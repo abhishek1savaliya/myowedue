@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { fail, logActivity, ok } from "@/lib/api";
+import { attachBankThemesToCards } from "@/lib/bankCardTheme";
 import { lookupHandyBin } from "@/lib/handyBin";
 import { clearUserApiCache } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
@@ -44,7 +45,8 @@ export async function PUT(request, { params }) {
 
     await clearUserApiCache(user._id);
     await logActivity(user._id, "card_updated", `Updated ${selection.variantLabel} (${selection.issuingBankName})`);
-    return ok({ card: await serializeCard(card, user), message: "Card updated successfully" });
+    const [withTheme] = await attachBankThemesToCards([await serializeCard(card, user)]);
+    return ok({ card: withTheme, message: "Card updated successfully" });
   } catch (caughtError) {
     return fail(caughtError?.message || "Failed to update card", 422);
   }

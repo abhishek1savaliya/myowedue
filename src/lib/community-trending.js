@@ -42,10 +42,12 @@ export function computeTrendingTopics(posts, topicRows, likeRows, commentRows, o
     const comments = commentCount[postId] || 0;
     const shares = Number(post.share_count || 0);
     const baseScore = likes * 2 + comments * 3 + shares * 5;
+    /** So topics from many low-engagement posts (e.g. new Gujarati threads) still surface in trending. */
+    const mentionFloor = 0.18;
 
     const created = new Date(post.created_at).getTime();
     const hoursSince = Math.max((nowMs - created) / 3600000, minHours);
-    const decayed = baseScore / hoursSince;
+    const decayed = (Math.max(baseScore, 0) + mentionFloor) / hoursSince;
 
     if (!byTopic.has(topic)) {
       byTopic.set(topic, { trend_score: 0, posts: new Set() });

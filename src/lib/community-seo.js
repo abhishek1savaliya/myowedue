@@ -74,6 +74,25 @@ export const fetchCommunityPostForSeo = cache(async (postId) => {
 });
 
 /**
+ * Latest public posts for SSR / JSON-LD / view-source (no auth).
+ * @param {number} [limit]
+ * @returns {Promise<{ posts: Array<{ id: string; author_id: string; author_name: string; body: string; created_at: string; updated_at: string; share_count?: number }> }>}
+ */
+export const fetchCommunityFeedForSeo = cache(async (limit = 24) => {
+  const n = Math.min(Math.max(Number(limit) || 24, 1), 50);
+  if (!isSupabaseCommunityConfigured()) return { posts: [] };
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { posts: [] };
+  const { data, error } = await supabase
+    .from("community_posts")
+    .select("id, author_id, author_name, body, created_at, updated_at, share_count")
+    .order("created_at", { ascending: false })
+    .limit(n);
+  if (error || !Array.isArray(data)) return { posts: [] };
+  return { posts: data };
+});
+
+/**
  * @returns {Promise<Array<{ id: string; updated_at: string }>>}
  */
 export async function fetchCommunityPostSitemapRows(limit = 5000) {
@@ -118,5 +137,31 @@ export function buildCommunityPostJsonLd(post, canonicalUrl) {
       name: "OWE DUE",
       url: site,
     },
+  };
+}
+
+/**
+ * @param {Array<{ id: string; author_name: string; body: string; created_at: string }>} posts
+ * @param {string} siteBase
+ */
+export function buildCommunityFeedJsonLd(posts, siteBase) {
+  const site = String(siteBase || "").replace(/\/$/, "") || getCommunitySiteUrl();
+  const list = Array.isArray(posts) ? posts : [];
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "OWE DUE Community — recent public posts",
+    description: "Public discussion feed for OWE DUE members and visitors.",
+    numberOfItems: list.length,
+    itemListElement: list.map((p, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: {
+        "@type": "Article",
+        name: titleSnippetFromPost(p, 72),
+        url: `${site}/community/post/${p.id}`,
+        datePublished: p.created_at,
+      },
+    })),
   };
 }

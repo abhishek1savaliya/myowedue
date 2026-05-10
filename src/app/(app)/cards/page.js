@@ -5,6 +5,7 @@ import { Copy, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
+import VirtualCreditCard from "@/components/VirtualCreditCard";
 
 const initialForm = {
   cardNumber: "",
@@ -54,14 +55,22 @@ function buildMaskedCardNumber(length, last4, revealLast4) {
   return raw.match(/.{1,4}/g)?.join(" ") || raw;
 }
 
-function getNetworkAccent(network) {
-  const value = String(network || "").toLowerCase();
-  if (value.includes("visa")) return "from-blue-700 via-sky-600 to-cyan-400";
-  if (value.includes("master")) return "from-orange-500 via-rose-500 to-pink-500";
-  if (value.includes("american")) return "from-emerald-700 via-teal-500 to-cyan-400";
-  if (value.includes("jcb")) return "from-green-700 via-emerald-500 to-lime-400";
-  if (value.includes("diners")) return "from-indigo-700 via-violet-600 to-fuchsia-500";
-  return "from-zinc-900 via-zinc-700 to-zinc-500";
+const PLATE_DEFAULT_THEME = { primaryHex: "#3b79e1", secondaryHex: "#5c94f0" };
+
+/** Entry card corner radius (mm), scaled with ~22% larger entry surface vs ID-1 width. */
+const ENTRY_CARD_CORNER_MM = 3.88;
+
+function bankMarkLetter(name) {
+  const t = String(name || "?").trim();
+  if (!t) return "?";
+  const ch = [...t][0];
+  return ch.toUpperCase();
+}
+
+function bankTitleUpper(name) {
+  const n = String(name || "ISSUER").trim().toUpperCase();
+  if (!n) return "ISSUER";
+  return n.length > 22 ? `${n.slice(0, 20)}…` : n;
 }
 
 function getNetworkLabel(network) {
@@ -72,11 +81,13 @@ function buildDetectedDetails(source) {
   if (!source) return null;
 
   return {
+    issuingBankKey: source.issuingBankKey || "",
     cardTypeLabel: source.cardTypeLabel || source.metadata?.type || "Payment Card",
     issuingBankName: source.issuingBankName || source.metadata?.issuer || "Unknown Issuer",
     issuingCountryName: source.issuingCountryName || source.metadata?.countryName || "Unknown",
     variantLabel: source.variantLabel || source.metadata?.tier || "Card",
     network: source.network || source.metadata?.scheme || "Card",
+    bankTheme: source.bankTheme || null,
     metadata: {
       scheme: source.metadata?.scheme || source.network || "Card",
       type: source.metadata?.type || source.cardTypeLabel || "Payment Card",
@@ -98,6 +109,8 @@ export default function CardsPage() {
   const [revealedCards, setRevealedCards] = useState({});
   const [revealedCardDetails, setRevealedCardDetails] = useState({});
   const [revealTimers, setRevealTimers] = useState({});
+  /** When true, the card’s back face (full details) is shown with a 3D flip. */
+  const [cardFlipOpen, setCardFlipOpen] = useState({});
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, cardId: "", deleting: false });
   const [passwordModal, setPasswordModal] = useState({ open: false, cardId: "" });
   const [passwordInput, setPasswordInput] = useState("");
@@ -139,7 +152,6 @@ export default function CardsPage() {
   const normalizedCardNumber = normalizeCardNumberInput(form.cardNumber);
   const editingCard = cards.find((card) => card.id === editingId) || null;
   const detectedDetails = buildDetectedDetails(binLookup.data) || buildDetectedDetails(editingCard);
-  const showDetectedDetails = binLookup.status !== "idle" || Boolean(detectedDetails);
 
   useEffect(() => {
     if (normalizedCardNumber.length < 6) {
@@ -282,9 +294,25 @@ export default function CardsPage() {
         : "Re-enter the full card number to enable secure full-number reveal for this card."
     );
     setBinLookup({
-      status: "idle",
-      message: "Enter a new card number to refresh the detected details, or leave it blank to keep the current issuer data.",
-      data: null,
+      status: "success",
+      message: "Showing issuer from your saved card.",
+      data: {
+        issuingBankKey: card.issuingBankKey,
+        issuingBankName: card.issuingBankName,
+        issuingCountryName: card.issuingCountryName,
+        issuingCountryCode: card.issuingCountryCode,
+        cardTypeLabel: card.cardTypeLabel,
+        variantLabel: card.variantLabel,
+        network: card.network,
+        bankTheme: card.bankTheme || PLATE_DEFAULT_THEME,
+        metadata: {
+          scheme: card.network,
+          type: card.cardTypeLabel,
+          tier: card.variantLabel,
+          issuer: card.issuingBankName,
+          countryName: card.issuingCountryName,
+        },
+      },
       lookupBin: "",
     });
     lastLookupBinRef.current = "";
@@ -357,7 +385,12 @@ export default function CardsPage() {
         delete next[cardId];
         return next;
       });
-      
+      setCardFlipOpen((prev) => {
+        const next = { ...prev };
+        delete next[cardId];
+        return next;
+      });
+
       setDeleteConfirm({ open: false, cardId: "", deleting: false });
       setMessage("Card deleted successfully!");
       
@@ -409,41 +442,55 @@ export default function CardsPage() {
       delete next[id];
       return next;
     });
+    setCardFlipOpen((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     setMessage(data.message || "Card deleted successfully.");
     load();
   }
 
   async function copyCardNumber(card) {
+    const sessionOpen = Boolean(revealedCards[card.id]);
     const revealedDetails = revealedCardDetails[card.id];
-    const valueToCopy = revealedDetails?.cardNumber
-      ? formatCardNumberInput(revealedDetails.cardNumber)
-      : buildMaskedCardNumber(card.cardNumberLength, card.last4, true);
+    const valueToCopy =
+      sessionOpen && revealedDetails?.cardNumber
+        ? formatCardNumberInput(revealedDetails.cardNumber)
+        : buildMaskedCardNumber(card.cardNumberLength, card.last4, true);
 
     setMessage("");
     if (window.navigator?.clipboard?.writeText) {
       await window.navigator.clipboard.writeText(valueToCopy);
-      setMessage(revealedDetails?.cardNumber ? "Full card number copied." : "Masked card number copied.");
+      setMessage(sessionOpen && revealedDetails?.cardNumber ? "Full card number copied." : "Masked card number copied.");
       return;
     }
 
-    setMessage(revealedDetails?.cardNumber ? "Full card number is ready to copy." : "Masked card number is ready to copy.");
+    setMessage(sessionOpen && revealedDetails?.cardNumber ? "Full card number is ready to copy." : "Masked card number is ready to copy.");
   }
 
   function requestReveal(cardId) {
     if (revealedCards[cardId]) {
-      setRevealedCards((prev) => ({ ...prev, [cardId]: false }));
+      setCardFlipOpen((prev) => ({ ...prev, [cardId]: false }));
       if (revealTimers[cardId]) {
         clearTimeout(revealTimers[cardId]);
-        setRevealTimers((prev) => ({ ...prev, [cardId]: null }));
       }
+      setRevealTimers((prev) => ({ ...prev, [cardId]: null }));
+      window.setTimeout(() => {
+        setRevealedCards((prev) => ({ ...prev, [cardId]: false }));
+      }, 720);
       return;
     }
 
     if (revealedCardDetails[cardId]?.cardNumber) {
+      if (revealTimers[cardId]) {
+        clearTimeout(revealTimers[cardId]);
+      }
       setRevealedCards((prev) => ({ ...prev, [cardId]: true }));
-      // Set auto-hide timer for 3 minutes (180000 ms)
+      setCardFlipOpen((prev) => ({ ...prev, [cardId]: true }));
       const timerId = window.setTimeout(() => {
         setRevealedCards((prev) => ({ ...prev, [cardId]: false }));
+        setCardFlipOpen((prev) => ({ ...prev, [cardId]: false }));
         setRevealTimers((prev) => ({ ...prev, [cardId]: null }));
       }, 180000);
       setRevealTimers((prev) => ({ ...prev, [cardId]: timerId }));
@@ -475,29 +522,34 @@ export default function CardsPage() {
       return;
     }
 
+    const cid = passwordModal.cardId;
     if (data?.card) {
-      setRevealedCardDetails((prev) => ({ ...prev, [passwordModal.cardId]: data.card }));
+      setRevealedCardDetails((prev) => ({ ...prev, [cid]: data.card }));
     }
-    setRevealedCards((prev) => ({ ...prev, [passwordModal.cardId]: true }));
-    
-    // Set auto-hide timer for 3 minutes (180000 ms)
+    if (revealTimers[cid]) {
+      clearTimeout(revealTimers[cid]);
+    }
+    setCardFlipOpen((prev) => ({ ...prev, [cid]: false }));
+    setRevealedCards((prev) => ({ ...prev, [cid]: true }));
+
     const timerId = window.setTimeout(() => {
-      setRevealedCards((prev) => ({ ...prev, [passwordModal.cardId]: false }));
-      setRevealTimers((prev) => ({ ...prev, [passwordModal.cardId]: null }));
+      setRevealedCards((prev) => ({ ...prev, [cid]: false }));
+      setCardFlipOpen((prev) => ({ ...prev, [cid]: false }));
+      setRevealTimers((prev) => ({ ...prev, [cid]: null }));
     }, 180000);
-    setRevealTimers((prev) => ({ ...prev, [passwordModal.cardId]: timerId }));
-    
+    setRevealTimers((prev) => ({ ...prev, [cid]: timerId }));
+
     closePasswordModal();
+
+    window.setTimeout(() => {
+      setCardFlipOpen((prev) => ({ ...prev, [cid]: true }));
+    }, 140);
   }
 
-  const previewDigits = normalizedCardNumber;
-  const previewLast4 = previewDigits ? previewDigits.slice(-4).padStart(4, "*") : "****";
-  const previewLength = previewDigits.length >= 12 ? previewDigits.length : 16;
-  const previewNumber = buildMaskedCardNumber(previewLength, previewLast4, true);
-  const previewNetwork = detectedDetails?.network || "Card";
   const previewTitle = detectedDetails?.issuingBankName || "Issuer Pending";
-  const previewSubtitle = detectedDetails?.variantLabel || detectedDetails?.cardTypeLabel || "Detected after 6 digits";
-  const previewExpiry = `${form.expiryMonth.padEnd(2, "*")}/${form.expiryYear.padEnd(2, "*")}`;
+  const previewTheme = detectedDetails?.bankTheme || PLATE_DEFAULT_THEME;
+
+  const entryCardBackground = `linear-gradient(148deg, ${previewTheme.primaryHex} 0%, ${previewTheme.secondaryHex} 52%, ${previewTheme.primaryHex} 100%)`;
 
   return (
     <div className="space-y-6">
@@ -508,118 +560,187 @@ export default function CardsPage() {
         </p>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <form onSubmit={handleSubmit} className="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1 md:col-span-2">
-              <input
-                required={!editingId}
-                value={form.cardNumber ?? ""}
-                onChange={(e) => updateFormField("cardNumber", formatCardNumberInput(e.target.value))}
-                placeholder={editingId ? "Enter new card number (optional)" : "Card number"}
-                inputMode="numeric"
-                className="w-full rounded-xl border border-zinc-300 px-3 py-3"
-              />
-            </div>
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto grid w-full max-w-2xl gap-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5"
+      >
+          <div
+            className="relative mx-auto flex w-full max-w-[min(100%,112mm)] flex-col overflow-hidden px-4 pb-4 pt-3.5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.2)] sm:px-5 sm:pb-5 sm:pt-4"
+            style={{
+              background: entryCardBackground,
+              borderRadius: `${ENTRY_CARD_CORNER_MM}mm`,
+            }}
+          >
+            <div
+              className="pointer-events-none absolute inset-0 opacity-[0.18]"
+              style={{
+                backgroundImage: [
+                  "radial-gradient(circle at 72% 88%, rgba(255,255,255,0.42) 0%, transparent 40%)",
+                  "radial-gradient(circle at 56% 68%, rgba(255,255,255,0.24) 0%, transparent 34%)",
+                  "radial-gradient(circle at 42% 48%, rgba(255,255,255,0.16) 0%, transparent 28%)",
+                  "radial-gradient(circle at 22% 22%, rgba(255,255,255,0.1) 0%, transparent 24%)",
+                ].join(", "),
+              }}
+            />
 
-            <div className="space-y-1 md:col-span-2">
-              <input
-                value={form.nameOnCard ?? ""}
-                onChange={(e) => updateFormField("nameOnCard", e.target.value)}
-                placeholder="Name on card (optional)"
-                className="w-full rounded-xl border border-zinc-300 px-3 py-3"
-              />
-            </div>
+            <div className="relative flex flex-col">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/35 bg-white/12 text-xs font-bold text-white shadow-inner shadow-black/10 sm:h-10 sm:w-10 sm:text-sm">
+                    {bankMarkLetter(previewTitle)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[10px] font-bold uppercase tracking-widest text-white/90 sm:text-[11px]">
+                      {bankTitleUpper(previewTitle)}
+                    </p>
+                    {binLookup.status === "loading" ? (
+                      <p className="mt-0.5 flex items-center gap-1.5 text-[9px] font-medium leading-snug text-white/80 sm:text-[10px]">
+                        <LoaderCircle className="h-3 w-3 shrink-0 animate-spin text-white" aria-hidden />
+                        <span className="line-clamp-2">{binLookup.message}</span>
+                      </p>
+                    ) : binLookup.status === "error" ? (
+                      <p className="mt-0.5 text-[9px] font-medium leading-snug text-red-100 sm:text-[10px]">{binLookup.message}</p>
+                    ) : detectedDetails &&
+                      (binLookup.status === "success" || (editingId && binLookup.status === "idle")) ? (
+                      <p className="mt-0.5 line-clamp-2 text-[8px] font-medium leading-snug text-white/80 sm:text-[9px]">
+                        <span className="text-white/90">{detectedDetails.issuingCountryName}</span>
+                        <span className="text-white/40"> · </span>
+                        <span className="text-amber-200/95">{detectedDetails.cardTypeLabel}</span>
+                        <span className="text-white/40"> · </span>
+                        <span className="text-emerald-200/95">{detectedDetails.variantLabel}</span>
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/65 sm:text-[10px]">
+                        {editingId ? "Update on card" : "Type on card"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {binLookup.status === "loading" ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin text-white/90" aria-hidden />
+                  ) : (
+                    <p className="text-right text-[9px] font-semibold uppercase tracking-wider text-cyan-200/95 sm:text-[10px]">
+                      {detectedDetails?.network || "Card"}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-            <div className="space-y-1">
-              <input
-                required
-                value={form.expiryMonth ?? ""}
-                onChange={(e) => updateFormField("expiryMonth", formatExpiryMonthInput(e.target.value))}
-                placeholder="Expiry month (MM)"
-                inputMode="numeric"
-                className={`w-full rounded-xl border px-3 py-3 ${fieldErrors.expiryMonth ? "border-red-500 text-red-700" : "border-zinc-300"}`}
-              />
-              {fieldErrors.expiryMonth ? <p className="text-sm text-red-600">{fieldErrors.expiryMonth}</p> : null}
-            </div>
+              <label className="relative mt-4 block sm:mt-5">
+                <span className="sr-only">Card number</span>
+                <input
+                  required={!editingId}
+                  value={form.cardNumber ?? ""}
+                  onChange={(e) => updateFormField("cardNumber", formatCardNumberInput(e.target.value))}
+                  placeholder={editingId ? "New number (optional)" : "0000 0000 0000 0000"}
+                  inputMode="numeric"
+                  autoComplete="cc-number"
+                  className="w-full min-w-0 border-0 border-b border-white/40 bg-white/10 px-2 py-2.5 font-mono text-base font-semibold tracking-[0.14em] text-white caret-white placeholder:text-white/40 outline-none ring-0 transition focus:border-white focus:bg-white/16 sm:text-lg sm:tracking-[0.16em]"
+                />
+              </label>
 
-            <div className="space-y-1">
-              <input
-                required
-                value={form.expiryYear ?? ""}
-                onChange={(e) => updateFormField("expiryYear", formatExpiryYearInput(e.target.value))}
-                placeholder="Expiry year (YY)"
-                inputMode="numeric"
-                className={`w-full rounded-xl border px-3 py-3 ${fieldErrors.expiryYear ? "border-red-500 text-red-700" : "border-zinc-300"}`}
-              />
-              {fieldErrors.expiryYear ? <p className="text-sm text-red-600">{fieldErrors.expiryYear}</p> : null}
-            </div>
+              <div className="relative mt-4 grid grid-cols-1 gap-5 sm:mt-5 sm:grid-cols-2 sm:items-end sm:gap-6">
+                <div className="min-w-0">
+                  <label className="block text-[9px] font-semibold uppercase tracking-wider text-white/70 sm:text-[10px]" htmlFor="card-cvv">
+                    Security code <span className="font-normal normal-case text-white/50">(optional)</span>
+                  </label>
+                  <input
+                    id="card-cvv"
+                    value={form.cvv ?? ""}
+                    onChange={(e) => updateFormField("cvv", formatCVVInput(e.target.value))}
+                    placeholder="3 or 4 digits"
+                    title="Saved encrypted. Never stored in plain text."
+                    inputMode="numeric"
+                    maxLength="4"
+                    autoComplete="cc-csc"
+                    className="mt-2 w-full min-w-0 border-0 border-b border-white/40 bg-white/10 px-2 py-2.5 font-mono text-base font-semibold tracking-[0.14em] text-white caret-white placeholder:text-white/40 outline-none ring-0 transition focus:border-white focus:bg-white/16 sm:text-lg sm:tracking-[0.16em]"
+                  />
+                  <p className="sr-only">Saved encrypted. Never stored in plain text.</p>
+                  <p className="mt-1.5 text-[8px] leading-snug text-white/55 sm:text-[9px]" aria-hidden>
+                    Encrypted at rest, not plain text.
+                  </p>
+                </div>
 
-            <div className="space-y-1">
-              <input
-                value={form.cvv ?? ""}
-                onChange={(e) => updateFormField("cvv", formatCVVInput(e.target.value))}
-                placeholder="CVV (optional)"
-                inputMode="numeric"
-                maxLength="4"
-                className="w-full rounded-xl border border-zinc-300 px-3 py-3"
-              />
-              <p className="text-xs text-zinc-500">3 or 4 digits, saved encrypted. Never stored in plain text.</p>
-            </div>
+                <div className="flex flex-col sm:items-end">
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-white/65 sm:text-[10px]">Valid thru</span>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <label className="sr-only" htmlFor="card-expiry-month">
+                      Expiry month
+                    </label>
+                    <input
+                      id="card-expiry-month"
+                      required
+                      value={form.expiryMonth ?? ""}
+                      onChange={(e) => updateFormField("expiryMonth", formatExpiryMonthInput(e.target.value))}
+                      placeholder="MM"
+                      inputMode="numeric"
+                      autoComplete="cc-exp-month"
+                      maxLength={2}
+                      className={`w-11 border-0 border-b bg-white/10 px-0 py-1.5 text-center font-mono text-sm font-semibold tracking-wider text-white placeholder:text-white/40 outline-none ring-0 transition focus:bg-white/16 sm:w-12 sm:text-base ${
+                        fieldErrors.expiryMonth ? "border-red-300 focus:border-red-200" : "border-white/40 focus:border-white"
+                      }`}
+                    />
+                    <span className="pb-1 font-mono text-sm text-white/55" aria-hidden>
+                      /
+                    </span>
+                    <label className="sr-only" htmlFor="card-expiry-year">
+                      Expiry year
+                    </label>
+                    <input
+                      id="card-expiry-year"
+                      required
+                      value={form.expiryYear ?? ""}
+                      onChange={(e) => updateFormField("expiryYear", formatExpiryYearInput(e.target.value))}
+                      placeholder="YY"
+                      inputMode="numeric"
+                      autoComplete="cc-exp-year"
+                      maxLength={2}
+                      className={`w-11 border-0 border-b bg-white/10 px-0 py-1.5 text-center font-mono text-sm font-semibold tracking-wider text-white placeholder:text-white/40 outline-none ring-0 transition focus:bg-white/16 sm:w-12 sm:text-base ${
+                        fieldErrors.expiryYear ? "border-red-300 focus:border-red-200" : "border-white/40 focus:border-white"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.expiryMonth || fieldErrors.expiryYear ? (
+                    <p className="mt-1 max-w-56 text-right text-[10px] text-red-200 sm:text-xs">
+                      {[fieldErrors.expiryMonth, fieldErrors.expiryYear].filter(Boolean).join(" ")}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
 
-            <div className="space-y-1 md:col-span-2">
-              <textarea
-                value={form.privateNote ?? ""}
-                onChange={(e) => updateFormField("privateNote", e.target.value)}
-                placeholder="Private note (optional)"
-                maxLength={1000}
-                rows={3}
-                className="w-full rounded-xl border border-zinc-300 px-3 py-3"
-              />
-              <p className="text-xs text-zinc-500">Saved encrypted for your account. Good for reminders or card-specific notes, not CVV.</p>
+              <label className="relative mt-4 block min-w-0 sm:mt-5">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-white/65 sm:text-[10px]">Name on card</span>
+                <input
+                  value={form.nameOnCard ?? ""}
+                  onChange={(e) => updateFormField("nameOnCard", e.target.value)}
+                  placeholder="Optional"
+                  autoComplete="cc-name"
+                  className="mt-1 w-full border-0 border-b border-white/40 bg-white/10 px-0 py-1.5 text-xs font-medium uppercase tracking-wide text-white placeholder:normal-case placeholder:text-white/40 outline-none ring-0 transition focus:border-white focus:bg-white/16 sm:text-sm"
+                />
+              </label>
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-600" htmlFor="card-private-note">
+              Private note (optional)
+            </label>
+            <textarea
+              id="card-private-note"
+              value={form.privateNote ?? ""}
+              onChange={(e) => updateFormField("privateNote", e.target.value)}
+              placeholder="Reminders only — do not store CVV here"
+              maxLength={1000}
+              rows={3}
+              className="w-full rounded-xl border border-zinc-300 bg-zinc-50/80 px-3 py-2.5 text-zinc-900 outline-none transition focus:border-zinc-500 focus:ring-1 focus:ring-zinc-400"
+            />
+            <p className="text-xs text-zinc-500">Saved encrypted for your account.</p>
           </div>
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             All card details including card number and CVV are saved encrypted in your account. They can only be viewed after password confirmation and will automatically hide after 3 minutes.
           </div>
-
-          {showDetectedDetails ? (
-            <div className="overflow-hidden rounded-3xl border border-slate-800 bg-[linear-gradient(135deg,#0f172a_0%,#172554_55%,#1e293b_100%)] p-4 text-white shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-200/90">Detected Details</p>
-                  {binLookup.status !== "idle" ? <p className="mt-2 text-sm text-slate-200/75">{binLookup.message}</p> : null}
-                </div>
-                {binLookup.status === "loading" ? <LoaderCircle className="mt-0.5 h-4 w-4 animate-spin text-cyan-200" /> : null}
-              </div>
-
-              {detectedDetails ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Issuer</p>
-                    <p className="mt-2 text-base font-semibold leading-snug text-white">{detectedDetails.issuingBankName}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Country</p>
-                    <p className="mt-2 text-base font-semibold leading-snug text-white">{detectedDetails.issuingCountryName}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Network</p>
-                    <p className="mt-2 text-base font-semibold leading-snug text-cyan-200">{detectedDetails.network}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Type</p>
-                    <p className="mt-2 text-base font-semibold leading-snug text-amber-200">{detectedDetails.cardTypeLabel}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/12 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm sm:col-span-2">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300/85">Variant</p>
-                    <p className="mt-2 text-base font-semibold leading-snug text-emerald-200">{detectedDetails.variantLabel}</p>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <button type="submit" disabled={saving} className="rounded-xl bg-black px-4 py-3 text-white disabled:opacity-60">
@@ -632,36 +753,7 @@ export default function CardsPage() {
             ) : null}
             {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
           </div>
-        </form>
-
-        <div className={`relative self-start overflow-hidden rounded-[28px] bg-linear-to-br p-6 text-white shadow-[0_20px_60px_rgba(15,23,42,0.22)] aspect-[1.586/1] min-h-[260px] ${getNetworkAccent(previewNetwork)}`}>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.28),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.16),transparent_32%)]" />
-          <div className="relative flex h-full flex-col">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-white/70">Preview</p>
-                <p className="mt-3 text-2xl font-semibold tracking-[0.18em]">{previewNumber}</p>
-              </div>
-              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]">
-                {getNetworkLabel(previewNetwork)}
-              </span>
-            </div>
-
-            <div className="mt-auto grid gap-5 pt-10 sm:grid-cols-2">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Issuer</p>
-                <p className="mt-2 text-sm font-semibold tracking-[0.08em]">{previewTitle}</p>
-                <p className="mt-2 text-xs text-white/70">{previewSubtitle}</p>
-              </div>
-              <div className="sm:text-right">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Expires</p>
-                <p className="mt-2 text-sm font-semibold tracking-[0.14em]">{previewExpiry}</p>
-                <p className="mt-2 text-xs text-white/70">{detectedDetails?.issuingCountryName || "Country pending"}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </form>
 
       {loading ? (
         <Loader />
@@ -670,89 +762,130 @@ export default function CardsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {cards.map((card) => {
-            const revealed = Boolean(revealedCards[card.id]);
+            const sessionOpen = Boolean(revealedCards[card.id]);
             const revealedDetails = revealedCardDetails[card.id];
-            const cardNumberText =
-              revealed && revealedDetails?.cardNumber
-                ? formatCardNumberInput(revealedDetails.cardNumber)
-                : buildMaskedCardNumber(card.cardNumberLength, card.last4, revealed);
+            const flipOpen = Boolean(cardFlipOpen[card.id]);
+
+            const frontMasked = buildMaskedCardNumber(card.cardNumberLength, card.last4, false);
+            const backNumber = revealedDetails?.cardNumber
+              ? formatCardNumberInput(revealedDetails.cardNumber)
+              : frontMasked;
+            const backCvv =
+              sessionOpen && revealedDetails?.cvv ? String(revealedDetails.cvv) : "•••";
+
+            const cardTheme = card.bankTheme || PLATE_DEFAULT_THEME;
+            const nameLine = [card.nameOnCard || "Stored without cardholder name", card.privateNote ? `Note: ${card.privateNote}` : ""]
+              .filter(Boolean)
+              .join(" · ");
+
+            const disclaimerText = !card.hasStoredCardNumber
+              ? "Full number unavailable for this older card until you edit and save it again."
+              : "Encrypted in OWE DUE. Use the eye to unlock, then flip shows full details.";
+
+            const actionRow = (
+              <>
+                <button
+                  type="button"
+                  onClick={() => copyCardNumber(card)}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden />
+                  {sessionOpen && revealedDetails?.cardNumber ? "Copy Number" : "Copy Masked"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => startEdit(card)}
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => promptDeleteCard(card.id)}
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  Delete
+                </button>
+              </>
+            );
 
             return (
-              <article
-                key={card.id}
-                className={`relative overflow-hidden rounded-[28px] bg-linear-to-br p-5 text-white shadow-[0_20px_60px_rgba(15,23,42,0.2)] ${getNetworkAccent(card.network)}`}
-              >
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.28),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.16),transparent_32%)]" />
-                <div className="relative">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-white/70">{card.issuingBankName}</p>
-                      <p className="mt-2 text-lg font-semibold">{card.variantLabel}</p>
-                    </div>
-                    <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]">
-                      {card.network}
-                    </span>
+              <div key={card.id} className="min-w-0" style={{ perspective: "1400px" }}>
+                <div
+                  className="relative mx-auto aspect-[85.6/53.98] w-full max-w-[85.6mm]"
+                  style={{
+                    transformStyle: "preserve-3d",
+                    transform: flipOpen ? "rotateY(180deg)" : "rotateY(0deg)",
+                    transition: "transform 0.72s cubic-bezier(0.22, 1, 0.36, 1)",
+                  }}
+                >
+                  <div
+                    className="absolute inset-0 h-full w-full"
+                    style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+                  >
+                    <VirtualCreditCard
+                      fillContainer
+                      primaryHex={cardTheme.primaryHex}
+                      secondaryHex={cardTheme.secondaryHex}
+                      bankName={card.issuingBankName}
+                      badgeText="Virtual Card"
+                      cardNumberDisplay={frontMasked}
+                      cvvDisplay="•••"
+                      expiryDisplay={`${card.expiryMonth || "**"}/${card.expiryYear || "**"}`}
+                      cardTypeTag={String(card.cardTypeLabel || "CARD").toUpperCase()}
+                      networkLine={getNetworkLabel(card.network)}
+                      countryLine={card.issuingCountryName}
+                      nameLine={nameLine}
+                      disclaimer={disclaimerText}
+                      revealButton={{
+                        onClick: () => requestReveal(card.id),
+                        revealed: false,
+                        disabled: !card.hasStoredCardNumber,
+                        title: !card.hasStoredCardNumber
+                          ? "Save a full card number on this record to enable reveal"
+                          : revealedDetails?.cardNumber
+                            ? "View full card details (flip)"
+                            : "Unlock with your password",
+                      }}
+                    >
+                      {actionRow}
+                    </VirtualCreditCard>
                   </div>
 
-                  <p className="mt-8 text-2xl font-semibold tracking-[0.18em]">{cardNumberText}</p>
-
-                  <div className="mt-8 grid gap-4 text-sm sm:grid-cols-2">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Type</p>
-                      <p className="mt-2 font-semibold tracking-[0.08em]">{card.cardTypeLabel}</p>
-                      <p className="mt-2 text-xs text-white/75">{card.issuingCountryName}</p>
-                    </div>
-                    <div className="sm:text-right">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-white/60">Expires</p>
-                      <p className="mt-2 font-semibold tracking-[0.14em]">{`${card.expiryMonth || "**"}/${card.expiryYear || "**"}`}</p>
-                      <p className="mt-2 text-xs text-white/75">{card.nameOnCard || "Stored without cardholder name"}</p>
-                      {revealed && revealedDetails?.cvv ? (
-                        <p className="mt-2 text-xs text-white/75">CVV: {revealedDetails.cvv}</p>
-                      ) : null}
-                      {card.privateNote ? <p className="mt-2 text-xs text-white/75">{card.privateNote}</p> : null}
-                    </div>
-                  </div>
-
-                  {!card.hasStoredCardNumber ? (
-                    <p className="mt-3 text-xs text-white/75">
-                      Full number unavailable for this older card until you edit and save it again.
-                    </p>
-                  ) : null}
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => requestReveal(card.id)}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
+                  <div
+                    className="absolute inset-0 h-full w-full"
+                    style={{
+                      backfaceVisibility: "hidden",
+                      WebkitBackfaceVisibility: "hidden",
+                      transform: "rotateY(180deg)",
+                    }}
+                  >
+                    <VirtualCreditCard
+                      fillContainer
+                      primaryHex={cardTheme.primaryHex}
+                      secondaryHex={cardTheme.secondaryHex}
+                      bankName={card.issuingBankName}
+                      badgeText="Details"
+                      cardNumberDisplay={backNumber}
+                      cvvDisplay={backCvv}
+                      expiryDisplay={`${card.expiryMonth || "**"}/${card.expiryYear || "**"}`}
+                      cardTypeTag={String(card.cardTypeLabel || "CARD").toUpperCase()}
+                      networkLine={getNetworkLabel(card.network)}
+                      countryLine={card.issuingCountryName}
+                      nameLine={nameLine}
+                      disclaimer="Sensitive view — tap the eye to flip back. Auto-hides after 3 minutes."
+                      revealButton={{
+                        onClick: () => requestReveal(card.id),
+                        revealed: true,
+                        disabled: false,
+                        title: "Flip back to masked card",
+                      }}
                     >
-                      {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                      {revealed ? "Hide" : "Show"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => copyCardNumber(card)}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      {revealed && revealedDetails?.cardNumber ? "Copy Number" : "Copy Masked"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(card)}
-                      className="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => promptDeleteCard(card.id)}
-                      className="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
-                    >
-                      Delete
-                    </button>
+                      {actionRow}
+                    </VirtualCreditCard>
                   </div>
                 </div>
-              </article>
+              </div>
             );
           })}
         </div>

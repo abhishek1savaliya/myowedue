@@ -848,9 +848,6 @@ export function PostCard({
   );
 }
 
-/**
- * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x"; containerClassName?: string }} props
- */
 /** Tabs for /posts (portal) only; public /community shows a single feed. */
 const FEED_TABS_PORTAL = [
   { id: "all", label: "My posts" },
@@ -868,16 +865,38 @@ function buildPostsQuery(tab, cursor, portalMineHome) {
   return qs ? `/api/community/posts?${qs}` : "/api/community/posts";
 }
 
+function normalizeInitialFeedPost(p) {
+  if (!p || typeof p !== "object") return null;
+  return {
+    ...p,
+    share_count: p.share_count ?? 0,
+    likeCount: p.likeCount ?? 0,
+    commentCount: p.commentCount ?? 0,
+    liked: Boolean(p.liked),
+    authorVerified: Boolean(p.authorVerified),
+  };
+}
+
+/**
+ * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x"; containerClassName?: string; initialFeedPosts?: Array<object> | null }} props
+ */
 export default function CommunityFeedClient({
   variant = "portal",
   shareBasePath = "/community",
   loginNextPath = "/community",
   skin = "default",
   containerClassName = "",
+  initialFeedPosts = null,
 }) {
-  const [posts, setPosts] = useState([]);
+  const isPortal = variant === "portal";
+  const seedList = useMemo(() => {
+    if (isPortal || !Array.isArray(initialFeedPosts) || initialFeedPosts.length === 0) return [];
+    return initialFeedPosts.map(normalizeInitialFeedPost).filter(Boolean);
+  }, [isPortal, initialFeedPosts]);
+
+  const [posts, setPosts] = useState(() => seedList);
   const [nextCursor, setNextCursor] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => seedList.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
@@ -887,7 +906,6 @@ export default function CommunityFeedClient({
   const [feedTab, setFeedTab] = useState("all");
   const [shareTarget, setShareTarget] = useState(null);
 
-  const isPortal = variant === "portal";
   const isX = !isPortal && skin === "x";
   const portalMineHome = isPortal;
   const canInteract = Boolean(currentUserId);
@@ -932,11 +950,16 @@ export default function CommunityFeedClient({
         return;
       }
 
-      setLoading(true);
-      setError("");
-      setPosts([]);
-      setNextCursor(null);
-      nextCursorRef.current = null;
+      const hasSeed = !isPortal && feedTab === "all" && seedList.length > 0;
+      if (!hasSeed) {
+        setLoading(true);
+        setError("");
+        setPosts([]);
+        setNextCursor(null);
+        nextCursorRef.current = null;
+      } else {
+        setError("");
+      }
       try {
         const res = await fetch(buildPostsQuery(feedTab, null, portalMineHome), { credentials: "include", cache: "no-store" });
         const data = await res.json().catch(() => ({}));
@@ -944,7 +967,7 @@ export default function CommunityFeedClient({
         if (res.status === 503) {
           setConfigError(true);
           setError(data.message || "Community is not configured.");
-          setPosts([]);
+          if (!hasSeed) setPosts([]);
           return;
         }
         if (!res.ok) {
@@ -952,7 +975,11 @@ export default function CommunityFeedClient({
           if (isMissingCommunityTables(msg)) {
             setConfigError(true);
             setError(COMMUNITY_SETUP_MESSAGE);
-            setPosts([]);
+            if (!hasSeed) setPosts([]);
+            return;
+          }
+          if (hasSeed) {
+            setError(msg);
             return;
           }
           throw new Error(msg);
@@ -980,7 +1007,7 @@ export default function CommunityFeedClient({
     return () => {
       cancelled = true;
     };
-  }, [feedTab, tabAuthKey, portalMineHome]);
+  }, [feedTab, tabAuthKey, portalMineHome, isPortal, seedList.length]);
 
   const loadMore = useCallback(async () => {
     const cursor = nextCursorRef.current;
