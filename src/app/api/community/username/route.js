@@ -1,6 +1,7 @@
 import { fail, ok } from "@/lib/api";
 import { COMMUNITY_USERNAME_MAX, COMMUNITY_USERNAME_MIN, normalizeCommunityUsername } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
+import { upsertCommunityUsernameInAlgolia } from "@/lib/community-algolia";
 import { clearCommunityCaches } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import { connectDB } from "@/lib/db";
@@ -98,6 +99,7 @@ export async function PUT(request) {
   await User.updateOne({ _id: user._id }, { $set: { communityUsernamePromptSent: true } }).catch(() => {});
 
   await clearCommunityCaches();
+  void upsertCommunityUsernameInAlgolia({ userId: uid, username: normalized });
 
   return ok({ username: normalized, message: "Username saved" });
 }

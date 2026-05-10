@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/api";
+import { searchCommunityUsernamesWithAlgolia } from "@/lib/community-algolia";
 import { COMMUNITY_USERNAME_MAX, normalizeSavedUsernameHandle } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
@@ -27,6 +28,11 @@ export async function GET(request) {
 
   if (prefix.length < 1 || prefix.length > COMMUNITY_USERNAME_MAX) {
     return ok({ matches: [] });
+  }
+
+  const algoliaMatches = await searchCommunityUsernamesWithAlgolia(prefix, DEFAULT_LIMIT);
+  if (Array.isArray(algoliaMatches) && algoliaMatches.length > 0) {
+    return ok({ matches: algoliaMatches });
   }
 
   const { data, error } = await supabase.rpc("community_username_suggest", {

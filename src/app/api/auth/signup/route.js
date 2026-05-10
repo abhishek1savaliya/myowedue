@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import Notification from "@/models/Notification";
+import { upsertCommunityUsernameInAlgolia } from "@/lib/community-algolia";
 import { hashPassword, safeUser, signToken } from "@/lib/auth";
 import { fail, ok } from "@/lib/api";
 import { randomUUID } from "crypto";
@@ -96,6 +97,7 @@ export async function POST(request) {
       if (mapped) return fail(mapped, 503);
       return fail(insErr.message || "Failed to reserve username.", 500);
     }
+    void upsertCommunityUsernameInAlgolia({ userId: String(user._id), username: normalizedHandle });
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await Notification.create({

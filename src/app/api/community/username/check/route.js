@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/api";
+import { lookupCommunityUsernameInAlgolia } from "@/lib/community-algolia";
 import {
   COMMUNITY_USERNAME_MAX,
   COMMUNITY_USERNAME_MIN,
@@ -80,6 +81,15 @@ export async function GET(request) {
   }
 
   const uid = String(user._id);
+
+  // Fast path via Algolia index.
+  const algoliaHit = await lookupCommunityUsernameInAlgolia(s);
+  if (algoliaHit?.userId) {
+    if (algoliaHit.userId === uid) {
+      return ok({ ...baseMeta, status: "yours", available: true, normalized: s });
+    }
+    return ok({ ...baseMeta, status: "taken", available: false, normalized: s });
+  }
 
   const { data: row, error: qErr } = await supabase.from("community_usernames").select("user_id, username").eq("username", s).maybeSingle();
 

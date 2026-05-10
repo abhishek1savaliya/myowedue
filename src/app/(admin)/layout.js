@@ -6,21 +6,21 @@ import { clearStoredAdminProfile, readStoredAdminProfile, writeStoredAdminProfil
 const ROLE_BADGE = {
   superadmin: {
     label: "Super Admin",
-    cls: "bg-amber-500/20 text-amber-300 border border-amber-500/30",
+    cls: "border border-amber-300/70 bg-amber-100/80 text-amber-800",
     panel: "from-amber-500/15 to-orange-500/10",
-    active: "bg-amber-400/20 text-amber-200 border-amber-400/40",
+    active: "border-amber-300 bg-amber-100 text-amber-900",
   },
   manager: {
     label: "Manager",
-    cls: "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30",
+    cls: "border border-sky-300/70 bg-sky-100/80 text-sky-800",
     panel: "from-cyan-500/15 to-blue-500/10",
-    active: "bg-cyan-400/20 text-cyan-200 border-cyan-400/40",
+    active: "border-sky-300 bg-sky-100 text-sky-900",
   },
   support: {
     label: "Support",
-    cls: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
+    cls: "border border-emerald-300/70 bg-emerald-100/80 text-emerald-800",
     panel: "from-emerald-500/15 to-teal-500/10",
-    active: "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
+    active: "border-emerald-300 bg-emerald-100 text-emerald-900",
   },
 };
 
@@ -101,34 +101,34 @@ export default function AdminLayout({ children }) {
   const badge = ROLE_BADGE[role] || ROLE_BADGE.support;
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-slate-100">
+    <div className="flex min-h-screen bg-slate-950">
       {/* Sidebar */}
-      <aside className="relative flex w-64 flex-col border-r border-slate-800 bg-slate-900">
-        <div className={`pointer-events-none absolute inset-0 bg-linear-to-b ${badge.panel}`} />
+      <aside className="relative flex w-72 flex-col border-r border-amber-100 bg-white/95 shadow-[0_8px_32px_rgba(120,53,15,0.08)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(251,191,36,0.12),transparent_32%),radial-gradient(circle_at_90%_96%,rgba(16,185,129,0.1),transparent_38%)]" />
         {/* Logo */}
-        <div className="relative flex h-16 items-center gap-2 px-5 border-b border-slate-800">
-          <span className="text-cyan-300 text-xl font-bold">#</span>
-          <span className="font-semibold text-white tracking-wide">MyOweDue Admin</span>
+        <div className="relative flex h-16 items-center gap-2 border-b border-amber-100 px-5">
+          <span className="text-xl font-bold text-amber-600">✦</span>
+          <span className="font-semibold tracking-wide text-zinc-900">MyOweDue Admin</span>
         </div>
 
         {/* User info card */}
         {admin && (
-          <div className="relative mx-3 mt-4 rounded-xl bg-slate-900/70 border border-slate-700/80 p-3 space-y-1 backdrop-blur-sm">
+          <div className="relative mx-3 mt-4 space-y-1 rounded-2xl border border-amber-100/90 bg-[linear-gradient(180deg,#fffdf8_0%,#ffffff_100%)] p-3 shadow-sm shadow-amber-900/5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-white truncate">{admin.name}</p>
+              <p className="truncate text-sm font-semibold text-zinc-900">{admin.name}</p>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
                 {badge.label}
               </span>
             </div>
-            <p className="text-xs text-slate-400 truncate">{admin.email}</p>
+            <p className="truncate text-xs text-zinc-500">{admin.email}</p>
             {admin.employeeId && (
-              <p className="font-mono text-[10px] text-slate-500">{admin.employeeId}</p>
+              <p className="font-mono text-[10px] text-zinc-400">{admin.employeeId}</p>
             )}
           </div>
         )}
 
         {/* Nav */}
-        <nav className="relative flex-1 py-4 space-y-1 px-3">
+        <nav className="relative flex-1 space-y-1 px-3 py-4">
           {navItems.map((item) => (
             <a
               key={item.href}
@@ -136,7 +136,7 @@ export default function AdminLayout({ children }) {
               className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
                 pathname.startsWith(item.href)
                   ? badge.active
-                  : "border-transparent text-slate-400 hover:border-slate-700 hover:bg-slate-800/60 hover:text-white"
+                  : "border-transparent text-zinc-600 hover:border-amber-200 hover:bg-amber-50/70 hover:text-zinc-900"
               }`}
             >
               <span>{item.icon}</span>
@@ -146,11 +146,11 @@ export default function AdminLayout({ children }) {
         </nav>
 
         {/* Logout */}
-        <div className="relative p-3 border-t border-slate-800">
+        <div className="relative border-t border-amber-100 p-3">
           <button
             onClick={handleLogout}
             disabled={loggingOut}
-            className="w-full rounded-xl border border-slate-700 px-3 py-2.5 text-sm font-medium text-slate-300 hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300 transition-colors text-left flex items-center gap-2"
+            className="flex w-full items-center gap-2 rounded-xl border border-amber-200/90 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:border-rose-400/50 hover:bg-rose-50 hover:text-rose-700"
           >
             <span>x</span>
             {loggingOut ? "Logging out..." : "Sign out"}
@@ -159,14 +159,14 @@ export default function AdminLayout({ children }) {
       </aside>
 
       {/* Main */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-slate-950 text-slate-100">
         {/* Top bar */}
-        <header className="flex h-14 items-center justify-between border-b border-slate-800 bg-slate-900/50 px-6">
-          <h2 className="text-sm font-medium text-slate-300 capitalize">
+        <header className="flex h-14 items-center justify-between border-b border-slate-800 bg-slate-900/70 px-6 backdrop-blur-sm">
+          <h2 className="text-sm font-medium capitalize text-slate-200">
             {isAdminSide ? "Admin Panel" : "Employee Panel"}
           </h2>
           {admin && (
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2 text-xs text-slate-300">
               <span className={`rounded-full px-2.5 py-1 font-semibold ${badge.cls}`}>
                 {badge.label}
               </span>

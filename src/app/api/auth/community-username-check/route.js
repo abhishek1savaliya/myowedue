@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/api";
+import { lookupCommunityUsernameInAlgolia } from "@/lib/community-algolia";
 import {
   COMMUNITY_USERNAME_MAX,
   COMMUNITY_USERNAME_MIN,
@@ -73,6 +74,12 @@ export async function GET(request) {
 
   if (RESERVED_COMMUNITY_USERNAMES.has(s)) {
     return ok({ ...baseMeta, status: "reserved", available: false, normalized: s });
+  }
+
+  // Fast path via Algolia.
+  const algoliaHit = await lookupCommunityUsernameInAlgolia(s);
+  if (algoliaHit?.userId) {
+    return ok({ ...baseMeta, status: "taken", available: false, normalized: s });
   }
 
   const { data: row, error: qErr } = await supabase

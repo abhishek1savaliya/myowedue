@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   Sparkles,
   FileDown,
+  RefreshCw,
 } from "lucide-react";
 import { useAppAlert } from "@/components/AppAlertProvider";
 
@@ -244,6 +245,7 @@ function SuperAdminDashboard({ admin }) {
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [reindexLoading, setReindexLoading] = useState(false);
 
   async function downloadReportPdf() {
     setPdfLoading(true);
@@ -276,6 +278,30 @@ function SuperAdminDashboard({ admin }) {
       showAlert("Network error while downloading the report.", { severity: "error" });
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  async function reindexAlgoliaUsernames() {
+    setReindexLoading(true);
+    try {
+      const res = await fetch("/api/admin/algolia/reindex-usernames", {
+        method: "POST",
+        cache: "no-store",
+      });
+      if (res.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert(j.message || "Failed to reindex usernames.", { severity: "error" });
+        return;
+      }
+      showAlert(`Reindex complete: ${j.indexed ?? 0}/${j.scanned ?? 0} usernames indexed.`, { severity: "success" });
+    } catch {
+      showAlert("Network error while reindexing usernames.", { severity: "error" });
+    } finally {
+      setReindexLoading(false);
     }
   }
 
@@ -368,6 +394,15 @@ function SuperAdminDashboard({ admin }) {
               >
                 <FileDown className="h-4 w-4 shrink-0" strokeWidth={2} />
                 {pdfLoading ? "Building PDF…" : "Export full report (PDF)"}
+              </button>
+              <button
+                type="button"
+                onClick={reindexAlgoliaUsernames}
+                disabled={reindexLoading}
+                className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/15 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-sm transition hover:bg-cyan-500/25 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 shrink-0 ${reindexLoading ? "animate-spin" : ""}`} strokeWidth={2} />
+                {reindexLoading ? "Reindexing…" : "Reindex usernames (Algolia)"}
               </button>
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Signed in</p>
