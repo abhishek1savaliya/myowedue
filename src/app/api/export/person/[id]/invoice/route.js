@@ -200,542 +200,253 @@ export async function GET(request, { params }) {
     }
 
     const pdfDoc = await PDFDocument.create();
-    /** Serif for headings / luxury feel; sans for dense table rows (matches app display + body pairing). */
-    const fontSerif = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-    const fontSerifBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const isPremiumPdf = supportsPremiumExports(user);
 
     const width = 595;
     const height = 842;
-    const margin = 40;
+    const margin = 52;
     const contentWidth = width - margin * 2;
-    const rowHeight = 22;
+    const rightEdge = margin + contentWidth;
+    const rowHeight = 19;
+
+    const black = rgb(0.06, 0.06, 0.06);
+    const gray = rgb(0.42, 0.42, 0.42);
+    const lineCol = rgb(0.88, 0.88, 0.88);
+    const zebra = rgb(0.985, 0.985, 0.985);
+    const amber = rgb(0.92, 0.58, 0.08);
+    const emerald = rgb(0.06, 0.52, 0.4);
+
+    const invoiceNo = `INV-${String(person._id).slice(-8).toUpperCase()}-${scope.slice(0, 3).toUpperCase()}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+    const invoiceDateStr = new Date().toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    const drawLine = (pg, yLine, thickness = 0.75) => {
+      pg.drawLine({
+        start: { x: margin, y: yLine },
+        end: { x: rightEdge, y: yLine },
+        thickness,
+        color: lineCol,
+      });
+    };
+
+    const drawPlus = (pg, cx, cy, s = 4.5) => {
+      pg.drawLine({ start: { x: cx - s, y: cy }, end: { x: cx + s, y: cy }, thickness: 1.1, color: black });
+      pg.drawLine({ start: { x: cx, y: cy - s }, end: { x: cx, y: cy + s }, thickness: 1.1, color: black });
+    };
+
+    const widthOf = (text, size, f = font) => f.widthOfTextAtSize(text, size);
+
+    const drawRight = (pg, text, size, f, color, baselineY) => {
+      const w = widthOf(text, size, f);
+      pg.drawText(text, { x: rightEdge - w, y: baselineY, size, font: f, color });
+    };
+
+    const blankPage = (pg) => {
+      pg.drawRectangle({ x: 0, y: 0, width, height, color: rgb(1, 1, 1) });
+    };
 
     let page = pdfDoc.addPage([width, height]);
+    blankPage(page);
     let y = height - margin;
 
-    /** Warm stone, amber, emerald — aligned with app `globals.css` / OWE DUE brand. */
-    const theme = {
-      pagePaper: rgb(0.99, 0.978, 0.952),
-      frameGold: rgb(0.78, 0.66, 0.42),
-      ink: rgb(0.11, 0.1, 0.09),
-      inkMuted: rgb(0.38, 0.34, 0.3),
-      inkSoft: rgb(0.52, 0.47, 0.42),
-      accentAmber: rgb(0.94, 0.62, 0.12),
-      accentAmberDeep: rgb(0.72, 0.48, 0.08),
-      accentEmerald: rgb(0.06, 0.65, 0.48),
-      accentEmeraldSoft: rgb(0.12, 0.55, 0.42),
-      headerBg: rgb(0.13, 0.11, 0.095),
-      headerStripeGold: rgb(0.93, 0.72, 0.26),
-      headerStripeEmerald: rgb(0.1, 0.58, 0.44),
-      headerText: rgb(0.99, 0.98, 0.95),
-      headerSub: rgb(0.82, 0.76, 0.66),
-      metricNeutral: {
-        bg: rgb(0.99, 0.97, 0.93),
-        border: rgb(0.82, 0.7, 0.48),
-        title: rgb(0.42, 0.36, 0.28),
-        value: rgb(0.14, 0.12, 0.1),
-      },
-      metricYellow: {
-        bg: rgb(0.995, 0.97, 0.88),
-        border: rgb(0.9, 0.72, 0.28),
-        title: rgb(0.48, 0.36, 0.12),
-        value: rgb(0.32, 0.22, 0.06),
-      },
-      metricRed: {
-        bg: rgb(0.99, 0.93, 0.92),
-        border: rgb(0.78, 0.38, 0.36),
-        title: rgb(0.52, 0.14, 0.12),
-        value: rgb(0.42, 0.1, 0.1),
-      },
-      metricGreen: {
-        bg: rgb(0.93, 0.99, 0.96),
-        border: rgb(0.35, 0.68, 0.52),
-        title: rgb(0.1, 0.42, 0.28),
-        value: rgb(0.06, 0.32, 0.2),
-      },
-      tableHeaderBg: rgb(0.26, 0.21, 0.16),
-      tableHeaderAccent: rgb(0.94, 0.62, 0.12),
-      tableHeaderText: rgb(0.99, 0.96, 0.9),
-      rowAlt: rgb(0.992, 0.988, 0.978),
-      rowLine: rgb(0.9, 0.86, 0.78),
-      summaryBg: rgb(0.99, 0.975, 0.94),
-      footer: rgb(0.48, 0.42, 0.36),
-      chartBg: rgb(0.99, 0.975, 0.94),
-      chartBorder: rgb(0.82, 0.72, 0.52),
-      chartTrack: rgb(0.93, 0.9, 0.84),
-      chartTitle: rgb(0.28, 0.22, 0.16),
-      chartSubtitle: rgb(0.45, 0.4, 0.34),
+    const col = {
+      desc: margin + 6,
+      amt: margin + 248,
+      tot: margin + 338,
+      st: margin + 408,
+      dt: margin + 468,
     };
 
-    const drawPageCanvas = (targetPage) => {
-      targetPage.drawRectangle({ x: 0, y: 0, width, height, color: theme.pagePaper });
-      targetPage.drawRectangle({
-        x: 22,
-        y: 22,
-        width: width - 44,
-        height: height - 44,
-        color: theme.pagePaper,
-        borderWidth: 1.1,
-        borderColor: theme.frameGold,
+    const drawInvoiceTop = (pg, yy) => {
+      let t = yy;
+      drawPlus(pg, margin + 7, t - 9, 4.5);
+      pg.drawText("OWE DUE", { x: margin + 18, y: t - 14, size: 20, font: bold, color: black });
+      pg.drawText("Personal credit & debit clarity", { x: margin + 18, y: t - 30, size: 8.5, font, color: gray });
+      pg.drawLine({
+        start: { x: margin + 18, y: t - 34 },
+        end: { x: margin + 168, y: t - 34 },
+        thickness: 2,
+        color: amber,
       });
-    };
 
-    drawPageCanvas(page);
-
-    const drawHeader = () => {
-      const bandH = 88;
-      page.drawRectangle({ x: margin, y: y - bandH, width: contentWidth, height: bandH, color: theme.headerBg });
-      page.drawRectangle({ x: margin, y: y - bandH, width: 5, height: bandH, color: theme.headerStripeGold });
-      page.drawRectangle({ x: margin + 5, y: y - bandH, width: 3, height: bandH, color: theme.headerStripeEmerald });
-      page.drawRectangle({ x: margin + 8, y: y - bandH, width: 4, height: bandH, color: theme.headerStripeGold });
+      const invWord = "Invoice";
+      drawRight(pg, invWord, 30, bold, black, t - 4);
+      drawRight(pg, "Invoice No.", 8, bold, gray, t - 26);
+      drawRight(pg, invoiceNo, 9, bold, black, t - 38);
+      drawRight(pg, "Date", 8, bold, gray, t - 52);
+      drawRight(pg, invoiceDateStr, 9, bold, black, t - 64);
       if (isPremiumPdf) {
-        page.drawRectangle({
-          x: margin + contentWidth - 6,
-          y: y - bandH,
-          width: 6,
-          height: bandH,
-          color: theme.headerStripeEmerald,
-        });
+        drawRight(pg, "Premium", 7, bold, emerald, t - 76);
       }
-
-      page.drawText("STATEMENT OF ACCOUNT", {
-        x: margin + 22,
-        y: y - 20,
-        size: 8.5,
-        font: fontSerifBold,
-        color: theme.headerSub,
-      });
-      page.drawText("OWE DUE", {
-        x: margin + 22,
-        y: y - 40,
-        size: 22,
-        font: fontSerifBold,
-        color: theme.headerText,
-      });
-      page.drawText("Personal credit & debit clarity", {
-        x: margin + 22,
-        y: y - 58,
-        size: 10,
-        font: fontSerif,
-        color: theme.headerSub,
-      });
-      page.drawText(`Issued ${new Date().toLocaleDateString()} · ${new Date().toLocaleTimeString()}`, {
-        x: margin + 22,
-        y: y - 74,
-        size: 8,
-        font: font,
-        color: theme.headerSub,
-      });
-      if (isPremiumPdf) {
-        page.drawRectangle({
-          x: margin + contentWidth - 86,
-          y: y - 36,
-          width: 74,
-          height: 18,
-          color: theme.accentAmber,
-          borderWidth: 0.4,
-          borderColor: theme.accentAmberDeep,
-        });
-        page.drawText("PREMIUM", {
-          x: margin + contentWidth - 78,
-          y: y - 30,
-          size: 8,
-          font: bold,
-          color: theme.headerBg,
-        });
-      }
-      y -= bandH + 20;
+      return t - 92;
     };
 
-    const drawCard = (x, title, value, tone = "neutral") => {
-      const palette = {
-        neutral: theme.metricNeutral,
-        yellow: theme.metricYellow,
-        red: theme.metricRed,
-        green: theme.metricGreen,
-      };
-      const style = palette[tone] || palette.neutral;
-
-      page.drawRectangle({ x, y: y - 56, width: 166, height: 56, color: style.bg, borderWidth: 1, borderColor: style.border });
-      page.drawText(title, {
-        x: x + 10,
-        y: y - 20,
-        size: 7.5,
-        font: fontSerif,
-        color: style.title,
-      });
-      page.drawText(value, {
-        x: x + 10,
-        y: y - 42,
-        size: 14,
-        font: fontSerifBold,
-        color: style.value,
-      });
+    const drawParties = (pg, yy) => {
+      let t = yy;
+      pg.drawText("From", { x: margin, y: t, size: 9, font: bold, color: black });
+      drawRight(pg, "Billed to:", 9, bold, black, t);
+      t -= 14;
+      pg.drawText(String(user.name || ""), { x: margin, y: t, size: 9, font, color: black });
+      drawRight(pg, String(person.name || ""), 9, font, black, t);
+      t -= 12;
+      pg.drawText(String(user.email || ""), { x: margin, y: t, size: 8.5, font, color: gray });
+      drawRight(pg, String(person.email || "—"), 8.5, font, gray, t);
+      t -= 11;
+      pg.drawText(user.phone ? String(user.phone) : "—", { x: margin, y: t, size: 8.5, font, color: gray });
+      drawRight(pg, String(person.phone || "—"), 8.5, font, gray, t);
+      return t - 18;
     };
 
-    const drawRemainingBanner = () => {
-      const bg = userNeedsToPay ? theme.metricYellow.bg : theme.metricRed.bg;
-      const border = userNeedsToPay ? theme.metricYellow.border : theme.metricRed.border;
-      const titleColor = userNeedsToPay ? theme.metricYellow.title : theme.metricRed.title;
-      const valueColor = userNeedsToPay ? theme.metricYellow.value : theme.metricRed.value;
-
-      page.drawRectangle({
-        x: margin,
-        y: y - 62,
-        width: contentWidth,
-        height: 62,
-        color: bg,
-        borderWidth: 1.2,
-        borderColor: border,
-      });
-      page.drawRectangle({ x: margin, y: y - 62, width: 4, height: 62, color: userNeedsToPay ? theme.accentAmber : theme.accentAmberDeep });
-
-      page.drawText("OUTSTANDING BALANCE", {
-        x: margin + 14,
-        y: y - 22,
-        size: 8,
-        font: fontSerifBold,
-        color: titleColor,
-      });
-
-      page.drawText(`${remainingLabel}`, {
-        x: margin + 14,
-        y: y - 38,
-        size: 10,
-        font: fontSerif,
-        color: titleColor,
-      });
-      page.drawText(`${money(remainingAmount)} ${targetCurrency}`, {
-        x: margin + 14,
-        y: y - 54,
-        size: 16,
-        font: fontSerifBold,
-        color: valueColor,
-      });
-
-      y -= 74;
-    };
-
-    const drawBottomInsightChart = (targetPage, startY) => {
-      const chartX = margin;
-      const chartWidth = contentWidth;
-      const chartHeight = 80;
-      const chartY = startY - chartHeight;
-
-      const metrics = [
-        { label: `Given by ${userFirstName}`, value: creditTotal, color: theme.accentAmber },
-        { label: `Received by ${userFirstName}`, value: debitTotal, color: theme.accentEmerald },
-        {
-          label: `Remaining by ${userNeedsToPay ? userFirstName : personFirstName}`,
-          value: remainingAmount,
-          color: theme.accentAmberDeep,
-        },
-      ];
-
-      const maxMetricValue = Math.max(...metrics.map((metric) => metric.value), 1);
-      const barX = chartX + 160;
-      const barMaxWidth = chartWidth - 270;
-
-      targetPage.drawRectangle({
-        x: chartX,
-        y: chartY,
-        width: chartWidth,
-        height: chartHeight,
-        color: theme.chartBg,
-        borderWidth: 0.8,
-        borderColor: theme.chartBorder,
-      });
-
-      targetPage.drawText("BALANCE OVERVIEW", {
-        x: chartX + 10,
-        y: chartY + chartHeight - 14,
-        size: 9,
-        font: fontSerifBold,
-        color: theme.chartTitle,
-      });
-      targetPage.drawText(`${userFirstName} · ${personFirstName}`, {
-        x: chartX + 118,
-        y: chartY + chartHeight - 14,
-        size: 8,
-        font: fontSerif,
-        color: theme.chartSubtitle,
-      });
-
-      metrics.forEach((metric, index) => {
-        const rowY = chartY + chartHeight - 30 - index * 18;
-        const barWidth = Math.max(2, (metric.value / maxMetricValue) * barMaxWidth);
-
-        targetPage.drawText(metric.label, {
-          x: chartX + 10,
-          y: rowY,
-          size: 8,
-          font: fontSerif,
-          color: theme.inkMuted,
-        });
-
-        targetPage.drawRectangle({
-          x: barX,
-          y: rowY - 1,
-          width: barMaxWidth,
-          height: 8,
-          color: theme.chartTrack,
-        });
-
-        targetPage.drawRectangle({
-          x: barX,
-          y: rowY - 1,
-          width: barWidth,
-          height: 8,
-          color: metric.color,
-        });
-
-        targetPage.drawText(`${money(metric.value)} ${targetCurrency}`, {
-          x: barX + barMaxWidth + 8,
-          y: rowY,
-          size: 8,
-          font: fontSerifBold,
-          color: theme.ink,
-        });
-      });
-
-      return chartY - 10;
-    };
-
-    const drawTableHeader = () => {
-      page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: theme.tableHeaderBg });
-      page.drawRectangle({ x: margin, y: y - rowHeight, width: 4, height: rowHeight, color: theme.tableHeaderAccent });
-      const th = theme.tableHeaderText;
-      page.drawText("Type", { x: margin + 8, y: y - 15, size: 8.5, font: bold, color: th });
-      page.drawText("Amount", { x: margin + 92, y: y - 15, size: 8.5, font: bold, color: th });
-      page.drawText("Total", { x: margin + 220, y: y - 15, size: 8.5, font: bold, color: th });
-      page.drawText("Status", { x: margin + 310, y: y - 15, size: 8.5, font: bold, color: th });
-      page.drawText("Date", { x: margin + 380, y: y - 15, size: 8.5, font: bold, color: th });
-      page.drawText("Notes", { x: margin + 460, y: y - 15, size: 8.5, font: bold, color: th });
+    const drawTableHeaderRow = (pg) => {
+      pg.drawText("Description", { x: col.desc, y, size: 8.5, font: bold, color: black });
+      pg.drawText("Amount", { x: col.amt, y, size: 8.5, font: bold, color: black });
+      pg.drawText("Total", { x: col.tot, y, size: 8.5, font: bold, color: black });
+      pg.drawText("Status", { x: col.st, y, size: 8.5, font: bold, color: black });
+      pg.drawText("Date", { x: col.dt, y, size: 8.5, font: bold, color: black });
       y -= rowHeight;
+      drawLine(pg, y + 4);
+      y -= 6;
     };
 
-    const ensureSpace = (spaceNeeded = rowHeight) => {
-      if (y - spaceNeeded < margin + 26) {
+    const ensureSpace = (need = rowHeight + 8) => {
+      if (y - need < margin + 100) {
         page = pdfDoc.addPage([width, height]);
+        blankPage(page);
         y = height - margin;
-        drawPageCanvas(page);
-        drawTableHeader();
+        page.drawText("OWE DUE — continued", { x: margin, y, size: 9, font: bold, color: gray });
+        y -= 16;
+        drawLine(page, y + 6);
+        y -= 14;
+        drawTableHeaderRow(page);
       }
     };
 
-    drawHeader();
-
-    page.drawRectangle({
-      x: margin,
-      y: y - 52,
-      width: contentWidth,
-      height: 52,
-      color: rgb(0.995, 0.99, 0.965),
-      borderWidth: 0.75,
-      borderColor: theme.frameGold,
-    });
-    page.drawText("FROM", {
-      x: margin + 10,
-      y: y - 16,
-      size: 7,
-      font: fontSerifBold,
-      color: theme.inkSoft,
-    });
-    page.drawText(`${user.name}`, {
-      x: margin + 10,
-      y: y - 30,
-      size: 10,
-      font: fontSerifBold,
-      color: theme.ink,
-    });
-    page.drawText(user.email, {
-      x: margin + 10,
-      y: y - 42,
-      size: 8,
-      font: font,
-      color: theme.accentEmeraldSoft,
-    });
-    page.drawText("TO", {
-      x: margin + 300,
-      y: y - 16,
-      size: 7,
-      font: fontSerifBold,
-      color: theme.inkSoft,
-    });
-    page.drawText(person.name, {
-      x: margin + 300,
-      y: y - 30,
-      size: 10,
-      font: fontSerifBold,
-      color: theme.accentAmberDeep,
-    });
-    y -= 62;
-
-    page.drawText(`Contact · ${person.email || "—"} · ${person.phone || "—"}`, {
-      x: margin,
-      y,
-      size: 8.5,
-      font: fontSerif,
-      color: theme.inkMuted,
-    });
-    y -= 14;
-
-    page.drawText(`Denomination · ${targetCurrency}`, {
-      x: margin,
-      y,
-      size: 8.5,
-      font: fontSerifBold,
-      color: theme.ink,
-    });
-    y -= 14;
-
-    page.drawText(
-      scope === "all"
-        ? "Scope · All entries (credits & debits, every status)"
-        : `Scope · ${scope.toUpperCase()} entries only`,
-      {
-        x: margin,
-        y,
-        size: 8.5,
-        font: fontSerif,
-        color: theme.inkMuted,
-      }
-    );
+    y = drawInvoiceTop(page, y);
+    drawLine(page, y + 8);
+    y -= 20;
+    y = drawParties(page, y);
+    drawLine(page, y + 6);
     y -= 18;
 
-    drawCard(margin, "ENTRY COUNT", String(transactions.length), "neutral");
-    drawCard(margin + 177, "PENDING ENTRIES", String(pendingCount), "neutral");
-    y -= 70;
+    const scopeLine =
+      scope === "all" ? `Scope: All entries · Currency: ${targetCurrency}` : `Scope: ${scope.toUpperCase()} · Currency: ${targetCurrency}`;
+    page.drawText(`${transactions.length} line items · ${pendingCount} pending · ${scopeLine}`, {
+      x: margin,
+      y,
+      size: 8,
+      font,
+      color: gray,
+    });
+    y -= 22;
 
-    drawRemainingBanner();
+    page.drawText("Outstanding balance", { x: margin, y, size: 8, font: bold, color: gray });
+    drawRight(page, `${money(remainingAmount)} ${targetCurrency}`, 11, bold, black, y);
+    page.drawText(short(remainingLabel, 72), { x: margin, y: y - 12, size: 7.5, font, color: gray });
+    y -= 28;
 
-    drawTableHeader();
+    drawLine(page, y + 8);
+    y -= 18;
+    drawTableHeaderRow(page);
 
     if (!transactions.length) {
       ensureSpace();
-      page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: theme.rowAlt });
-      page.drawText("No line items in this view.", {
-        x: margin + 8,
-        y: y - 15,
-        size: 9,
-        font: fontSerif,
-        color: theme.inkMuted,
-      });
+      page.drawText("No transactions in this view.", { x: col.desc, y, size: 9, font, color: gray });
       y -= rowHeight;
     } else {
       convertedTransactions.forEach((tx, idx) => {
         ensureSpace();
         if (idx % 2 === 0) {
-          page.drawRectangle({ x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight, color: theme.rowAlt });
+          page.drawRectangle({ x: margin, y: y - rowHeight + 2, width: contentWidth, height: rowHeight, color: zebra });
         }
-
         const isCredit = tx.type === "credit";
-        const typeColor = isCredit ? theme.accentEmerald : theme.accentAmberDeep;
+        const tone = isCredit ? emerald : amber;
         const amountLabel =
           tx.currency === targetCurrency
             ? `${money(tx.originalAmount)} ${tx.currency}`
-            : `${money(tx.originalAmount)} ${tx.currency} × ${money(tx.conversionRate)}`;
+            : `${money(tx.originalAmount)} ${tx.currency}`;
         const totalLabel = `${money(tx.convertedAmount)} ${targetCurrency}`;
-
-        page.drawText(tx.type.toUpperCase(), { x: margin + 8, y: y - 15, size: 8.5, font: bold, color: typeColor });
-        page.drawText(amountLabel, { x: margin + 92, y: y - 15, size: 8.5, font: bold, color: typeColor });
-        page.drawText(totalLabel, { x: margin + 220, y: y - 15, size: 8.5, font: bold, color: typeColor });
-        page.drawText(tx.status.toUpperCase(), { x: margin + 310, y: y - 15, size: 8.5, font, color: theme.inkMuted });
-        page.drawText(new Date(tx.date).toLocaleDateString(), { x: margin + 380, y: y - 15, size: 8.5, font, color: theme.inkMuted });
-        page.drawText(short(tx.notes || "-", 28), { x: margin + 460, y: y - 15, size: 8.5, font, color: theme.inkMuted });
+        const desc = `${tx.type.toUpperCase()} · ${short(tx.notes || "—", 48)}`;
+        page.drawText(short(desc, 52), { x: col.desc, y, size: 7.5, font: bold, color: tone });
+        page.drawText(short(amountLabel, 18), { x: col.amt, y, size: 7.5, font, color: black });
+        page.drawText(totalLabel, { x: col.tot, y, size: 7.5, font: bold, color: black });
+        page.drawText(tx.status.toUpperCase(), { x: col.st, y, size: 7.5, font, color: gray });
+        page.drawText(new Date(tx.date).toLocaleDateString(), { x: col.dt, y, size: 7.5, font, color: gray });
         y -= rowHeight;
       });
     }
 
+    drawLine(page, y + 6);
+    y -= 20;
+
     const signedText = `${signedScopeTotal >= 0 ? "+" : "-"}${money(Math.abs(signedScopeTotal))} ${targetCurrency}`;
     const isNegative = signedScopeTotal < 0;
-    const summaryColor = isNegative ? theme.metricRed.value : theme.accentEmerald;
     const summaryMessage = isNegative
-      ? `${person.name}, please send ${userFirstName} this amount ASAP`
-      : `${userFirstName} will pay ${person.name} ASAP`;
+      ? `${person.name} -> send to ${userFirstName}`
+      : `${userFirstName} -> pay ${person.name}`;
 
-    const conversionAreaHeight = conversionNotes.length ? 18 + conversionNotes.length * 14 + 14 : 0;
-    const chartAreaHeight = 98;
-    ensureSpace(54 + conversionAreaHeight + chartAreaHeight);
+    page.drawText("Due / notes", { x: margin, y, size: 8, font: bold, color: gray });
+    page.drawText(short(summaryMessage, 85), { x: margin, y: y - 12, size: 8, font, color: gray });
 
-    page.drawRectangle({
-      x: margin,
-      y: y - 44,
-      width: contentWidth,
-      height: 44,
-      color: theme.summaryBg,
-      borderWidth: 1,
-      borderColor: theme.frameGold,
-    });
-    page.drawRectangle({ x: margin, y: y - 44, width: 3, height: 44, color: summaryColor });
-    page.drawText(`NET (${scope.toUpperCase()}) · ${signedText}`, {
-      x: margin + 12,
-      y: y - 18,
-      size: 11,
-      font: fontSerifBold,
-      color: summaryColor,
-    });
-    page.drawText(summaryMessage, {
-      x: margin + 12,
-      y: y - 34,
-      size: 9,
-      font: fontSerif,
-      color: theme.inkMuted,
-    });
-    y -= 52;
+    drawRight(page, "Net (this scope)", 8, bold, gray, y);
+    drawRight(page, signedText, 9, font, black, y - 12);
+    drawRight(page, "Total outstanding", 8, bold, gray, y - 28);
+    drawRight(page, `${money(remainingAmount)} ${targetCurrency}`, 11, bold, black, y - 40);
+    y -= 56;
 
     if (conversionNotes.length) {
-      const noteX = margin + contentWidth - 180;
-      page.drawText("FX reference", {
-        x: noteX,
-        y: y - 15,
-        size: 8,
-        font: fontSerifBold,
-        color: theme.ink,
-      });
-      y -= 18;
+      ensureSpace(40);
+      drawLine(page, y + 8);
+      y -= 14;
+      page.drawText("FX reference", { x: margin, y, size: 8, font: bold, color: black });
+      y -= 12;
       conversionNotes.forEach((note) => {
-        page.drawText(note, {
-          x: noteX,
-          y: y - 12,
-          size: 8,
-          font: fontSerif,
-          color: theme.inkMuted,
-        });
-        y -= 14;
+        page.drawText(short(note, 95), { x: margin, y, size: 7.5, font, color: gray });
+        y -= 11;
       });
-      page.drawText(`As of ${conversionTimestamp}`, {
-        x: noteX,
-        y: y - 10,
-        size: 7.5,
-        font: font,
-        color: theme.inkSoft,
-      });
-      y -= 18;
+      page.drawText(`As of ${conversionTimestamp}`, { x: margin, y, size: 7, font: font, color: gray });
+      y -= 16;
     }
 
-    y = drawBottomInsightChart(page, y);
+    ensureSpace(72);
+    drawLine(page, y + 8);
+    y -= 22;
+    page.drawText("Summary", { x: margin, y, size: 8, font: bold, color: black });
+    y -= 12;
+    page.drawText(`Credits recorded: ${money(creditTotal)} ${targetCurrency}`, { x: margin, y, size: 8, font, color: gray });
+    y -= 11;
+    page.drawText(`Debits recorded: ${money(debitTotal)} ${targetCurrency}`, { x: margin, y, size: 8, font, color: gray });
+    y -= 11;
+    page.drawText(`Outstanding: ${money(remainingAmount)} ${targetCurrency}`, { x: margin, y, size: 8, font: bold, color: black });
+    y -= 28;
 
-    page.drawText("OWE DUE · myowedue.com", {
-      x: margin,
-      y: 18,
-      size: 8,
-      font: fontSerif,
-      color: theme.footer,
-    });
+    drawLine(page, y + 8);
+    y -= 22;
+    const footerY = Math.max(margin + 52, y);
+    page.drawText("Contact", { x: margin, y: footerY, size: 9, font: bold, color: black });
+    page.drawText("Payment", { x: margin + 280, y: footerY, size: 9, font: bold, color: black });
+    let fy = footerY - 14;
+    page.drawText(process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@myowedue.com", { x: margin, y: fy, size: 8, font, color: gray });
+    page.drawText("Settle per your agreement with the counterparty.", { x: margin + 280, y: fy, size: 8, font, color: gray });
+    fy -= 11;
+    page.drawText(String(user.email), { x: margin, y: fy, size: 8, font, color: gray });
+    page.drawText("OWE DUE · myowedue.com", { x: margin + 280, y: fy, size: 8, font, color: gray });
 
     const pages = pdfDoc.getPages();
     const totalPages = pages.length;
+    const pageLabel = (i) => `Page ${i + 1} of ${totalPages}`;
     pages.forEach((pdfPage, index) => {
-      pdfPage.drawText(`Page ${index + 1} of ${totalPages}`, {
-        x: pdfPage.getWidth() - margin - 70,
-        y: 18,
+      const label = pageLabel(index);
+      pdfPage.drawText(label, {
+        x: width - margin - widthOf(label, 8),
+        y: 22,
         size: 8,
         font,
-        color: theme.footer,
+        color: gray,
       });
     });
 

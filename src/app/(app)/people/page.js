@@ -333,20 +333,36 @@ export default function PeoplePage() {
 
       {invoiceModal ? (
         <ModalPortal>
-            <div className="fixed inset-0 z-[100] flex items-end justify-center bg-stone-950/55 backdrop-blur-[2px] sm:items-center sm:p-4">
-              <div className="w-full max-h-[85dvh] overflow-y-auto rounded-t-[1.75rem] border border-amber-200/60 bg-[linear-gradient(180deg,#fffefb_0%,#f8f4eb_100%)] p-0 shadow-[0_24px_80px_rgba(28,25,23,0.18)] sm:max-h-[calc(100dvh-2rem)] sm:max-w-md sm:rounded-2xl sm:border-amber-200/80">
-                <div className="rounded-t-[1.75rem] border-b border-amber-200/50 bg-[linear-gradient(135deg,rgba(245,158,11,0.12)_0%,rgba(16,185,129,0.08)_50%,rgba(245,158,11,0.06)_100%)] px-5 pb-4 pt-5 sm:rounded-t-2xl">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-800/80">Statement of account</p>
-                  <h2 className="mt-1 text-2xl font-semibold tracking-tight text-stone-900 [font-family:var(--font-display),ui-serif,Georgia,serif]">
-                    Statement PDF
-                  </h2>
-                  <p className="mt-2 text-sm leading-relaxed text-stone-600">
-                    For <span className="font-semibold text-stone-900">{invoiceModal.personName}</span>. The document uses your OWE DUE palette: warm cream, amber, and emerald accents.
-                  </p>
+            <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 backdrop-blur-[1px] sm:items-center sm:p-4">
+              <div className="w-full max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-zinc-200 bg-white p-0 shadow-[0_20px_60px_rgba(0,0,0,0.12)] sm:max-h-[calc(100dvh-2rem)] sm:max-w-md sm:rounded-xl">
+                <div className="border-b border-zinc-200 px-5 pb-5 pt-6 sm:rounded-t-xl">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-base font-light leading-none text-black">
+                          +
+                        </span>
+                        <div>
+                          <p className="text-lg font-bold tracking-tight text-black">OWE DUE</p>
+                          <div className="mt-1 h-0.5 w-24 bg-amber-500" aria-hidden />
+                          <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">
+                            Invoice PDF
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm leading-relaxed text-zinc-600">
+                        Billed to{" "}
+                        <span className="font-semibold text-black">{invoiceModal.personName}</span>.
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-right text-2xl font-bold leading-none tracking-tight text-black">
+                      Invoice
+                    </p>
+                  </div>
                 </div>
                 <div className="space-y-4 px-5 py-5">
                   <div>
-                    <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">From date</label>
+                    <label className="block text-xs font-bold text-black">From date</label>
                     <input
                       type="date"
                       value={invoiceModal.startDate}
@@ -356,11 +372,11 @@ export default function PeoplePage() {
                           startDate: e.target.value,
                         }))
                       }
-                      className="mt-2 w-full rounded-xl border border-stone-200/90 bg-white/90 px-3 py-2.5 text-sm text-stone-900 shadow-inner shadow-stone-100 outline-none ring-amber-400/30 transition focus:border-amber-400 focus:ring-2"
+                      className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-black outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">To date</label>
+                    <label className="block text-xs font-bold text-black">To date</label>
                     <input
                       type="date"
                       value={invoiceModal.endDate}
@@ -370,23 +386,23 @@ export default function PeoplePage() {
                           endDate: e.target.value,
                         }))
                       }
-                      className="mt-2 w-full rounded-xl border border-stone-200/90 bg-white/90 px-3 py-2.5 text-sm text-stone-900 shadow-inner shadow-stone-100 outline-none ring-amber-400/30 transition focus:border-amber-400 focus:ring-2"
+                      className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-black outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25"
                     />
                   </div>
                 </div>
 
-                <div className="flex flex-col-reverse gap-2 border-t border-amber-100/80 bg-white/40 px-5 py-4 sm:flex-row sm:justify-end">
+                <div className="flex flex-col-reverse gap-2 border-t border-zinc-200 bg-zinc-50/80 px-5 py-4 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => setInvoiceModal(null)}
-                    className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
+                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 transition hover:border-zinc-400 hover:bg-zinc-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={generateInvoice}
-                    className="rounded-xl bg-[linear-gradient(135deg,#1c1917_0%,#292524_45%,#b45309_160%)] px-4 py-2.5 text-sm font-semibold text-amber-50 shadow-md shadow-amber-900/20 transition hover:brightness-110"
+                    className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-900"
                   >
                     Download PDF
                   </button>
