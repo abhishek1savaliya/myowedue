@@ -122,8 +122,7 @@ export const CMS_DEFAULT_CONTENT = {
       ctaLabel: "View Pro options",
       ctaHref: "/signup",
     },
-    plansFootnote:
-      "Plan text on this front page can be updated anytime from the admin content editor by super admin and manager.",
+    plansFootnote: "",
     finalCtaTitle: "Join thousands of users tracking dues effortlessly.",
     communityEyebrow: "Connect to community",
     communityTitle: "Learn from others and share what works for you",

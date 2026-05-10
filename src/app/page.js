@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import PublicFooter from "@/components/PublicFooter";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import HomeTrendingSection from "@/components/HomeTrendingSection";
+import HomeLogoThree from "@/components/HomeLogoThree";
 import { ArrowRight } from "lucide-react";
 import { getCmsPageContent } from "@/lib/cmsPublic";
 
@@ -111,6 +112,10 @@ export default async function Home() {
             </Link>
           </div>
         </header>
+
+        <div className="frontpage-reveal frontpage-delay-1 mt-6 flex justify-center md:mt-8">
+          <HomeLogoThree size={132} />
+        </div>
 
         <div className="mt-12 grid gap-10 md:mt-16 md:grid-cols-[1.2fr_0.8fr] md:items-end">
           <div className="frontpage-reveal frontpage-delay-1">
@@ -347,9 +352,9 @@ export default async function Home() {
             </article>
           </div>
 
-          <p className="mt-5 text-sm text-zinc-700 dark:text-zinc-500">
-            {content.plansFootnote || "This section can be managed from the admin content editor."}
-          </p>
+          {content.plansFootnote?.trim() ? (
+            <p className="mt-5 text-sm text-zinc-700 dark:text-zinc-500">{content.plansFootnote.trim()}</p>
+          ) : null}
         </div>
       </section>
 
