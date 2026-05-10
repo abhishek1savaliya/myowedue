@@ -342,9 +342,8 @@ export default function CommunityProfileClient({ username: usernameParam }) {
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-zinc-600 dark:text-zinc-400">
                   <span>@{profile.username}</span>
                   {profile.verified && !isPrivateForViewer ? (
-                    <span className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400">
+                    <span className="inline-flex items-center text-sky-600 dark:text-sky-400" aria-label="Verified">
                       <BadgeCheck className="h-4 w-4" aria-hidden />
-                      Verified
                     </span>
                   ) : null}
                 </p>
