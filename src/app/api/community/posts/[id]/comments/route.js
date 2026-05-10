@@ -311,6 +311,15 @@ export async function POST(request, { params }) {
     return fail(insErr.message || "Failed to post comment", 500);
   }
 
+  void supabase.from("community_feed_signals").insert({
+    user_id: String(user._id),
+    post_id: postId,
+    event_type: "comment",
+    watch_time_ms: 0,
+    scroll_duration_ms: 0,
+    dwell_ms: 0,
+  });
+
   await clearCommunityCaches();
 
   const actorId = String(user._id);

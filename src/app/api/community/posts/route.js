@@ -1,15 +1,27 @@
 import { fail, ok } from "@/lib/api";
 import { attachAuthorVerifiedToPosts } from "@/lib/community-author-verified";
+import { embedText, embeddingModelName, vectorToPgLiteral } from "@/lib/communityEmbeddings";
+import { buildSignalsScoreMap, rerankWithPhase2 } from "@/lib/communityPhase2Ranking";
 import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
+import { rankPersonalizedPosts } from "@/lib/communityPersonalization";
 import { extractPostTopics } from "@/lib/post-topic-extraction";
-import { communityFeedCacheKey, clearCommunityCaches, getRedisJSON, setRedisJSON } from "@/lib/redis";
+import {
+  communityFeedCacheKey,
+  communityPersonalizedFeedCacheKey,
+  clearCommunityCaches,
+  getRedisJSON,
+  setRedisJSON,
+} from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 import { hasActivePremium } from "@/lib/subscription";
 
 const PAGE_SIZE = 10;
 const COMMUNITY_FEED_CACHE_TTL_SEC = 45;
+const PHASE2_SIGNAL_WINDOW_DAYS = 30;
+const PERSONALIZED_CURSOR_PREFIX = "p2:";
+const PERSONALIZED_MAX_CANDIDATES = 500;
 
 function viewerPayload(sessionUser) {
   if (!sessionUser) return null;
@@ -52,6 +64,23 @@ function parseFeedFilter(searchParams) {
   if (f === "mine") return "mine";
   if (f === "liked" || f === "shared") return f;
   return "all";
+}
+
+function parsePersonalizedCursor(cursorValue) {
+  const raw = String(cursorValue || "");
+  if (!raw.startsWith(PERSONALIZED_CURSOR_PREFIX)) return null;
+  const payload = raw.slice(PERSONALIZED_CURSOR_PREFIX.length);
+  const [rankPart, dbPart] = payload.split(":");
+  const rankOffset = Number(rankPart || 0);
+  const dbOffset = Number(dbPart || 0);
+  return {
+    rankOffset: Number.isFinite(rankOffset) && rankOffset >= 0 ? rankOffset : 0,
+    dbOffset: Number.isFinite(dbOffset) && dbOffset >= 0 ? dbOffset : 0,
+  };
+}
+
+function buildPersonalizedCursor(rankOffset, dbOffset) {
+  return `${PERSONALIZED_CURSOR_PREFIX}${Math.max(0, Number(rankOffset) || 0)}:${Math.max(0, Number(dbOffset) || 0)}`;
 }
 
 async function enrichPostsWithEngagement(supabase, page, currentUserId) {
@@ -103,6 +132,8 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const cursor = searchParams.get("cursor");
   const filter = parseFeedFilter(searchParams);
+  const parsedPersonalizedCursor = parsePersonalizedCursor(cursor);
+  const isPersonalizedCursor = Boolean(parsedPersonalizedCursor);
 
   const currentUserId = user ? String(user._id) : "";
   const viewerCacheId = currentUserId || "anon";
@@ -262,6 +293,162 @@ export async function GET(request) {
     return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter }, user);
   }
 
+  // Personalized feed for signed-in users (supports infinite scrolling via p2 cursor).
+  if (filter === "all" && user && (!cursor || isPersonalizedCursor)) {
+    const pageOffset = parsedPersonalizedCursor?.rankOffset || 0;
+    const dbOffset = parsedPersonalizedCursor?.dbOffset || 0;
+    const personalizedCacheKey = `${communityPersonalizedFeedCacheKey(currentUserId)}:${dbOffset}:${pageOffset}`;
+    const cachedPersonalized = await getRedisJSON(personalizedCacheKey);
+    if (cachedPersonalized && typeof cachedPersonalized === "object" && Array.isArray(cachedPersonalized.posts)) {
+      return ok({ ...cachedPersonalized, viewer: viewerPayload(user) });
+    }
+
+    const signalsSince = new Date(Date.now() - PHASE2_SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const [candidateRes, followingRes, likesRes, sharesRes, myCommentsRes, signalRes, userVecRes] = await Promise.all([
+      supabase
+        .from("community_posts")
+        .select("id, author_id, author_name, body, share_count, created_at")
+        .order("created_at", { ascending: false })
+        .range(dbOffset, dbOffset + PERSONALIZED_MAX_CANDIDATES - 1),
+      supabase.from("community_follows").select("following_id").eq("follower_id", currentUserId),
+      supabase.from("community_post_likes").select("post_id").eq("user_id", currentUserId).limit(250),
+      supabase.from("community_post_shares").select("post_id").eq("user_id", currentUserId).limit(250),
+      supabase.from("community_comments").select("post_id, body").eq("author_id", currentUserId).limit(250),
+      supabase
+        .from("community_feed_signals")
+        .select("post_id, event_type, watch_time_ms, scroll_duration_ms, dwell_ms")
+        .eq("user_id", currentUserId)
+        .gte("created_at", signalsSince)
+        .order("created_at", { ascending: false })
+        .limit(600),
+      supabase.from("community_user_interest_vectors").select("embedding").eq("user_id", currentUserId).maybeSingle(),
+    ]);
+
+    for (const err of [candidateRes.error, followingRes.error, likesRes.error, sharesRes.error, myCommentsRes.error, signalRes.error, userVecRes.error]) {
+      if (err) {
+        const mapped = mapCommunitySupabaseError(err.message, setup);
+        if (mapped) return fail(mapped, 503);
+        return fail(err.message || "Failed to build personalized feed", 500);
+      }
+    }
+
+    const candidates = candidateRes.data || [];
+    const hasMoreHistoricalCandidates = candidates.length === PERSONALIZED_MAX_CANDIDATES;
+    const followingSet = new Set((followingRes.data || []).map((r) => String(r.following_id)));
+    const interactedPostIds = new Set([
+      ...(likesRes.data || []).map((r) => r.post_id),
+      ...(sharesRes.data || []).map((r) => r.post_id),
+      ...(myCommentsRes.data || []).map((r) => r.post_id),
+    ]);
+
+    const interactedBodies = candidates
+      .filter((p) => interactedPostIds.has(p.id))
+      .map((p) => String(p.body || ""))
+      .join(" ");
+    const myCommentBodies = (myCommentsRes.data || []).map((r) => String(r.body || "")).join(" ");
+    const userInterestTokens = `${interactedBodies} ${myCommentBodies}`
+      .toLowerCase()
+      .split(/[^a-z0-9_]+/g)
+      .filter((x) => x && x.length >= 3)
+      .slice(0, 800);
+
+    const candidateIds = candidates.map((p) => p.id);
+    const [candidateLikes, candidateComments] = await Promise.all([
+      candidateIds.length > 0
+        ? supabase.from("community_post_likes").select("post_id").in("post_id", candidateIds)
+        : { data: [], error: null },
+      candidateIds.length > 0
+        ? supabase.from("community_comments").select("post_id").in("post_id", candidateIds)
+        : { data: [], error: null },
+    ]);
+
+    if (candidateLikes.error || candidateComments.error) {
+      const err = candidateLikes.error || candidateComments.error;
+      const mapped = mapCommunitySupabaseError(err.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(err.message || "Failed to enrich personalized feed", 500);
+    }
+
+    const likesMap = new Map();
+    const commentsMap = new Map();
+    for (const r of candidateLikes.data || []) likesMap.set(r.post_id, (likesMap.get(r.post_id) || 0) + 1);
+    for (const r of candidateComments.data || []) commentsMap.set(r.post_id, (commentsMap.get(r.post_id) || 0) + 1);
+
+    const phase1 = rankPersonalizedPosts({
+      candidates,
+      likesMap,
+      commentsMap,
+      followingSet,
+      userInterestTokens,
+      pageSize: candidates.length,
+    });
+
+    let rankedAll = phase1.posts;
+
+    // Phase 2 blend (embeddings + online interaction signals).
+    try {
+      const postVecRes = await supabase
+        .from("community_post_embeddings")
+        .select("post_id, embedding")
+        .in("post_id", candidates.map((p) => p.id));
+      if (!postVecRes.error) {
+        const postEmbeddingsById = new Map((postVecRes.data || []).map((r) => [String(r.post_id), r.embedding]));
+        let userEmbedding = userVecRes.data?.embedding || null;
+        if (!userEmbedding) {
+          userEmbedding = await embedText(userInterestTokens.join(" "));
+          await supabase.from("community_user_interest_vectors").upsert(
+            {
+              user_id: currentUserId,
+              embedding: vectorToPgLiteral(userEmbedding),
+              model: embeddingModelName(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+        }
+        const signalsByPostId = buildSignalsScoreMap(signalRes.data || []);
+        rankedAll = rerankWithPhase2({
+          phase1Posts: phase1.posts,
+          phase1ScoresByPostId: phase1.scoreMap,
+          postEmbeddingsById,
+          userEmbedding,
+          signalsByPostId,
+          pageSize: phase1.posts.length,
+        });
+      }
+    } catch {
+      // Graceful fallback to phase1.
+    }
+
+    const rankedPage = rankedAll.slice(pageOffset, pageOffset + PAGE_SIZE);
+    const nextPersonalizedOffset = pageOffset + PAGE_SIZE;
+    let nextCursor = null;
+    if (nextPersonalizedOffset < rankedAll.length) {
+      nextCursor = buildPersonalizedCursor(nextPersonalizedOffset, dbOffset);
+    } else if (hasMoreHistoricalCandidates) {
+      // Stage 2: move to older historical window and continue infinite scroll.
+      nextCursor = buildPersonalizedCursor(0, dbOffset + PERSONALIZED_MAX_CANDIDATES);
+    }
+
+    const enriched = await enrichAndVerifyPosts(supabase, rankedPage, currentUserId);
+    if (enriched.error) {
+      const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(enriched.error.message, 500);
+    }
+
+    const payload = {
+      posts: enriched.posts,
+      nextCursor,
+      currentUserId,
+      filter,
+      feedMode: "personalized_v1",
+      personalization: { phase: "phase2-hybrid" },
+    };
+    await setRedisJSON(personalizedCacheKey, payload, COMMUNITY_FEED_CACHE_TTL_SEC);
+    return ok({ ...payload, viewer: viewerPayload(user) });
+  }
+
   let query = supabase
     .from("community_posts")
     .select("id, author_id, author_name, body, share_count, created_at")
@@ -340,6 +527,24 @@ export async function POST(request) {
     if (mapped) return fail(mapped, 503);
     return fail(insErr.message || "Failed to create post", 500);
   }
+
+  // Async embedding creation for phase 2 ranking.
+  void (async () => {
+    try {
+      const vector = await embedText(body);
+      await supabase.from("community_post_embeddings").upsert(
+        {
+          post_id: data.id,
+          embedding: vectorToPgLiteral(vector),
+          model: embeddingModelName(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "post_id" }
+      );
+    } catch {
+      // no-op
+    }
+  })();
 
   const topics = extractPostTopics(body);
   if (topics.length > 0) {

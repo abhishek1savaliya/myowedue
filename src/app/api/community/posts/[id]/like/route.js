@@ -74,6 +74,15 @@ export async function POST(request, { params }) {
     });
   }
 
+  void supabase.from("community_feed_signals").insert({
+    user_id: uid,
+    post_id: postId,
+    event_type: "like",
+    watch_time_ms: 0,
+    scroll_duration_ms: 0,
+    dwell_ms: 0,
+  });
+
   const { count: likeCount, error: countErr } = await supabase
     .from("community_post_likes")
     .select("*", { count: "exact", head: true })

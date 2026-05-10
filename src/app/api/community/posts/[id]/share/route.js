@@ -54,6 +54,14 @@ export async function POST(request, { params }) {
     if (shareErr) {
       console.warn("[community] community_post_shares upsert:", shareErr.message);
     }
+    void supabase.from("community_feed_signals").insert({
+      user_id: String(user._id),
+      post_id: postId,
+      event_type: "share",
+      watch_time_ms: 0,
+      scroll_duration_ms: 0,
+      dwell_ms: 0,
+    });
   }
 
   const ownerId = row.author_id != null ? String(row.author_id) : "";

@@ -197,6 +197,13 @@ async function ensureLateCommunityMigrations(clientPool) {
     await runMigrationWithPool(clientPool, sql009);
     console.info("[community] Postgres community_username_suggest ensured (009_community_username_suggest.sql).");
   }
+
+  const embeddingsRel = await clientPool.query(`SELECT to_regclass('public.community_post_embeddings') AS rel`);
+  if (!embeddingsRel.rows[0]?.rel) {
+    const sql010 = readFileSync(join(migrationsDir, "010_community_ai_phase2.sql"), "utf8");
+    await runMigrationWithPool(clientPool, sql010);
+    console.info("[community] Postgres AI phase2 tables ensured (010_community_ai_phase2.sql).");
+  }
 }
 
 /**

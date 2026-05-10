@@ -140,6 +140,11 @@ export function communityFeedCacheKey(filter, cursor, viewerId) {
   return `community:feed:v1:${encodeKeyPart(filter)}:${encodeKeyPart(cursor || "")}:${encodeKeyPart(viewerId || "anon")}`;
 }
 
+/** Personalized first-page cache for community feed. */
+export function communityPersonalizedFeedCacheKey(viewerId) {
+  return `community:feed:personalized:v1:${encodeKeyPart(viewerId || "anon")}`;
+}
+
 /** Thread for one post (GET .../comments) — includes viewer id for future personalization. */
 export function communityCommentsCacheKey(postId, viewerId) {
   return `community:comments:v1:${encodeKeyPart(postId)}:${encodeKeyPart(viewerId || "anon")}`;
@@ -182,7 +187,7 @@ export async function clearCommunityCaches() {
     const client = await getRedisClient();
     if (!client) return false;
 
-    const patterns = ["community:feed:v1:*", "community:comments:v1:*", "community:trending:*"];
+    const patterns = ["community:feed:v1:*", "community:feed:personalized:v1:*", "community:comments:v1:*", "community:trending:*"];
     const keysToDelete = new Set();
     for (const pattern of patterns) {
       let cursor = "0";
