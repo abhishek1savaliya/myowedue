@@ -423,6 +423,15 @@ function HomeEditor({ content, onChange }) {
       <PlanField label="Paid plan" value={content.paidPlan} onChange={(v) => set("paidPlan", v)} />
       <TextField label="Plans footnote" value={content.plansFootnote} onChange={(v) => set("plansFootnote", v)} />
       <TextField label="Final CTA title" value={content.finalCtaTitle} onChange={(v) => set("finalCtaTitle", v)} />
+      <TextField label="Community section eyebrow" value={content.communityEyebrow} onChange={(v) => set("communityEyebrow", v)} />
+      <TextField label="Community section title" value={content.communityTitle} onChange={(v) => set("communityTitle", v)} />
+      <RichTextField label="Community section description" value={content.communityDescription} onChange={(v) => set("communityDescription", v)} />
+      <TextField label="Community primary CTA label" value={content.communityCtaPrimaryLabel} onChange={(v) => set("communityCtaPrimaryLabel", v)} />
+      <TextField label="Community primary CTA URL" value={content.communityCtaPrimaryHref} onChange={(v) => set("communityCtaPrimaryHref", v)} />
+      <TextField label="Community secondary CTA label" value={content.communityCtaSecondaryLabel} onChange={(v) => set("communityCtaSecondaryLabel", v)} />
+      <TextField label="Community secondary CTA URL" value={content.communityCtaSecondaryHref} onChange={(v) => set("communityCtaSecondaryHref", v)} />
+      <TextField label="Connect Community button label" value={content.communityCtaCommunityLabel} onChange={(v) => set("communityCtaCommunityLabel", v)} />
+      <TextField label="Connect Community button URL" value={content.communityCtaCommunityHref} onChange={(v) => set("communityCtaCommunityHref", v)} />
     </div>
   );
 }

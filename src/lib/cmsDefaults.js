@@ -125,6 +125,16 @@ export const CMS_DEFAULT_CONTENT = {
     plansFootnote:
       "Plan text on this front page can be updated anytime from the admin content editor by super admin and manager.",
     finalCtaTitle: "Join thousands of users tracking dues effortlessly.",
+    communityEyebrow: "Connect to community",
+    communityTitle: "Learn from others and share what works for you",
+    communityDescription:
+      "<p>Join discussions, ask questions, and see how people stay organized with dues and reminders.</p>",
+    communityCtaPrimaryLabel: "Get started free",
+    communityCtaPrimaryHref: "/signup",
+    communityCtaSecondaryLabel: "Sign in to join",
+    communityCtaSecondaryHref: "/login?next=/community",
+    communityCtaCommunityLabel: "Connect Community",
+    communityCtaCommunityHref: "/community",
   },
   "contact-us": {
     heading: "Need help with your account?",

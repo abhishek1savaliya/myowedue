@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "@react-pdf-viewer/core/lib/styles/index.css";
 
+/* Match Tailwind `dark:` utilities to `data-theme` only — not OS prefers-color-scheme.
+   Otherwise light surfaces (e.g. plan cards) can get dark-mode text and become unreadable. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
 :root {
   --background: #f6f5ef;
   --foreground: #111111;
@@ -579,6 +583,11 @@ main > * {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
   animation: frontpageShimmer 4.8s ease-in-out infinite;
   pointer-events: none;
+}
+
+:root:not([data-theme="dark"]) .frontpage-pro-card::after,
+:root:not([data-theme="dark"]) .frontpage-final-cta::after {
+  opacity: 0.22;
 }
 
 /* Light glossy shimmer reads as “metallic” on dark surfaces and hurts contrast — keep it subtle in dark mode */

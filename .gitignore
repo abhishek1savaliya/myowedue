@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Local Supabase keys (optional alternative to .env.local — see supabase.local.example.json)
+supabase.local.json
+
 # vercel
 .vercel
 

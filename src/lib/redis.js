@@ -130,6 +130,45 @@ export function filesCacheKey(userId, queryString = "", origin = "") {
   return `files:${String(userId)}:${encodeKeyPart(origin)}:${encodeKeyPart(queryString)}`;
 }
 
+/** Community feed list (GET /api/community/posts) — viewer-specific for like flags. */
+export function communityFeedCacheKey(filter, cursor, viewerId) {
+  return `community:feed:v1:${encodeKeyPart(filter)}:${encodeKeyPart(cursor || "")}:${encodeKeyPart(viewerId || "anon")}`;
+}
+
+/** Thread for one post (GET .../comments) — includes viewer id for future personalization. */
+export function communityCommentsCacheKey(postId, viewerId) {
+  return `community:comments:v1:${encodeKeyPart(postId)}:${encodeKeyPart(viewerId || "anon")}`;
+}
+
+/** Invalidate cached community feeds and comment threads (after writes). */
+export async function clearCommunityCaches() {
+  try {
+    const client = await getRedisClient();
+    if (!client) return false;
+
+    const patterns = ["community:feed:v1:*", "community:comments:v1:*"];
+    const keysToDelete = new Set();
+    for (const pattern of patterns) {
+      let cursor = "0";
+      do {
+        const [nextCursor, keys] = await client.scan(cursor, { match: pattern, count: 100 });
+        cursor = String(nextCursor);
+        for (const key of keys || []) {
+          keysToDelete.add(String(key));
+        }
+      } while (cursor !== "0");
+    }
+
+    if (keysToDelete.size > 0) {
+      await client.del(...Array.from(keysToDelete));
+    }
+    return true;
+  } catch (error) {
+    handleRedisError("Redis community cache clear failed", error);
+    return false;
+  }
+}
+
 export async function publishNotificationEvent(userId, type = "changed") {
   try {
     const client = await getRedisClient();

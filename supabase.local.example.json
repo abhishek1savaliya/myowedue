@@ -1,0 +1,12 @@
+{
+  "NEXT_PUBLIC_SUPABASE_URL": "https://your-project-ref.supabase.co",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "your_sb_publishable_key",
+  "SUPABASE_SERVICE_ROLE_KEY": "your_sb_secret_key",
+
+  "SUPABASE_DB_PASSWORD": "your_database_password_from_supabase_database_settings",
+
+  "SUPABASE_DB_HOST": "",
+  "SUPABASE_DB_PORT": "5432",
+  "SUPABASE_DB_DATABASE": "postgres",
+  "SUPABASE_DB_USER": "postgres"
+}

@@ -121,6 +121,7 @@ export default function RootLayout({ children }) {
       lang="en"
       suppressHydrationWarning
       className={`${display.variable} ${body.variable} ${googleInter.variable} ${googleRoboto.variable} ${googlePoppins.variable} ${googleMontserrat.variable} ${googlePlayfair.variable} h-full antialiased`}
+      data-theme="light"
       data-premium-ui="false"
       data-font-preset={DEFAULT_FONT_PRESET}
       data-font-size-preset={DEFAULT_FONT_SIZE_PRESET}

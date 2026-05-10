@@ -258,7 +258,7 @@ export default async function Home() {
                 {content.plansTitle || "Choose the plan that fits your workflow"}
               </h2>
               <div
-                className="mt-3 max-w-2xl text-sm leading-7 text-zinc-600 dark:text-zinc-400 md:text-base cms-html"
+                className="mt-3 max-w-2xl text-sm leading-7 text-zinc-700 dark:text-zinc-400 md:text-base cms-html"
                 dangerouslySetInnerHTML={{
                   __html:
                     content.plansDescription ||
@@ -298,7 +298,7 @@ export default async function Home() {
               </div>
               <Link
                 href={freePlan.ctaHref || "/signup"}
-                className="mt-6 inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-[var(--surface)] px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-slate-800/80"
+                className="mt-6 inline-flex items-center gap-2 rounded-xl border border-stone-800/20 bg-white px-5 py-3 text-sm font-semibold text-stone-900 shadow-sm transition hover:border-stone-800/35 hover:bg-stone-50 dark:border-zinc-600 dark:bg-slate-900/80 dark:text-zinc-100 dark:hover:bg-slate-800/80"
               >
                 {freePlan.ctaLabel || "Get started free"}
               </Link>
@@ -315,7 +315,7 @@ export default async function Home() {
                 <span className="pb-1 text-sm font-semibold text-zinc-500 dark:text-zinc-400">{paidPlan.billing || "/month or $70/year"}</span>
               </div>
               <div
-                className="mt-4 text-sm leading-7 text-zinc-600 dark:text-zinc-300 cms-html"
+                className="mt-4 text-sm leading-7 text-zinc-700 dark:text-zinc-300 cms-html"
                 dangerouslySetInnerHTML={{
                   __html:
                     paidPlan.description ||
@@ -326,7 +326,7 @@ export default async function Home() {
                 {paidPlanFeatures.map((item, idx) => (
                   <div
                     key={`${item}-${idx}`}
-                    className="rounded-2xl border border-amber-200/90 bg-amber-500/[0.06] px-4 py-3 text-sm font-medium text-zinc-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-zinc-100"
+                    className="rounded-2xl border border-amber-300/80 bg-amber-50/90 px-4 py-3 text-sm font-medium text-stone-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-zinc-100"
                   >
                     {item}
                   </div>
@@ -342,7 +342,7 @@ export default async function Home() {
             </article>
           </div>
 
-          <p className="mt-5 text-sm text-zinc-500 dark:text-zinc-500">
+          <p className="mt-5 text-sm text-zinc-700 dark:text-zinc-500">
             {content.plansFootnote || "This section can be managed from the admin content editor."}
           </p>
         </div>
@@ -369,6 +369,52 @@ export default async function Home() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-[var(--surface)] px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-slate-800/80 sm:w-auto"
             >
               Sign in
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <div className="relative mx-auto max-w-6xl px-6 py-5 md:py-6" role="separator" aria-hidden="true">
+        <hr className="h-px w-full border-0 bg-zinc-200 dark:bg-zinc-700" />
+      </div>
+
+      <section className="relative mx-auto max-w-6xl px-6 pb-14 md:pb-20">
+        <div className="frontpage-lift relative overflow-hidden rounded-2xl border border-zinc-200 bg-[var(--surface)] p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-zinc-700 dark:shadow-[0_12px_40px_rgba(0,0,0,0.3)] md:flex md:items-center md:justify-between md:gap-10 md:p-10">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-linear-to-r from-emerald-500 via-amber-400 to-amber-500 opacity-85" />
+          <div className="max-w-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+              {content.communityEyebrow || "Connect to community"}
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-foreground md:text-3xl">
+              {content.communityTitle || "Learn from others and share what works for you"}
+            </h2>
+            <div
+              className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300 cms-html"
+              dangerouslySetInnerHTML={{
+                __html:
+                  content.communityDescription ||
+                  "<p>Join discussions, ask questions, and see how people stay organized with dues and reminders.</p>",
+              }}
+            />
+          </div>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap md:mt-0 md:justify-end">
+            <Link
+              href={content.communityCtaPrimaryHref || "/signup"}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-amber-600 hover:to-amber-700 sm:w-auto"
+            >
+              {content.communityCtaPrimaryLabel || "Get started free"}
+            </Link>
+            <Link
+              href={content.communityCtaSecondaryHref || "/login?next=/community"}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-[var(--surface)] px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-slate-800/80 sm:w-auto"
+            >
+              {content.communityCtaSecondaryLabel || "Sign in to join"}
+            </Link>
+            <Link
+              href={content.communityCtaCommunityHref || "/community"}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-600/50 bg-emerald-500/10 px-5 py-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-500/15 dark:border-emerald-500/45 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/15 sm:w-auto"
+            >
+              {content.communityCtaCommunityLabel || "Connect Community"}
             </Link>
           </div>
         </div>

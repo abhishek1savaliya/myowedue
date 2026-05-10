@@ -5,10 +5,11 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays, Gem, LifeBuoy, CreditCard, FolderOpen } from "lucide-react";
+import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays, Gem, LifeBuoy, CreditCard, FolderOpen, PenLine } from "lucide-react";
 
 const baseLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/posts", label: "Post", icon: PenLine },
   { href: "/people", label: "People", icon: Users },
   { href: "/cards", label: "Cards", icon: CreditCard },
   { href: "/files", label: "Files", icon: FolderOpen },
