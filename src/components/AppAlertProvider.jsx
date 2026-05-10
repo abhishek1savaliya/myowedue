@@ -68,7 +68,7 @@ export function AppAlertProvider({ children }) {
         open={alertState.open}
         autoHideDuration={alertState.autoHideDuration}
         onClose={closeAlert}
-        TransitionComponent={SlideUp}
+        slots={{ transition: SlideUp }}
         anchorOrigin={isDesktop ? { vertical: "top", horizontal: "right" } : { vertical: "bottom", horizontal: "center" }}
         sx={{
           left: { xs: 12, sm: "auto" },

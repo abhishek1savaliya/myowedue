@@ -5,12 +5,14 @@ import BackButton from "@/components/BackButton";
 
 const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
 const STATUS_COLORS = {
+  queued: "bg-fuchsia-500/20 text-fuchsia-300",
   open: "bg-blue-500/20 text-blue-400",
   in_progress: "bg-amber-500/20 text-amber-400",
   resolved: "bg-emerald-500/20 text-emerald-400",
   closed: "bg-gray-700 text-gray-400",
 };
 const STATUS_LABELS = {
+  queued: "Queued",
   open: "Open",
   in_progress: "In Progress",
   resolved: "Resolved",
@@ -71,7 +73,8 @@ export default function TicketDetailPage() {
     setError("");
     setSaving(true);
     try {
-      const body = { status, notes };
+      const body = { notes };
+      if (ticket.status !== "queued") body.status = status;
       if (reply.trim()) body.reply = reply.trim();
       if (assignTo) body.assignTo = assignTo;
       if (isSuperadmin && assignManager && assignManager !== ticket?.assignedManagers?.[0]?.id) {
@@ -200,15 +203,23 @@ export default function TicketDetailPage() {
           {/* Status */}
           <div>
             <label className="mb-1 block text-xs text-gray-400">Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-              ))}
-            </select>
+            {ticket.status === "queued" ? (
+              <p className="rounded-lg border border-fuchsia-600/30 bg-fuchsia-500/10 px-3 py-2 text-sm text-fuchsia-200">
+                Queued — waiting for an active manager. Assign a manager below or it will auto-assign when a manager logs in.
+              </p>
+            ) : (
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Handler reassignment: manager/superadmin only */}

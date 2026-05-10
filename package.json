@@ -9,8 +9,7 @@
     "verify": "npm run build",
     "start": "next start",
     "alive": "node alive.mjs",
-    "socket": "node socket-server.mjs",
-    "cards:import": "node scripts/import-card-catalog.cjs"
+    "socket": "node socket-server.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

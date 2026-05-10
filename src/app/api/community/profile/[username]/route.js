@@ -90,7 +90,7 @@ export async function GET(request, { params }) {
 
   await connectDB();
   const user = await User.findById(profileUserId).select(
-    "name firstName lastName createdAt showVerifiedBadge subscriptionEndDate isPremium subscriptionPlan"
+    "name firstName lastName createdAt showVerifiedBadge subscriptionEndDate isPremium subscriptionPlan communityProfileVisibility"
   );
 
   if (!user) {
@@ -102,16 +102,19 @@ export async function GET(request, { params }) {
   ).trim();
   const verified = hasActivePremium(user) && Boolean(user.showVerifiedBadge);
   const joinedAt = user.createdAt ? new Date(user.createdAt).toISOString() : null;
+  const visibility = user.communityProfileVisibility === "private" ? "private" : "public";
+  const isPrivateForViewer = visibility === "private" && !(viewerState?.isSelf);
 
   return ok({
     profile: {
       id: String(user._id),
       username: parsed.normalized,
       displayName,
-      verified,
-      joinedAt,
-      followersCount: followersCount ?? 0,
-      followingCount: followingCount ?? 0,
+      visibility,
+      verified: isPrivateForViewer ? false : verified,
+      joinedAt: isPrivateForViewer ? null : joinedAt,
+      followersCount: isPrivateForViewer ? null : followersCount ?? 0,
+      followingCount: isPrivateForViewer ? null : followingCount ?? 0,
       viewer: viewerState,
     },
   });

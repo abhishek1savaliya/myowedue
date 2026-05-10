@@ -1,6 +1,7 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { clearStoredAdminProfile, readStoredAdminProfile, writeStoredAdminProfile } from "@/lib/adminClientSession";
 
 const ROLE_BADGE = {
   superadmin: {
@@ -28,6 +29,7 @@ const ADMIN_NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/admin/tickets", label: "Support Tickets", icon: "🎫" },
   { href: "/admin/team", label: "Team", icon: "👥" },
+  { href: "/admin/chat", label: "Chat", icon: "💬" },
   { href: "/admin/vouchers", label: "Vouchers", icon: "🎟️" },
   { href: "/admin/content", label: "Content Editor", icon: "✏️" },
   { href: "/admin/profile", label: "Profile", icon: "🧾" },
@@ -36,6 +38,8 @@ const ADMIN_NAV = [
 const EMPLOYEE_NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/admin/tickets", label: "My Tickets", icon: "🎫" },
+  { href: "/admin/team", label: "Team", icon: "👥" },
+  { href: "/admin/chat", label: "Chat", icon: "💬" },
   { href: "/admin/profile", label: "Profile", icon: "🧾" },
 ];
 
@@ -44,17 +48,45 @@ export default function AdminLayout({ children }) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [admin, setAdmin] = useState(null);
+  /** Once true for a logged-in shell, we keep using React state + session cache — no refetch on each route. */
+  const adminSessionReadyRef = useRef(false);
 
   useEffect(() => {
-    if (pathname === "/admin/login") return;
+    if (pathname === "/admin/login") {
+      adminSessionReadyRef.current = false;
+      return;
+    }
+    if (adminSessionReadyRef.current) {
+      return;
+    }
+    adminSessionReadyRef.current = true;
+
+    const cached = readStoredAdminProfile();
+    if (cached) {
+      setAdmin(cached);
+      return;
+    }
+
+    let cancelled = false;
     fetch("/api/admin/me")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => d && setAdmin(d))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        setAdmin(d);
+        writeStoredAdminProfile(d);
+      })
       .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   async function handleLogout() {
     setLoggingOut(true);
+    clearStoredAdminProfile();
+    adminSessionReadyRef.current = false;
+    setAdmin(null);
     await fetch("/api/admin/logout", { method: "POST" });
     router.push("/admin/login");
   }
@@ -65,13 +97,7 @@ export default function AdminLayout({ children }) {
 
   const role = admin?.role || "support";
   const isAdminSide = role === "superadmin" || role === "manager";
-  const navItems = isAdminSide
-    ? [
-        ...ADMIN_NAV.slice(0, 4),
-        { href: "/admin/cards", label: "Cards Catalog", icon: "CC" },
-        ...ADMIN_NAV.slice(4),
-      ]
-    : EMPLOYEE_NAV;
+  const navItems = isAdminSide ? ADMIN_NAV : EMPLOYEE_NAV;
   const badge = ROLE_BADGE[role] || ROLE_BADGE.support;
 
   return (

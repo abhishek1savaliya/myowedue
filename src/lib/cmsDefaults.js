@@ -5,7 +5,7 @@ export const CMS_DEFAULT_CONTENT = {
     heroBadge: "Built for independent earners",
     heroTitle: "Track every rupee, rupee, without the chaos.",
     heroDescription:
-      "Manage who owes you and what you owe. Send reminders, export reports, and keep complete history in one premium workspace.",
+      "<p>Manage who owes you and what you owe. Send reminders, export reports, and keep complete history in one premium workspace.</p>",
     ctaPrimary: "Create your account",
     ctaSecondary: "Already have an account",
     heroStats: [
@@ -138,7 +138,7 @@ export const CMS_DEFAULT_CONTENT = {
   "contact-us": {
     heading: "Need help with your account?",
     description:
-      "Tell us what you need, and our team will get back with setup, troubleshooting, or product guidance.",
+      "<p>Tell us what you need, and our team will get back with setup, troubleshooting, or product guidance.</p>",
     contactItems: [
       "Product help: support@myowedue.com",
       "Billing queries: billing@myowedue.com",
@@ -147,6 +147,9 @@ export const CMS_DEFAULT_CONTENT = {
     formTitle: "Quick message",
     successTitle: "Message sent!",
     successDescription: "Our support team will get back to you soon.",
+    queuedSuccessTitle: "Message received!",
+    queuedSuccessDescription:
+      "No manager was online just yet, so your message is safely queued. It will be assigned in order when a manager is available. You will receive an email when your message has been delivered to our team.",
   },
   "privacy-policy": {
     heading: "Privacy Policy",

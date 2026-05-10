@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 const STATUS_COLORS = {
+  queued: "bg-fuchsia-500/20 text-fuchsia-300",
   open: "bg-blue-500/20 text-blue-400",
   in_progress: "bg-amber-500/20 text-amber-400",
   resolved: "bg-emerald-500/20 text-emerald-400",
@@ -11,6 +12,7 @@ const STATUS_COLORS = {
 };
 
 const STATUS_LABELS = {
+  queued: "Queued",
   open: "Open",
   in_progress: "In Progress",
   resolved: "Resolved",
@@ -64,7 +66,9 @@ export default function AdminTicketsPage() {
           <h1 className="mt-2 text-3xl font-bold text-white">
             {me?.role === "support" ? "My Assigned Tickets" : me?.role === "manager" ? "My Team Tickets" : "All Support Tickets"}
           </h1>
-          <p className="mt-1 text-sm text-slate-300">Track workload, filter statuses, and open any ticket for action.</p>
+          <p className="mt-1 text-sm text-slate-300">
+            By default only Open and In progress appear. Use filters to see queued items or closed history.
+          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-4">
@@ -80,26 +84,42 @@ export default function AdminTicketsPage() {
             <p className="text-xs uppercase tracking-[0.12em] text-amber-300">In Progress</p>
             <p className="mt-2 text-2xl font-bold text-amber-200">{progressCount}</p>
           </div>
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-            <p className="text-xs uppercase tracking-[0.12em] text-emerald-300">Done</p>
-            <p className="mt-2 text-2xl font-bold text-emerald-200">{doneCount}</p>
-          </div>
+          {["all", "resolved", "closed"].includes(statusFilter) ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+              <p className="text-xs uppercase tracking-[0.12em] text-emerald-300">Done (this page)</p>
+              <p className="mt-2 text-2xl font-bold text-emerald-200">{doneCount}</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-4">
+              <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Resolved / closed</p>
+              <p className="mt-2 text-sm text-slate-500">Use filter &quot;Resolved&quot;, &quot;Closed&quot;, or &quot;All&quot;</p>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-slate-400">{total} tickets in this view</div>
           <div className="flex gap-2">
-            {["", "open", "in_progress", "resolved", "closed"].map((s) => (
+            {[
+              { value: "", label: "Active" },
+              { value: "all", label: "All" },
+              { value: "queued", label: STATUS_LABELS.queued },
+              { value: "open", label: STATUS_LABELS.open },
+              { value: "in_progress", label: STATUS_LABELS.in_progress },
+              { value: "resolved", label: STATUS_LABELS.resolved },
+              { value: "closed", label: STATUS_LABELS.closed },
+            ].map(({ value, label }) => (
               <button
-                key={s}
-                onClick={() => { setStatusFilter(s); setPage(1); }}
+                key={value || "active"}
+                type="button"
+                onClick={() => { setStatusFilter(value); setPage(1); }}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors ${
-                  statusFilter === s
+                  statusFilter === value
                     ? "bg-cyan-400 text-slate-900"
                     : "border border-slate-700 text-slate-400 hover:border-cyan-400/40 hover:text-cyan-200"
                 }`}
               >
-                {s === "" ? "All" : STATUS_LABELS[s]}
+                {label}
               </button>
             ))}
           </div>

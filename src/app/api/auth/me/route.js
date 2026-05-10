@@ -100,17 +100,33 @@ export async function PATCH(request) {
 
   try {
     const body = await request.json();
-    if (typeof body.showVerifiedBadge !== "boolean") {
-      return fail("showVerifiedBadge must be a boolean", 422);
+    const hasBadgeUpdate = typeof body.showVerifiedBadge === "boolean";
+    const hasVisibilityUpdate = typeof body.communityProfileVisibility === "string";
+    if (!hasBadgeUpdate && !hasVisibilityUpdate) {
+      return fail("No valid preference updates provided.", 422);
     }
-    if (!hasActivePremium(user)) {
+
+    if (hasBadgeUpdate && !hasActivePremium(user)) {
       return fail("An active premium subscription is required to show a verified badge.", 403);
     }
 
+    let nextVisibility;
+    if (hasVisibilityUpdate) {
+      const normalizedVisibility = String(body.communityProfileVisibility || "").trim().toLowerCase();
+      if (normalizedVisibility !== "public" && normalizedVisibility !== "private") {
+        return fail("communityProfileVisibility must be 'public' or 'private'.", 422);
+      }
+      nextVisibility = normalizedVisibility;
+    }
+
     await connectDB();
+    const updates = {};
+    if (hasBadgeUpdate) updates.showVerifiedBadge = body.showVerifiedBadge;
+    if (nextVisibility) updates.communityProfileVisibility = nextVisibility;
+
     const updated = await User.findByIdAndUpdate(
       user._id,
-      { $set: { showVerifiedBadge: body.showVerifiedBadge } },
+      { $set: updates },
       { returnDocument: "after" }
     );
     if (!updated) return fail("User not found", 404);
@@ -120,7 +136,8 @@ export async function PATCH(request) {
     return ok({
       user: safeUser(updated),
       showVerifiedBadge: Boolean(updated.showVerifiedBadge),
-      message: "Community badge preference updated",
+      communityProfileVisibility: updated.communityProfileVisibility === "private" ? "private" : "public",
+      message: "Community preferences updated",
     });
   } catch {
     return fail("Failed to update preference", 500);

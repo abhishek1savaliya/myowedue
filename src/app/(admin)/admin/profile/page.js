@@ -197,11 +197,13 @@ export default function AdminProfilePage() {
           <div>
             <p className="text-xs uppercase tracking-widest text-slate-400">Upward Message</p>
             <h2 className="mt-1 text-2xl font-bold text-white">
-              {profile?.role === "manager" ? "Message to Super Admin" : "Message to Manager"}
+              {profile?.role === "superadmin" ? "Messages" : "Message to Super Admin"}
             </h2>
             <p className="mt-1 text-sm text-slate-400">
               {target
-                ? `Conversation with ${target.name} (${roleLabel(target.role)})`
+                ? profile?.role === "support" && target.role === "superadmin"
+                  ? `Conversation with ${target.name}`
+                  : `Conversation with ${target.name} (${roleLabel(target.role)})`
                 : "No target available for your role yet."}
             </p>
           </div>
@@ -232,7 +234,7 @@ export default function AdminProfilePage() {
             )}
           </div>
 
-          {target && (
+          {target && profile?.role !== "support" && (
             <form onSubmit={sendMessage} className="space-y-3">
               <textarea
                 rows={3}
@@ -252,6 +254,11 @@ export default function AdminProfilePage() {
                 {sending ? "Sending..." : `Send to ${roleLabel(target.role)}`}
               </button>
             </form>
+          )}
+          {target && profile?.role === "support" && (
+            <p className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-500">
+              You can read messages from Admin above. Sending is not available for your role.
+            </p>
           )}
         </article>
       </div>

@@ -10,6 +10,12 @@ const PAGE_LABELS = {
   "privacy-policy": "Privacy Policy",
 };
 
+const PAGE_PREVIEW_PATH = {
+  home: "/",
+  "contact-us": "/contact-us",
+  "privacy-policy": "/privacy-policy",
+};
+
 export default function AdminContentEditorPage() {
   const { showAlert } = useAppAlert();
   const [selectedPage, setSelectedPage] = useState("home");
@@ -83,7 +89,8 @@ export default function AdminContentEditorPage() {
     }
   }
 
-  async function reviewSubmission(submissionId, decision) {
+  async function reviewSubmission(submissionId, decision, submissionPageKey) {
+    const pageKeyForApi = submissionPageKey || selectedPage;
     const feedback = window.prompt(
       decision === "approve" ? "Approval note (optional):" : "Rejection feedback (required):",
       ""
@@ -93,7 +100,7 @@ export default function AdminContentEditorPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/admin/content/${selectedPage}`, {
+      const res = await fetch(`/api/admin/content/${pageKeyForApi}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ submissionId, decision, feedback: feedback || "" }),
@@ -168,12 +175,27 @@ export default function AdminContentEditorPage() {
           <section className="rounded-2xl border border-slate-700 bg-slate-800/60 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-semibold text-white">{PAGE_LABELS[selectedPage]}</h2>
-              <p className="text-xs text-slate-400">
-                Published version: {currentPage?.version || 1}
-              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <a
+                  href={PAGE_PREVIEW_PATH[selectedPage] || "/"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-cyan-400 hover:text-cyan-300 hover:underline"
+                >
+                  View live page ↗
+                </a>
+                <p className="text-xs text-slate-400">
+                  Published version: {currentPage?.version || 1}
+                </p>
+              </div>
             </div>
 
-            <div className="mt-4">
+            <p className="mt-2 text-xs text-slate-500">
+              Home content applies to the public landing page at <code className="rounded bg-slate-900/80 px-1 py-0.5 text-slate-300">/</code>{" "}
+              (logged-out visitors only). Contact and privacy routes match their paths exactly.
+            </p>
+
+            <div className="mt-4 max-w-4xl">
               <CmsEditor
                 pageKey={selectedPage}
                 content={content}
@@ -234,14 +256,14 @@ export default function AdminContentEditorPage() {
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
-                        onClick={() => reviewSubmission(sub.id, "approve")}
+                        onClick={() => reviewSubmission(sub.id, "approve", sub.pageKey)}
                         className="rounded-lg border border-emerald-600/50 bg-emerald-900/40 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/60 transition-colors"
                       >
                         Approve
                       </button>
                       <button
                         type="button"
-                        onClick={() => reviewSubmission(sub.id, "reject")}
+                        onClick={() => reviewSubmission(sub.id, "reject", sub.pageKey)}
                         className="rounded-lg border border-rose-600/50 bg-rose-900/40 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-800/60 transition-colors"
                       >
                         Reject

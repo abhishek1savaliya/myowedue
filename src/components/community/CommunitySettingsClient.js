@@ -38,6 +38,7 @@ export default function CommunitySettingsClient() {
   const [loading, setLoading] = useState(true);
   const [viewer, setViewer] = useState(null);
   const [savingBadge, setSavingBadge] = useState(false);
+  const [savingVisibility, setSavingVisibility] = useState(false);
   const [communityUsername, setCommunityUsername] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
   /** When false and a handle exists, show read-only @handle with edit icon instead of the form. */
@@ -67,6 +68,7 @@ export default function CommunitySettingsClient() {
       setViewer({
         isPremium: Boolean(u?.isPremium),
         showVerifiedBadge: Boolean(u?.showVerifiedBadge),
+        communityProfileVisibility: u?.communityProfileVisibility === "private" ? "private" : "public",
       });
     } catch {
       setError("Could not load account.");
@@ -178,6 +180,38 @@ export default function CommunitySettingsClient() {
       }
     },
     [viewer?.isPremium, savingBadge]
+  );
+
+  const updateProfileVisibility = useCallback(
+    async (next) => {
+      if (!loggedIn || savingVisibility) return;
+      const normalized = next === "private" ? "private" : "public";
+      setSavingVisibility(true);
+      setError("");
+      try {
+        const res = await fetch("/api/auth/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ communityProfileVisibility: normalized }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Failed to save");
+        setViewer((prev) =>
+          prev
+            ? {
+                ...prev,
+                communityProfileVisibility: data.communityProfileVisibility === "private" ? "private" : "public",
+              }
+            : prev
+        );
+      } catch (e) {
+        setError(e.message || "Failed to save");
+      } finally {
+        setSavingVisibility(false);
+      }
+    },
+    [loggedIn, savingVisibility]
   );
 
   return (
@@ -418,6 +452,54 @@ export default function CommunitySettingsClient() {
                     View subscription
                   </Link>
                 </p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className={card} aria-labelledby="community-privacy">
+          <div className="flex items-start gap-3">
+            <Settings2 className="mt-0.5 h-6 w-6 shrink-0 text-zinc-500 dark:text-zinc-300" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <h2 id="community-privacy" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Profile privacy
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                Public shows full profile. Private shows only your name and @username to other users.
+              </p>
+              {loading ? (
+                <p className="mt-4 flex items-center gap-2 text-sm text-zinc-500">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Loading…
+                </p>
+              ) : !loggedIn ? (
+                <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+                  <Link href="/login?next=/community/settings" className="font-semibold text-amber-700 underline dark:text-amber-400">
+                    Sign in
+                  </Link>{" "}
+                  to manage privacy.
+                </p>
+              ) : (
+                <div className="mt-4 inline-flex rounded-xl border border-stone-200 bg-white p-1 dark:border-zinc-600 dark:bg-slate-900">
+                  {["public", "private"].map((mode) => {
+                    const active = (viewer?.communityProfileVisibility || "public") === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        disabled={savingVisibility}
+                        onClick={() => void updateProfileVisibility(mode)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                          active
+                            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                            : "text-zinc-600 hover:bg-stone-100 dark:text-zinc-300 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>

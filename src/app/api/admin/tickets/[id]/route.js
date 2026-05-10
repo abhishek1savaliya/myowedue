@@ -74,6 +74,9 @@ export async function PATCH(req, { params }) {
       const manager = await AdminUser.findOne({ _id: body.assignManager, role: "manager", isActive: true });
       if (!manager) return fail("Invalid manager selected", 400);
       ticket.assignedManagers = [manager._id];
+      if (ticket.status === "queued") {
+        ticket.status = "open";
+      }
 
       // If current handler does not belong to new manager's team, clear handler.
       if (ticket.handledBy) {

@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BadgeCheck, Calendar, Loader2, UserPlus } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Calendar, Loader2, Share2, UserPlus } from "lucide-react";
 import { format } from "date-fns";
+import ModalPortal from "@/components/ModalPortal";
+import ShareProfileModal from "@/components/community/ShareProfileModal";
+import SharePostModal from "@/components/community/SharePostModal";
 
 /** Split display name for a subtle two-tone accent (home-style warmth + teal), without breaking single names. */
 function DisplayNameHeading({ name }) {
@@ -30,6 +33,11 @@ export default function CommunityProfileClient({ username: usernameParam }) {
   const [error, setError] = useState("");
   const [profile, setProfile] = useState(null);
   const [followBusy, setFollowBusy] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [profilePosts, setProfilePosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [postShareTarget, setPostShareTarget] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,6 +65,34 @@ export default function CommunityProfileClient({ username: usernameParam }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!profile?.username) return;
+    if (profile?.visibility === "private" && !profile?.viewer?.isSelf) {
+      setProfilePosts([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setPostsLoading(true);
+      try {
+        const res = await fetch(`/api/community/profile/${encodeURIComponent(profile.username)}/posts`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) return;
+        setProfilePosts(Array.isArray(data.posts) ? data.posts : []);
+        setCurrentUserId(data.currentUserId || "");
+      } finally {
+        if (!cancelled) setPostsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.username, profile?.visibility, profile?.viewer?.isSelf]);
 
   async function toggleFollow() {
     if (!profile?.viewer || profile.viewer.isSelf) return;
@@ -89,9 +125,53 @@ export default function CommunityProfileClient({ username: usernameParam }) {
     }
   }
 
+  function shareProfile() {
+    setShareOpen(true);
+  }
+
+  async function onLikeToggle(post) {
+    if (!currentUserId) {
+      router.push(`/login?next=${encodeURIComponent(`/community/user/${usernameParam}`)}`);
+      return;
+    }
+    const prevPosts = profilePosts;
+    const prev = profilePosts.find((p) => p.id === post.id);
+    const nextLiked = !Boolean(prev?.liked);
+    setProfilePosts((list) =>
+      list.map((p) =>
+        p.id === post.id ? { ...p, liked: nextLiked, likeCount: Math.max(0, (p.likeCount || 0) + (nextLiked ? 1 : -1)) } : p
+      )
+    );
+    try {
+      const res = await fetch(`/api/community/posts/${post.id}/like`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed");
+      setProfilePosts((list) =>
+        list.map((p) =>
+          p.id === post.id
+            ? {
+                ...p,
+                liked: Boolean(data.liked),
+                likeCount:
+                  typeof data.likeCount === "number"
+                    ? data.likeCount
+                    : Math.max(0, (p.likeCount || 0) + (data.liked ? 1 : -1)),
+              }
+            : p
+        )
+      );
+    } catch {
+      setProfilePosts(prevPosts);
+    }
+  }
+
   const joinedLabel = profile?.joinedAt ? format(new Date(profile.joinedAt), "MMMM yyyy") : null;
   const followersCount = profile?.followersCount ?? 0;
   const followingCount = profile?.followingCount ?? 0;
+  const isPrivateForViewer = profile?.visibility === "private" && !profile?.viewer?.isSelf;
 
   return (
     <div className="min-h-0 bg-background">
@@ -124,6 +204,15 @@ export default function CommunityProfileClient({ username: usernameParam }) {
         </div>
       ) : profile ? (
         <div className="px-4 pb-12 pt-4 sm:px-6">
+          {shareOpen ? (
+            <ModalPortal>
+              <ShareProfileModal
+                username={profile?.username || usernameParam}
+                displayName={profile?.displayName}
+                onClose={() => setShareOpen(false)}
+              />
+            </ModalPortal>
+          ) : null}
           <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-zinc-700 dark:bg-zinc-900/80">
             <div
               className="h-28 bg-linear-to-r from-amber-100/90 via-zinc-100 to-emerald-100/80 sm:h-32 dark:from-amber-950/40 dark:via-zinc-900 dark:to-emerald-950/30"
@@ -137,9 +226,10 @@ export default function CommunityProfileClient({ username: usernameParam }) {
                 >
                   {String(profile.displayName || "?").slice(0, 1).toUpperCase()}
                 </div>
-                {profile.viewer && !profile.viewer.isSelf ? (
-                  <div className="min-w-0 pb-1 sm:pb-2">
-                    {profile.viewer.isFollowing ? (
+                <div className="min-w-0 pb-1 sm:pb-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {!isPrivateForViewer && profile.viewer && !profile.viewer.isSelf ? (
+                      profile.viewer.isFollowing ? (
                       <button
                         type="button"
                         onClick={() => void toggleFollow()}
@@ -148,7 +238,7 @@ export default function CommunityProfileClient({ username: usernameParam }) {
                       >
                         {followBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Following"}
                       </button>
-                    ) : (
+                      ) : (
                       <button
                         type="button"
                         onClick={() => void toggleFollow()}
@@ -164,51 +254,128 @@ export default function CommunityProfileClient({ username: usernameParam }) {
                           </>
                         )}
                       </button>
-                    )}
+                      )
+                    ) : !isPrivateForViewer && !profile.viewer ? (
+                      <Link
+                        href={`/login?next=${encodeURIComponent(`/community/user/${usernameParam}`)}`}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-zinc-900 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+                      >
+                        <UserPlus className="h-4 w-4" aria-hidden />
+                        Follow
+                      </Link>
+                    ) : null}
+                    {!isPrivateForViewer ? (
+                      <button
+                        type="button"
+                        onClick={() => void shareProfile()}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                      >
+                        <Share2 className="h-4 w-4" aria-hidden />
+                        Share profile
+                      </button>
+                    ) : null}
                   </div>
-                ) : !profile.viewer ? (
-                  <Link
-                    href={`/login?next=${encodeURIComponent(`/community/user/${usernameParam}`)}`}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-zinc-900 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
-                  >
-                    <UserPlus className="h-4 w-4" aria-hidden />
-                    Follow
-                  </Link>
-                ) : null}
+                </div>
               </div>
               <div className="mt-4 max-w-xl">
                 <DisplayNameHeading name={profile.displayName} />
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-zinc-600 dark:text-zinc-400">
                   <span>@{profile.username}</span>
-                  {profile.verified ? (
+                  {profile.verified && !isPrivateForViewer ? (
                     <span className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400">
                       <BadgeCheck className="h-4 w-4" aria-hidden />
                       Verified
                     </span>
                   ) : null}
                 </p>
-                <p className="mt-2 text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
-                  <span className="font-medium text-zinc-800 dark:text-zinc-200">{followersCount}</span> followers
-                  <span className="mx-2 text-zinc-300 dark:text-zinc-600">·</span>
-                  <span className="font-medium text-zinc-800 dark:text-zinc-200">{followingCount}</span> following
-                </p>
-                {joinedLabel ? (
-                  <p className="mt-4 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-                    <Calendar className="h-4 w-4 shrink-0" aria-hidden />
-                    Joined {joinedLabel}
+                {!isPrivateForViewer ? (
+                  <>
+                    <p className="mt-2 text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
+                      <span className="font-medium text-zinc-800 dark:text-zinc-200">{followersCount}</span> followers
+                      <span className="mx-2 text-zinc-300 dark:text-zinc-600">·</span>
+                      <span className="font-medium text-zinc-800 dark:text-zinc-200">{followingCount}</span> following
+                    </p>
+                    {joinedLabel ? (
+                      <p className="mt-4 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                        <Calendar className="h-4 w-4 shrink-0" aria-hidden />
+                        Joined {joinedLabel}
+                      </p>
+                    ) : null}
+                    <p className="mt-6 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                      Public community profile. Posts and replies from this member appear in the{" "}
+                      <Link href="/community" className="font-semibold text-amber-700 underline underline-offset-2 dark:text-amber-400">
+                        community feed
+                      </Link>
+                      .
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+                    This member has set the profile to private.
                   </p>
-                ) : null}
-                <p className="mt-6 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  Public community profile. Posts and replies from this member appear in the{" "}
-                  <Link href="/community" className="font-semibold text-amber-700 underline underline-offset-2 dark:text-amber-400">
-                    community feed
-                  </Link>
-                  .
-                </p>
+                )}
               </div>
             </div>
           </div>
+
+          {!isPrivateForViewer ? (
+            <section className="mt-6">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Posts</h2>
+              {postsLoading ? (
+                <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading posts…
+                </div>
+              ) : profilePosts.length === 0 ? (
+                <div className="rounded-xl border border-zinc-200 bg-white px-4 py-5 text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-400">
+                  No posts yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {profilePosts.map((post) => (
+                    <article key={post.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          {post.author_name} <span className="font-normal text-zinc-500 dark:text-zinc-400">@{post.author_username}</span>
+                        </p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{format(new Date(post.created_at), "dd MMM yyyy")}</p>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">{post.body}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                        <button
+                          type="button"
+                          onClick={() => void onLikeToggle(post)}
+                          className={`rounded-full px-2.5 py-1 ${post.liked ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" : "bg-zinc-100 dark:bg-zinc-800"}`}
+                        >
+                          Likes {post.likeCount || 0}
+                        </button>
+                        <span className="rounded-full bg-zinc-100 px-2.5 py-1 dark:bg-zinc-800">Comments {post.commentCount || 0}</span>
+                        <button
+                          type="button"
+                          onClick={() => setPostShareTarget(post)}
+                          className="rounded-full bg-zinc-100 px-2.5 py-1 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                        >
+                          Share {post.share_count || 0}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
         </div>
+      ) : null}
+      {postShareTarget ? (
+        <SharePostModal
+          post={postShareTarget}
+          onClose={() => setPostShareTarget(null)}
+          onShared={(nextCount) => {
+            setProfilePosts((list) =>
+              list.map((p) => (p.id === postShareTarget.id ? { ...p, share_count: nextCount } : p))
+            );
+          }}
+        />
       ) : null}
     </div>
   );

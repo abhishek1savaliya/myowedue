@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 const DEFAULT_CONTENT = {
   heading: "Need help with your account?",
   description:
-    "Tell us what you need, and our team will get back with setup, troubleshooting, or product guidance.",
+    "<p>Tell us what you need, and our team will get back with setup, troubleshooting, or product guidance.</p>",
   contactItems: [
     "Product help: support@myowedue.com",
     "Billing queries: billing@myowedue.com",
@@ -17,12 +17,16 @@ const DEFAULT_CONTENT = {
   formTitle: "Quick message",
   successTitle: "Message sent!",
   successDescription: "Our support team will get back to you soon.",
+  queuedSuccessTitle: "Message received!",
+  queuedSuccessDescription:
+    "No manager was online just yet, so your message is safely queued. It will be assigned in order when a manager is available. You will receive an email when your message has been delivered to our team.",
 };
 
 export default function ContactUsPage() {
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [successQueued, setSuccessQueued] = useState(false);
   const [error, setError] = useState("");
   const [content, setContent] = useState(DEFAULT_CONTENT);
 
@@ -59,6 +63,7 @@ export default function ContactUsPage() {
       if (!res.ok) {
         setError(data.message || "Something went wrong. Please try again.");
       } else {
+        setSuccessQueued(Boolean(data.queued));
         setSuccess(true);
         setForm({ name: "", email: "", message: "" });
       }
@@ -94,10 +99,19 @@ export default function ContactUsPage() {
 
             {success ? (
               <div className="mt-6 rounded-xl border border-emerald-600/30 bg-emerald-500/10 px-4 py-5 text-sm text-emerald-600">
-                <p className="font-semibold text-base">{content.successTitle}</p>
-                <p className="mt-1 text-zinc-600">{content.successDescription}</p>
+                <p className="font-semibold text-base">
+                  {successQueued ? content.queuedSuccessTitle || content.successTitle : content.successTitle}
+                </p>
+                <p className="mt-1 text-zinc-600">
+                  {successQueued
+                    ? content.queuedSuccessDescription || content.successDescription
+                    : content.successDescription}
+                </p>
                 <button
-                  onClick={() => setSuccess(false)}
+                  onClick={() => {
+                    setSuccess(false);
+                    setSuccessQueued(false);
+                  }}
                   className="mt-3 text-xs text-amber-300 underline"
                 >
                   Send another message

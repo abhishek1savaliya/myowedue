@@ -12,6 +12,12 @@ const PAGE_LABELS = {
   "privacy-policy": "Privacy Policy",
 };
 
+const PAGE_PREVIEW_PATH = {
+  home: "/",
+  "contact-us": "/contact-us",
+  "privacy-policy": "/privacy-policy",
+};
+
 export default function ContentEditorPage() {
   const { showAlert } = useAppAlert();
   const [selectedPage, setSelectedPage] = useState("home");
@@ -246,7 +252,17 @@ export default function ContentEditorPage() {
       <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-black">{PAGE_LABELS[selectedPage]}</h2>
-          <p className="text-xs text-zinc-500">Published version: {currentPage?.version || 1}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href={PAGE_PREVIEW_PATH[selectedPage] || "/"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-zinc-700 underline decoration-zinc-300 underline-offset-2 hover:text-black"
+            >
+              View live page ↗
+            </a>
+            <p className="text-xs text-zinc-500">Published version: {currentPage?.version || 1}</p>
+          </div>
         </div>
 
         <div className="mt-4">
@@ -254,6 +270,7 @@ export default function ContentEditorPage() {
             pageKey={selectedPage}
             content={content}
             onChange={setContent}
+            variant="light"
           />
         </div>
 

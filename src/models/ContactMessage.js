@@ -17,7 +17,7 @@ const ContactMessageSchema = new Schema(
     message: { type: String, required: true, trim: true },
     status: {
       type: String,
-      enum: ["open", "in_progress", "resolved", "closed"],
+      enum: ["queued", "open", "in_progress", "resolved", "closed"],
       default: "open",
       index: true,
     },

@@ -17,8 +17,7 @@ export async function POST(req, { params }) {
   const { admin, error } = await requireAdmin();
   if (error) return error;
 
-  // Only superadmin can reset passwords
-  if (admin.role !== "superadmin") return fail("Forbidden", 403);
+  if (admin.role === "support") return fail("Forbidden", 403);
 
   try {
     const { id } = await params;
@@ -26,6 +25,15 @@ export async function POST(req, { params }) {
 
     const member = await AdminUser.findById(id);
     if (!member) return fail("Team member not found", 404);
+
+    if (admin.role === "manager") {
+      const isSelf = member._id.toString() === admin._id.toString();
+      const isTeamSupport =
+        member.role === "support" && member.managerId?.toString() === admin._id.toString();
+      if (!isSelf && !isTeamSupport) return fail("Forbidden", 403);
+    } else if (admin.role !== "superadmin") {
+      return fail("Forbidden", 403);
+    }
 
     // Cannot reset superadmin password via this route (use login directly)
     if (member.role === "superadmin" && member._id.toString() === admin._id.toString()) {

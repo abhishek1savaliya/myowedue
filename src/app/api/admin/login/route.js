@@ -3,6 +3,7 @@ import AdminUser from "@/models/AdminUser";
 import { hashPassword, comparePassword, signToken } from "@/lib/auth";
 import { ok, fail } from "@/lib/api";
 import { encryptAdminPasswordPreview } from "@/lib/adminPasswordPreview";
+import { processQueuedContactTickets } from "@/lib/contactTicketAssignment";
 import { cookies } from "next/headers";
 
 // Seed the default superadmin if not exists
@@ -69,6 +70,12 @@ export async function POST(req) {
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
     });
+
+    try {
+      await processQueuedContactTickets();
+    } catch (e) {
+      console.error("processQueuedContactTickets after login:", e);
+    }
 
     return ok({
       admin: {

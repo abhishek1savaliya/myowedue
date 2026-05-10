@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/adminSession";
 import { ok, fail } from "@/lib/api";
 import AdminUser from "@/models/AdminUser";
+import { messageTargetForViewer } from "@/lib/adminChat";
 
 function splitName(name = "") {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -12,15 +13,17 @@ function splitName(name = "") {
 
 async function resolveMessageTarget(admin) {
   if (admin.role === "support") {
-    if (!admin.managerId) return null;
-    const manager = await AdminUser.findById(admin.managerId).select("name role employeeId email").lean();
-    if (!manager) return null;
+    const superadmin = await AdminUser.findOne({ role: "superadmin", isActive: true })
+      .sort({ createdAt: 1 })
+      .select("name role employeeId email")
+      .lean();
+    if (!superadmin) return null;
     return {
-      id: manager._id.toString(),
-      name: manager.name,
-      role: manager.role,
-      employeeId: manager.employeeId,
-      email: manager.email,
+      id: superadmin._id.toString(),
+      name: superadmin.name,
+      role: superadmin.role,
+      employeeId: superadmin.employeeId,
+      email: superadmin.email,
     };
   }
 
@@ -54,7 +57,8 @@ export async function GET() {
     const split = splitName(dbAdmin.name);
     const firstName = dbAdmin.firstName || split.firstName;
     const lastName = dbAdmin.lastName || split.lastName;
-    const messageTarget = await resolveMessageTarget(dbAdmin);
+    const rawTarget = await resolveMessageTarget(dbAdmin);
+    const messageTarget = messageTargetForViewer(dbAdmin.role, rawTarget);
 
     return ok({
       profile: {

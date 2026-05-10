@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays, Gem, LifeBuoy, CreditCard, FolderOpen, PenLine } from "lucide-react";
+import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays, Gem, LifeBuoy, CreditCard, FolderOpen, PenLine, LogOut } from "lucide-react";
 
 const baseLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -169,10 +169,12 @@ export default function Sidebar({ notificationCount = 0 }) {
       </nav>
 
       <button
+        type="button"
         onClick={logout}
-        className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 md:mt-8 md:py-3"
+        className="group mt-2 flex w-full min-w-33 shrink-0 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/80 md:mt-2 md:min-w-0 md:justify-start md:gap-3 md:py-3 md:text-sm"
       >
-        Logout
+        <LogOut size={16} className="shrink-0" aria-hidden />
+        <span className="min-w-0 wrap-break-word">Logout</span>
       </button>
     </aside>
   );

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
+import { writeStoredAdminProfile } from "@/lib/adminClientSession";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -23,7 +24,8 @@ export default function AdminLoginPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.message || "Invalid credentials");
-      } else {
+      } else if (data.admin) {
+        writeStoredAdminProfile(data.admin);
         router.push("/admin/dashboard");
       }
     } catch {

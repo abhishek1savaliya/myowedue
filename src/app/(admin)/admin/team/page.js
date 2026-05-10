@@ -3,7 +3,116 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppAlert } from "@/components/AppAlertProvider";
 
-const ROLES = ["support", "manager", "superadmin"];
+const ROLES_SUPERADMIN = ["support", "manager", "superadmin"];
+
+function SuperadminRoleEditor({ member, managers, viewerId, soleSuperadmin, onSaved, showAlert }) {
+  const [role, setRole] = useState(member.role);
+  const [managerId, setManagerId] = useState(member.managerId || "");
+  const [saving, setSaving] = useState(false);
+
+  const isSelf = member.id === viewerId;
+  const lockedSoleSuperadmin = isSelf && soleSuperadmin;
+
+  useEffect(() => {
+    setRole(member.role);
+    setManagerId(member.managerId || "");
+  }, [member.id, member.role, member.managerId]);
+
+  const dirty =
+    role !== member.role ||
+    (role === "support" && (managerId || "") !== (member.managerId || ""));
+
+  const peerOtherSuperadmin = member.role === "superadmin" && !isSelf;
+
+  async function save() {
+    if (lockedSoleSuperadmin) return;
+    let mid = managerId;
+    if (role === "support") {
+      if (!mid && managers.length > 0) mid = managers[0].id;
+      if (!mid) {
+        showAlert("Select a manager for the support role.", { severity: "error" });
+        return;
+      }
+    }
+    setSaving(true);
+    try {
+      const body = { role };
+      if (role === "support") body.managerId = mid;
+      const res = await fetch(`/api/admin/team/${member.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert(json.message || "Could not update role.", { severity: "error" });
+        return;
+      }
+      if (json.pendingApproval) {
+        showAlert(json.message || "The other superadmin must approve this change.", { severity: "info" });
+        onSaved();
+        return;
+      }
+      showAlert("Role updated.", { severity: "success" });
+      onSaved();
+    } catch {
+      showAlert("Network error — could not update role.", { severity: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex w-full min-w-44 max-w-60 flex-col gap-1.5">
+      {lockedSoleSuperadmin ? (
+        <p className="text-[11px] leading-snug text-amber-400/90">
+          You are the only active superadmin. Add another superadmin before you can change your own role.
+        </p>
+      ) : null}
+      <select
+        value={role}
+        disabled={lockedSoleSuperadmin}
+        onChange={(e) => {
+          const r = e.target.value;
+          setRole(r);
+          if (r === "support" && !managerId && managers[0]) setManagerId(managers[0].id);
+        }}
+        className="w-full rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {ROLES_SUPERADMIN.map((r) => (
+          <option key={r} value={r}>
+            {r.charAt(0).toUpperCase() + r.slice(1)}
+          </option>
+        ))}
+      </select>
+      {role === "support" && (
+        <select
+          value={managerId}
+          disabled={lockedSoleSuperadmin}
+          onChange={(e) => setManagerId(e.target.value)}
+          className="w-full rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <option value="">Select manager</option>
+          {managers.map((mgr) => (
+            <option key={mgr.id} value={mgr.id}>
+              {mgr.name} ({mgr.employeeId})
+            </option>
+          ))}
+        </select>
+      )}
+      {dirty && !lockedSoleSuperadmin && (
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="rounded border border-amber-600/50 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 disabled:opacity-50"
+        >
+          {saving ? "Sending…" : peerOtherSuperadmin ? "Request role change" : "Save role"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function CredsBox({ creds, onDismiss, title = "✅ Credentials — share with employee" }) {
   const [copied, setCopied] = useState(false);
@@ -49,6 +158,8 @@ export default function AdminTeamPage() {
   const router = useRouter();
   const [team, setTeam] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [viewerRole, setViewerRole] = useState("");
+  const [viewerId, setViewerId] = useState("");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", role: "support", managerId: "" });
@@ -59,6 +170,9 @@ export default function AdminTeamPage() {
   const [eyeLoading, setEyeLoading] = useState({}); // { [memberId]: boolean }
   const [rowPasswords, setRowPasswords] = useState({}); // { [memberId]: password }
   const [rowPasswordVisible, setRowPasswordVisible] = useState({}); // { [memberId]: boolean }
+  const [soleSuperadmin, setSoleSuperadmin] = useState(false);
+  const [peerRequests, setPeerRequests] = useState({ incoming: [], outgoing: [] });
+  const [peerActionLoading, setPeerActionLoading] = useState(null);
 
   async function loadTeam() {
     const res = await fetch("/api/admin/team");
@@ -66,6 +180,10 @@ export default function AdminTeamPage() {
     const json = await res.json();
     setTeam(json.team || []);
     setManagers(json.managers || []);
+    setViewerRole(json.viewerRole || "");
+    setViewerId(json.viewerId || "");
+    setSoleSuperadmin(Boolean(json.soleSuperadmin));
+    setPeerRequests(json.peerRequests || { incoming: [], outgoing: [] });
 
     const preloaded = {};
     for (const member of json.team || []) {
@@ -111,21 +229,82 @@ export default function AdminTeamPage() {
   }
 
   async function toggleActive(member) {
-    await fetch(`/api/admin/team/${member.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !member.isActive }),
-    });
-    loadTeam();
+    try {
+      const res = await fetch(`/api/admin/team/${member.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !member.isActive }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert(json.message || "Could not update status.", { severity: "error" });
+        return;
+      }
+      if (json.pendingApproval) {
+        showAlert(json.message || "The other superadmin must approve this change.", { severity: "info" });
+      }
+      loadTeam();
+    } catch {
+      showAlert("Network error.", { severity: "error" });
+    }
   }
 
   async function deleteMember(id) {
     if (!confirm("Delete this team member? This cannot be undone.")) return;
-    await fetch(`/api/admin/team/${id}`, { method: "DELETE" });
-    loadTeam();
+    try {
+      const res = await fetch(`/api/admin/team/${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert(json.message || "Could not delete member.", { severity: "error" });
+        return;
+      }
+      if (json.pendingApproval) {
+        showAlert(json.message || "The other superadmin must approve this deletion.", { severity: "info" });
+      }
+      loadTeam();
+    } catch {
+      showAlert("Network error.", { severity: "error" });
+    }
+  }
+
+  async function respondPeerRequest(requestId, decision) {
+    setPeerActionLoading(`${requestId}:${decision}`);
+    try {
+      const res = await fetch(`/api/admin/team/peer-requests/${requestId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert(json.message || "Could not update request.", { severity: "error" });
+        return;
+      }
+      showAlert(decision === "accept" ? "Request accepted." : "Request rejected.", {
+        severity: decision === "accept" ? "success" : "info",
+      });
+      loadTeam();
+    } catch {
+      showAlert("Network error.", { severity: "error" });
+    } finally {
+      setPeerActionLoading(null);
+    }
+  }
+
+  function describePeerRequest(req) {
+    if (req.kind === "delete") {
+      return "requested to remove your account";
+    }
+    const p = req.proposedPatch || {};
+    const parts = [];
+    if (p.role) parts.push(`role → ${p.role}`);
+    if (p.isActive === false) parts.push("disable account");
+    if (p.isActive === true) parts.push("enable account");
+    return parts.length ? `requested: ${parts.join(", ")}` : "requested a profile update";
   }
 
   async function resetPassword(member) {
+    if (!member.canViewPassword) return;
     if (!confirm(`Reset password for ${member.name}? A new password will be generated.`)) return;
     setCreds(null);
     setResetLoading(member.id);
@@ -153,7 +332,7 @@ export default function AdminTeamPage() {
   }
 
   async function handleEyeToggle(member) {
-    if (member.role === "superadmin") return;
+    if (!member.canViewPassword) return;
 
     // If already have a password preview, just toggle visibility.
     if (rowPasswords[member.id]) {
@@ -191,20 +370,92 @@ export default function AdminTeamPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Team</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Manage support employees</p>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {viewerRole === "support"
+              ? "Your manager and teammates (view only)"
+              : viewerRole === "manager"
+                ? "Your team — you can add support members only"
+                : "Manage employees"}
+          </p>
         </div>
-        <button
-          onClick={() => { setShowForm((v) => !v); setCreds(null); setFormError(""); }}
-          className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-amber-400 transition-colors"
-        >
-          {showForm ? "Cancel" : "+ Add Employee"}
-        </button>
+        {(viewerRole === "superadmin" || viewerRole === "manager") && (
+          <button
+            onClick={() => {
+              setShowForm((v) => !v);
+              setCreds(null);
+              setFormError("");
+              setForm((f) =>
+                viewerRole === "manager"
+                  ? { name: "", email: "", role: "support", managerId: viewerId }
+                  : { ...f, name: "", email: "" }
+              );
+            }}
+            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-amber-400 transition-colors"
+          >
+            {showForm ? "Cancel" : "+ Add Employee"}
+          </button>
+        )}
       </div>
 
       {/* Credentials display (create or reset) */}
       {creds && (
         <CredsBox creds={creds} onDismiss={() => setCreds(null)} />
       )}
+
+      {viewerRole === "superadmin" && peerRequests.incoming?.length > 0 ? (
+        <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-amber-200">Pending requests (your approval)</h2>
+          <p className="text-xs text-amber-200/70">
+            Another superadmin proposed a sensitive change to your account. Nothing changes until you accept.
+          </p>
+          <ul className="space-y-3">
+            {peerRequests.incoming.map((req) => (
+              <li
+                key={req.id}
+                className="rounded-lg border border-amber-500/25 bg-gray-900/60 px-3 py-3 text-sm text-gray-200"
+              >
+                <p className="font-medium text-white">
+                  {req.requestedBy?.name || "Superadmin"}{" "}
+                  <span className="font-normal text-gray-400">({describePeerRequest(req)})</span>
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={Boolean(peerActionLoading)}
+                    onClick={() => respondPeerRequest(req.id, "accept")}
+                    className="rounded border border-emerald-600/50 bg-emerald-900/30 px-3 py-1 text-xs font-medium text-emerald-300 hover:bg-emerald-900/50 disabled:opacity-50"
+                  >
+                    {peerActionLoading === `${req.id}:accept` ? "…" : "Accept"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(peerActionLoading)}
+                    onClick={() => respondPeerRequest(req.id, "reject")}
+                    className="rounded border border-rose-600/50 bg-rose-900/30 px-3 py-1 text-xs font-medium text-rose-300 hover:bg-rose-900/50 disabled:opacity-50"
+                  >
+                    {peerActionLoading === `${req.id}:reject` ? "…" : "Reject"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {viewerRole === "superadmin" && peerRequests.outgoing?.length > 0 ? (
+        <div className="rounded-xl border border-cyan-500/25 bg-cyan-950/30 p-4">
+          <h2 className="text-sm font-semibold text-cyan-200">Waiting on their approval</h2>
+          <ul className="mt-2 space-y-2 text-xs text-cyan-100/80">
+            {peerRequests.outgoing.map((req) => (
+              <li key={req.id}>
+                <span className="font-medium text-cyan-100">{req.target?.name}</span>
+                {" — "}
+                {req.kind === "delete" ? "account removal" : "role / status change"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Add form */}
       {showForm && (
@@ -234,17 +485,29 @@ export default function AdminTeamPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm text-gray-400">Role</label>
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value, managerId: e.target.value === "support" ? form.managerId : "" })}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
-                ))}
-              </select>
+              {viewerRole === "manager" ? (
+                <p className="rounded-lg border border-gray-700 bg-gray-800/80 px-3 py-2 text-sm text-gray-300">Support</p>
+              ) : (
+                <select
+                  value={form.role}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      role: e.target.value,
+                      managerId: e.target.value === "support" ? form.managerId : "",
+                    })
+                  }
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
+                >
+                  {ROLES_SUPERADMIN.map((r) => (
+                    <option key={r} value={r}>
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
-            {form.role === "support" && (
+            {form.role === "support" && viewerRole === "superadmin" && (
               <div>
                 <label className="mb-1 block text-sm text-gray-400">Assign Manager</label>
                 <select
@@ -260,6 +523,14 @@ export default function AdminTeamPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+            {form.role === "support" && viewerRole === "manager" && (
+              <div>
+                <label className="mb-1 block text-sm text-gray-400">Manager</label>
+                <p className="rounded-lg border border-gray-700 bg-gray-800/80 px-3 py-2 text-sm text-gray-300">
+                  Assigned to your team automatically
+                </p>
               </div>
             )}
             {/* Error banner */}
@@ -296,17 +567,17 @@ export default function AdminTeamPage() {
           <p className="p-6 text-gray-400">No team members yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="border-b border-gray-800 text-left text-gray-400">
-                  <th className="px-4 pb-3 pt-4 font-medium">Employee</th>
-                  <th className="px-4 pb-3 pt-4 font-medium">ID</th>
-                  <th className="px-4 pb-3 pt-4 font-medium">Role</th>
-                  <th className="px-4 pb-3 pt-4 font-medium">Manager</th>
-                  <th className="px-4 pb-3 pt-4 font-medium">Status</th>
-                  <th className="px-4 pb-3 pt-4 font-medium">Password</th>
-                  <th className="px-4 pb-3 pt-4 font-medium">Last Login</th>
-                  <th className="px-4 pb-3 pt-4 font-medium">Actions</th>
+                  <th className="w-[18%] px-4 pb-3 pt-4 font-medium">Employee</th>
+                  <th className="w-[10%] whitespace-nowrap px-4 pb-3 pt-4 font-medium">ID</th>
+                  <th className="w-[14%] px-4 pb-3 pt-4 font-medium">Role</th>
+                  <th className="w-[12%] px-4 pb-3 pt-4 font-medium">Manager</th>
+                  <th className="w-[8%] whitespace-nowrap px-4 pb-3 pt-4 font-medium">Status</th>
+                  <th className="w-[14%] px-4 pb-3 pt-4 font-medium">Password</th>
+                  <th className="w-[14%] whitespace-nowrap px-4 pb-3 pt-4 font-medium">Last Login</th>
+                  <th className="w-[10%] px-4 pb-3 pt-4 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -316,36 +587,51 @@ export default function AdminTeamPage() {
                       <div className="text-white font-medium">{m.name}</div>
                       <div className="text-gray-500 text-xs">{m.email}</div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-gray-300 text-xs">{m.employeeId}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        m.role === "superadmin"
-                          ? "bg-amber-500/20 text-amber-400"
-                          : m.role === "manager"
-                          ? "bg-blue-500/20 text-blue-400"
-                          : "bg-gray-700 text-gray-300"
-                      }`}>
-                        {m.role}
-                      </span>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-300 whitespace-nowrap">{m.employeeId}</td>
+                    <td className="px-4 py-3 align-top wrap-break-word">
+                      {viewerRole === "superadmin" ? (
+                        <SuperadminRoleEditor
+                          member={m}
+                          managers={managers}
+                          viewerId={viewerId}
+                          soleSuperadmin={soleSuperadmin}
+                          onSaved={loadTeam}
+                          showAlert={showAlert}
+                        />
+                      ) : (
+                        <span
+                          className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize whitespace-nowrap ${
+                            m.role === "superadmin"
+                              ? "bg-amber-500/20 text-amber-400"
+                              : m.role === "manager"
+                                ? "bg-blue-500/20 text-blue-400"
+                                : "bg-gray-700 text-gray-300"
+                          }`}
+                        >
+                          {m.role}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400">
                       {m.role === "support"
                         ? (m.managerName || "Unassigned")
                         : "—"}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        m.isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
-                      }`}>
+                    <td className="px-4 py-3 align-middle whitespace-nowrap">
+                      <span
+                        className={`inline-flex w-max max-w-none shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${
+                          m.isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
+                        }`}
+                      >
                         {m.isActive ? "Active" : "Disabled"}
                       </span>
                     </td>
                     {/* Password column — shows after reset, hidden otherwise */}
                     <td className="px-4 py-3">
-                      {m.role === "superadmin" ? (
+                      {!m.canViewPassword ? (
                         <span className="text-xs text-gray-600">—</span>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-nowrap items-center gap-2">
                           <span className="font-mono text-xs font-bold text-amber-400 tracking-wider select-all">
                             {rowPasswords[m.id]
                               ? (rowPasswordVisible[m.id] ? rowPasswords[m.id] : "••••••••••")
@@ -376,13 +662,53 @@ export default function AdminTeamPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => toggleActive(m)}
-                          className="rounded px-2 py-1 text-xs border border-gray-700 text-gray-400 hover:border-amber-500 hover:text-amber-400 transition-colors"
-                        >
-                          {m.isActive ? "Disable" : "Enable"}
-                        </button>
-                        {m.role !== "superadmin" && (
+                        {viewerRole === "superadmin" && m.id !== viewerId && (
+                          <>
+                            <button
+                              onClick={() => toggleActive(m)}
+                              className="rounded px-2 py-1 text-xs border border-gray-700 text-gray-400 hover:border-amber-500 hover:text-amber-400 transition-colors"
+                            >
+                              {m.isActive ? "Disable" : "Enable"}
+                            </button>
+                            <button
+                              onClick={() => resetPassword(m)}
+                              disabled={resetLoading === m.id}
+                              className="rounded px-2 py-1 text-xs border border-gray-700 text-gray-400 hover:border-blue-500 hover:text-blue-400 disabled:opacity-50 transition-colors"
+                            >
+                              {resetLoading === m.id ? "Resetting…" : "🔑 Reset Password"}
+                            </button>
+                            <button
+                              onClick={() => deleteMember(m.id)}
+                              className="rounded px-2 py-1 text-xs border border-gray-700 text-gray-400 hover:border-red-500 hover:text-red-400 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                        {viewerRole === "manager" && m.role === "support" && m.managerId === viewerId && (
+                          <>
+                            <button
+                              onClick={() => toggleActive(m)}
+                              className="rounded px-2 py-1 text-xs border border-gray-700 text-gray-400 hover:border-amber-500 hover:text-amber-400 transition-colors"
+                            >
+                              {m.isActive ? "Disable" : "Enable"}
+                            </button>
+                            <button
+                              onClick={() => resetPassword(m)}
+                              disabled={resetLoading === m.id}
+                              className="rounded px-2 py-1 text-xs border border-gray-700 text-gray-400 hover:border-blue-500 hover:text-blue-400 disabled:opacity-50 transition-colors"
+                            >
+                              {resetLoading === m.id ? "Resetting…" : "🔑 Reset Password"}
+                            </button>
+                            <button
+                              onClick={() => deleteMember(m.id)}
+                              className="rounded px-2 py-1 text-xs border border-gray-700 text-gray-400 hover:border-red-500 hover:text-red-400 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                        {viewerRole === "manager" && m.id === viewerId && m.canViewPassword && (
                           <button
                             onClick={() => resetPassword(m)}
                             disabled={resetLoading === m.id}
@@ -391,14 +717,7 @@ export default function AdminTeamPage() {
                             {resetLoading === m.id ? "Resetting…" : "🔑 Reset Password"}
                           </button>
                         )}
-                        {m.role !== "superadmin" && (
-                          <button
-                            onClick={() => deleteMember(m.id)}
-                            className="rounded px-2 py-1 text-xs border border-gray-700 text-gray-400 hover:border-red-500 hover:text-red-400 transition-colors"
-                          >
-                            Delete
-                          </button>
-                        )}
+                        {viewerRole === "support" && <span className="text-xs text-gray-600">—</span>}
                       </div>
                     </td>
                   </tr>

@@ -3,11 +3,11 @@ import { requireAdmin } from "@/lib/adminSession";
 import { ok, fail } from "@/lib/api";
 import AdminUser from "@/models/AdminUser";
 import AdminMessage from "@/models/AdminMessage";
+import { maskMessageForSupportViewer, serializeChatMessage } from "@/lib/adminChat";
 
 async function resolveTarget(admin) {
   if (admin.role === "support") {
-    if (!admin.managerId) return null;
-    return AdminUser.findOne({ _id: admin.managerId, isActive: true }).select("_id").lean();
+    return AdminUser.findOne({ role: "superadmin", isActive: true }).sort({ createdAt: 1 }).select("_id").lean();
   }
   if (admin.role === "manager") {
     return AdminUser.findOne({ role: "superadmin", isActive: true }).sort({ createdAt: 1 }).select("_id").lean();
@@ -39,25 +39,13 @@ export async function GET() {
       .populate("toAdminId", "name role employeeId")
       .lean();
 
+    const thread = messages
+      .reverse()
+      .map((m) => maskMessageForSupportViewer(dbAdmin.role, serializeChatMessage(m)));
+
     return ok({
       targetId: target._id.toString(),
-      messages: messages.reverse().map((m) => ({
-        id: m._id.toString(),
-        message: m.message,
-        createdAt: m.createdAt,
-        from: {
-          id: m.fromAdminId?._id?.toString?.() || "",
-          name: m.fromAdminId?.name || "",
-          role: m.fromAdminId?.role || "",
-          employeeId: m.fromAdminId?.employeeId || "",
-        },
-        to: {
-          id: m.toAdminId?._id?.toString?.() || "",
-          name: m.toAdminId?.name || "",
-          role: m.toAdminId?.role || "",
-          employeeId: m.toAdminId?.employeeId || "",
-        },
-      })),
+      messages: thread,
     });
   } catch (err) {
     console.error("Admin profile messages GET error:", err);
@@ -78,6 +66,10 @@ export async function POST(req) {
     const dbAdmin = await AdminUser.findById(admin._id).lean();
     if (!dbAdmin) return fail("User not found", 404);
 
+    if (dbAdmin.role === "support") {
+      return fail("Support cannot send messages here. You can read messages from Admin only.", 403);
+    }
+
     const target = await resolveTarget(dbAdmin);
     if (!target) return fail("No target available for this role", 400);
 
@@ -92,25 +84,12 @@ export async function POST(req) {
       .populate("toAdminId", "name role employeeId")
       .lean();
 
-    return ok({
-      message: {
-        id: populated._id.toString(),
-        message: populated.message,
-        createdAt: populated.createdAt,
-        from: {
-          id: populated.fromAdminId?._id?.toString?.() || "",
-          name: populated.fromAdminId?.name || "",
-          role: populated.fromAdminId?.role || "",
-          employeeId: populated.fromAdminId?.employeeId || "",
-        },
-        to: {
-          id: populated.toAdminId?._id?.toString?.() || "",
-          name: populated.toAdminId?.name || "",
-          role: populated.toAdminId?.role || "",
-          employeeId: populated.toAdminId?.employeeId || "",
-        },
+    return ok(
+      {
+        message: maskMessageForSupportViewer(dbAdmin.role, serializeChatMessage(populated)),
       },
-    }, 201);
+      201
+    );
   } catch (err) {
     console.error("Admin profile messages POST error:", err);
     return fail("Internal server error", 500);

@@ -694,10 +694,45 @@ main > * {
   border-color: #475569;
   color: #f1f5f9;
   font-size: 0.875rem;
-  min-height: 120px;
+  min-height: 140px;
 }
 .cms-quill-dark .ql-editor.ql-blank::before {
   color: #64748b;
+}
+
+/* Quill light theme (app content editor on white background) */
+.cms-quill-light .ql-toolbar {
+  background-color: #fafafa;
+  border-color: #d4d4d8;
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+.cms-quill-light .ql-toolbar .ql-stroke {
+  stroke: #52525b;
+}
+.cms-quill-light .ql-toolbar .ql-fill {
+  fill: #52525b;
+}
+.cms-quill-light .ql-toolbar .ql-picker-label {
+  color: #52525b;
+}
+.cms-quill-light .ql-toolbar button:hover .ql-stroke,
+.cms-quill-light .ql-toolbar button.ql-active .ql-stroke {
+  stroke: #18181b;
+}
+.cms-quill-light .ql-toolbar button:hover .ql-fill,
+.cms-quill-light .ql-toolbar button.ql-active .ql-fill {
+  fill: #18181b;
+}
+.cms-quill-light .ql-container {
+  background-color: #ffffff;
+  border-color: #d4d4d8;
+  color: #18181b;
+  font-size: 0.875rem;
+  min-height: 140px;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+.cms-quill-light .ql-editor.ql-blank::before {
+  color: #a1a1aa;
 }
 
 /* My Subscription scoped readability in dark mode */
