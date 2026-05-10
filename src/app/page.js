@@ -4,6 +4,7 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import PublicFooter from "@/components/PublicFooter";
 import PublicModeToggle from "@/components/PublicModeToggle";
+import HomeTrendingSection from "@/components/HomeTrendingSection";
 import { ArrowRight } from "lucide-react";
 import { getCmsPageContent } from "@/lib/cmsPublic";
 
@@ -168,6 +169,10 @@ export default async function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="relative mx-auto max-w-6xl px-4 pb-10 pt-2 sm:px-6 md:pb-14 md:pt-0">
+        <HomeTrendingSection />
       </section>
 
       <section className="relative border-y border-zinc-200 bg-white/50">
