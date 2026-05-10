@@ -113,7 +113,7 @@ export default function FileShareClient({ token }) {
   );
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(34,197,94,0.12),transparent_35%),#f5f5f4] px-6 py-14">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(34,197,94,0.12),transparent_35%),#f5f5f4] px-4 pb-[max(3.5rem,env(safe-area-inset-bottom))] pt-10 pe-[max(1rem,env(safe-area-inset-right))] ps-[max(1rem,env(safe-area-inset-left))] sm:px-6 sm:py-14">
       <section className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
         <article className="overflow-hidden rounded-[32px] border border-zinc-200 bg-white shadow-[0_20px_70px_rgba(0,0,0,0.08)]">
           {canPreview ? (
@@ -242,7 +242,7 @@ export default function FileShareClient({ token }) {
             if (event.target === event.currentTarget) setPreviewOpen(false);
           }}
         >
-          <div className="relative max-h-full w-full max-w-6xl">
+          <div className="relative flex min-h-0 w-full max-w-6xl flex-col">
             <button
               type="button"
               onClick={() => setPreviewOpen(false)}
@@ -252,11 +252,11 @@ export default function FileShareClient({ token }) {
               <X className="h-5 w-5" />
             </button>
 
-            <div className="max-h-[85vh] overflow-hidden rounded-2xl bg-black shadow-2xl">
+            <div className="flex h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-3rem))] max-h-[85vh] flex-col overflow-hidden rounded-2xl bg-black shadow-2xl">
               {isPdfFile(file) ? (
                 <PdfViewer
                   fileUrl={pdfViewerUrl}
-                  className="h-[85vh] w-full overflow-hidden rounded-2xl bg-zinc-900"
+                  className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-zinc-900"
                 />
               ) : isVideoFile(file) ? (
                 <video key={file.mediaUrl} src={file.mediaUrl} controls autoPlay playsInline className="max-h-[85vh] w-full bg-black object-contain" />

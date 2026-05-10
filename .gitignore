@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# Generated from pdfjs-dist (see scripts/copy-pdf-worker.mjs)
+/public/pdf.worker.min.js
+
 # production
 /build
 

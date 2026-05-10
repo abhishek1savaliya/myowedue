@@ -54,6 +54,16 @@ const googlePlayfair = Playfair_Display({
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://myowedue.vercel.app";
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f5ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1020" },
+  ],
+};
+
 export const metadata = {
   metadataBase: new URL(siteUrl),
   icons: {

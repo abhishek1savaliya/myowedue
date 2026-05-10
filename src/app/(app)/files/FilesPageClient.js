@@ -1416,8 +1416,8 @@ export default function FilesPageClient() {
               if (event.target === event.currentTarget) setPreviewFile(null);
             }}
           >
-            <div className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-              <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
+            <div className="flex h-[min(92dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
                 <div className="min-w-0">
                   <h2 id="file-preview-title" className="truncate text-sm font-semibold text-black">
                     {previewFile.title || previewFile.originalName}
@@ -1435,11 +1435,11 @@ export default function FilesPageClient() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <div className="flex min-h-0 flex-1 items-center justify-center bg-zinc-950 p-2 sm:p-4">
+              <div className="relative min-h-0 flex-1 bg-zinc-950 p-2 sm:p-4">
                 {isPdfFile(previewFile) ? (
                   <PdfViewer
                     fileUrl={`/api/files/${previewFile.id}/content`}
-                    className="h-[calc(94dvh-5.5rem)] w-full overflow-hidden rounded-lg bg-zinc-900"
+                    className="h-full min-h-[50dvh] w-full overflow-hidden rounded-lg bg-zinc-900"
                   />
                 ) : isVideoFile(previewFile) ? (
                   CAN_USE_VIDSTACK_PLAYER ? (
