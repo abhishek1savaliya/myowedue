@@ -45,31 +45,39 @@ function communityUserProfileHref(username) {
 
 function CommunityAuthorAttribution({ displayName, username, isSelf, verified, isX, className }) {
   const href = communityUserProfileHref(username);
-  const handleMuted = isX ? "text-zinc-500" : "text-zinc-500 dark:text-zinc-400";
-  const youMuted = isX ? "text-sky-400" : "text-zinc-500 dark:text-zinc-400";
+  /** Explicit colors: "x" skin cards are still `bg-white` in light mode — use dark ink there, pale text only in `dark:`. */
+  const nameLink = isX
+    ? "font-semibold text-zinc-950 underline-offset-2 hover:text-zinc-800 hover:underline dark:text-zinc-100 dark:hover:text-white dark:hover:underline"
+    : "font-semibold text-zinc-950 underline-offset-2 hover:text-zinc-800 hover:underline dark:text-zinc-50 dark:hover:text-zinc-200";
+  const nameText = isX
+    ? "font-semibold text-zinc-950 dark:text-zinc-100"
+    : "font-semibold text-zinc-950 dark:text-zinc-50";
+  const handleLink = isX
+    ? "font-normal text-zinc-700 underline-offset-2 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-300 dark:hover:underline"
+    : "font-normal text-zinc-700 underline-offset-2 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-300";
+  const handleText = isX
+    ? "font-normal text-zinc-700 dark:text-zinc-400"
+    : "font-normal text-zinc-700 dark:text-zinc-400";
+  const youMuted = isX ? "text-sky-400" : "text-zinc-600 dark:text-zinc-400";
 
   return (
     <p className={className}>
       {href ? (
-        <Link href={href} className="font-semibold hover:underline" onClick={(e) => e.stopPropagation()}>
+        <Link href={href} className={nameLink} onClick={(e) => e.stopPropagation()}>
           {displayName}
         </Link>
       ) : (
-        <span className="font-semibold">{displayName}</span>
+        <span className={nameText}>{displayName}</span>
       )}
       {username ? (
         <>
           {" "}
           {href ? (
-            <Link
-              href={href}
-              className={`font-normal ${handleMuted} hover:underline`}
-              onClick={(e) => e.stopPropagation()}
-            >
+            <Link href={href} className={handleLink} onClick={(e) => e.stopPropagation()}>
               @{username}
             </Link>
           ) : (
-            <span className={`font-normal ${handleMuted}`}>@{username}</span>
+            <span className={handleText}>@{username}</span>
           )}
         </>
       ) : null}
@@ -197,7 +205,7 @@ function CommentBranch({
           isSelf={node.author_id === currentUserId}
           verified={Boolean(node.authorVerified)}
           isX={isX}
-          className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-semibold ${isX ? "text-zinc-100" : "text-zinc-800 dark:text-zinc-200"}`}
+          className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
         />
         <p className={`mt-1 whitespace-pre-wrap text-sm ${isX ? "text-zinc-200" : "text-zinc-700 dark:text-zinc-300"}`}>{node.body}</p>
         <p className={`mt-1 text-[11px] ${isX ? "text-zinc-500" : "text-zinc-500"}`}>
@@ -575,7 +583,7 @@ export function PostCard({
             isSelf={post.author_id === currentUserId}
             verified={post.authorVerified}
             isX={isX}
-            className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold ${isX ? "text-zinc-100" : "text-zinc-900 dark:text-zinc-100"}`}
+            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm"
           />
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}

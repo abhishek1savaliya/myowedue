@@ -27,13 +27,69 @@ function stripSqlComments(sql) {
   return sql.replace(/^\s*--.*$/gm, "");
 }
 
+/**
+ * Split SQL on semicolons only outside strings and dollar-quoted blocks.
+ * Naive splitting breaks PL/pgSQL (`as $$ ... return; ... end; $$;`).
+ */
 function splitSqlStatements(sql) {
   const normalized = stripSqlComments(sql).replace(/\r\n/g, "\n").trim();
   if (!normalized) return [];
-  return normalized
-    .split(/;\s*(?:\n+|$)/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+
+  const statements = [];
+  let start = 0;
+  let i = 0;
+  let inSingle = false;
+
+  while (i < normalized.length) {
+    const c = normalized[i];
+
+    if (inSingle) {
+      if (c === "'" && normalized[i + 1] === "'") {
+        i += 2;
+        continue;
+      }
+      if (c === "'") {
+        inSingle = false;
+      }
+      i++;
+      continue;
+    }
+
+    if (c === "$") {
+      const rest = normalized.slice(i);
+      const tagMatch = rest.match(/^\$([A-Za-z0-9_]*)\$/);
+      if (tagMatch) {
+        const tag = tagMatch[1];
+        const openLen = tagMatch[0].length;
+        const close = `$${tag}$`;
+        const j = i + openLen;
+        const closeIdx = normalized.indexOf(close, j);
+        if (closeIdx === -1) {
+          i = normalized.length;
+          break;
+        }
+        i = closeIdx + close.length;
+        continue;
+      }
+    }
+
+    if (c === "'") {
+      inSingle = true;
+      i++;
+      continue;
+    }
+
+    if (c === ";") {
+      const stmt = normalized.slice(start, i).trim();
+      if (stmt) statements.push(stmt);
+      start = i + 1;
+    }
+    i++;
+  }
+
+  const tail = normalized.slice(start).trim();
+  if (tail) statements.push(tail);
+  return statements;
 }
 
 async function runMigrationWithPool(clientPool, sql) {
@@ -128,6 +184,18 @@ async function ensureLateCommunityMigrations(clientPool) {
     const sql008 = readFileSync(join(migrationsDir, "008_community_follows.sql"), "utf8");
     await runMigrationWithPool(clientPool, sql008);
     console.info("[community] Postgres community_follows ensured (008_community_follows.sql).");
+  }
+
+  const suggestFn = await clientPool.query(
+    `SELECT 1 FROM pg_proc p
+     INNER JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.proname = 'community_username_suggest'
+     LIMIT 1`
+  );
+  if (suggestFn.rows.length === 0) {
+    const sql009 = readFileSync(join(migrationsDir, "009_community_username_suggest.sql"), "utf8");
+    await runMigrationWithPool(clientPool, sql009);
+    console.info("[community] Postgres community_username_suggest ensured (009_community_username_suggest.sql).");
   }
 }
 
