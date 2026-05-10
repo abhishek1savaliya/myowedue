@@ -31,7 +31,7 @@ export async function POST(request, { params }) {
     return fail("Profile not found.", 404);
   }
 
-  const { data: row, error: qErr } = await supabase
+  const { data: rowExact, error: qErr } = await supabase
     .from("community_usernames")
     .select("user_id")
     .eq("username", parsed.normalized)
@@ -41,6 +41,21 @@ export async function POST(request, { params }) {
     const mapped = mapCommunitySupabaseError(qErr.message, setup);
     if (mapped) return fail(mapped, 503);
     return fail(qErr.message || "Lookup failed", 500);
+  }
+
+  let row = rowExact;
+  if (!row?.user_id) {
+    const { data: rowInsensitive, error: iErr } = await supabase
+      .from("community_usernames")
+      .select("user_id")
+      .ilike("username", parsed.normalized)
+      .maybeSingle();
+    if (iErr) {
+      const mapped = mapCommunitySupabaseError(iErr.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(iErr.message || "Lookup failed", 500);
+    }
+    row = rowInsensitive;
   }
 
   if (!row?.user_id) {

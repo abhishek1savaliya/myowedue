@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, BadgeCheck, Calendar, Loader2, Share2, UserPlus } from "lucide-react";
 import { format } from "date-fns";
 import ModalPortal from "@/components/ModalPortal";
+import { PostCard } from "@/components/community/CommunityFeedClient";
 import ShareProfileModal from "@/components/community/ShareProfileModal";
 import SharePostModal from "@/components/community/SharePostModal";
 
@@ -38,6 +39,8 @@ export default function CommunityProfileClient({ username: usernameParam }) {
   const [postsLoading, setPostsLoading] = useState(false);
   const [postShareTarget, setPostShareTarget] = useState(null);
   const [currentUserId, setCurrentUserId] = useState("");
+  const [postsFilter, setPostsFilter] = useState("all");
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,7 +79,8 @@ export default function CommunityProfileClient({ username: usernameParam }) {
     (async () => {
       setPostsLoading(true);
       try {
-        const res = await fetch(`/api/community/profile/${encodeURIComponent(profile.username)}/posts`, {
+        const qs = postsFilter === "all" ? "" : `?filter=${encodeURIComponent(postsFilter)}`;
+        const res = await fetch(`/api/community/profile/${encodeURIComponent(profile.username)}/posts${qs}`, {
           credentials: "include",
           cache: "no-store",
         });
@@ -92,7 +96,7 @@ export default function CommunityProfileClient({ username: usernameParam }) {
     return () => {
       cancelled = true;
     };
-  }, [profile?.username, profile?.visibility, profile?.viewer?.isSelf]);
+  }, [profile?.username, profile?.visibility, profile?.viewer?.isSelf, postsFilter]);
 
   async function toggleFollow() {
     if (!profile?.viewer || profile.viewer.isSelf) return;
@@ -168,6 +172,37 @@ export default function CommunityProfileClient({ username: usernameParam }) {
     }
   }
 
+  async function updateVisibility(nextVisibility) {
+    if (!profile?.viewer?.isSelf || visibilitySaving) return;
+    const next = nextVisibility === "private" ? "private" : "public";
+    const prev = profile?.visibility === "private" ? "private" : "public";
+    if (next === prev) return;
+    setVisibilitySaving(true);
+    setProfile((p) => (p ? { ...p, visibility: next } : p));
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ communityProfileVisibility: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed to save");
+      const saved = data.communityProfileVisibility === "private" ? "private" : "public";
+      setProfile((p) => (p ? { ...p, visibility: saved } : p));
+    } catch {
+      setProfile((p) => (p ? { ...p, visibility: prev } : p));
+    } finally {
+      setVisibilitySaving(false);
+    }
+  }
+
+  function bumpCommentCount(postId, delta) {
+    setProfilePosts((list) =>
+      list.map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, (p.commentCount || 0) + delta) } : p))
+    );
+  }
+
   const joinedLabel = profile?.joinedAt ? format(new Date(profile.joinedAt), "MMMM yyyy") : null;
   const followersCount = profile?.followersCount ?? 0;
   const followingCount = profile?.followingCount ?? 0;
@@ -228,6 +263,31 @@ export default function CommunityProfileClient({ username: usernameParam }) {
                 </div>
                 <div className="min-w-0 pb-1 sm:pb-2">
                   <div className="flex flex-wrap items-center justify-end gap-2">
+                    {profile?.viewer?.isSelf ? (
+                      <div className="inline-flex items-center rounded-full border border-zinc-300 bg-white p-1 shadow-sm dark:border-zinc-600 dark:bg-zinc-800">
+                        {[
+                          ["public", "Public"],
+                          ["private", "Private"],
+                        ].map(([id, label]) => {
+                          const active = (profile?.visibility || "public") === id;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              disabled={visibilitySaving}
+                              onClick={() => void updateVisibility(id)}
+                              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                                active
+                                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                                  : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                     {!isPrivateForViewer && profile.viewer && !profile.viewer.isSelf ? (
                       profile.viewer.isFollowing ? (
                       <button
@@ -291,9 +351,19 @@ export default function CommunityProfileClient({ username: usernameParam }) {
                 {!isPrivateForViewer ? (
                   <>
                     <p className="mt-2 text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
-                      <span className="font-medium text-zinc-800 dark:text-zinc-200">{followersCount}</span> followers
+                      <Link
+                        href={`/community/user/${encodeURIComponent(profile.username)}/followers`}
+                        className="font-medium text-zinc-800 underline decoration-zinc-300 underline-offset-2 hover:text-zinc-950 dark:text-zinc-200 dark:decoration-zinc-600 dark:hover:text-white"
+                      >
+                        {followersCount} followers
+                      </Link>
                       <span className="mx-2 text-zinc-300 dark:text-zinc-600">·</span>
-                      <span className="font-medium text-zinc-800 dark:text-zinc-200">{followingCount}</span> following
+                      <Link
+                        href={`/community/user/${encodeURIComponent(profile.username)}/following`}
+                        className="font-medium text-zinc-800 underline decoration-zinc-300 underline-offset-2 hover:text-zinc-950 dark:text-zinc-200 dark:decoration-zinc-600 dark:hover:text-white"
+                      >
+                        {followingCount} following
+                      </Link>
                     </p>
                     {joinedLabel ? (
                       <p className="mt-4 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
@@ -320,7 +390,31 @@ export default function CommunityProfileClient({ username: usernameParam }) {
 
           {!isPrivateForViewer ? (
             <section className="mt-6">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Posts</h2>
+              <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-1.5 dark:border-zinc-700 dark:bg-zinc-900/80">
+                <div className="grid grid-cols-3 gap-1">
+                  {[
+                    ["all", "My posts"],
+                    ["liked", "Liked"],
+                    ["shared", "Shared"],
+                  ].map(([id, label]) => {
+                    const active = postsFilter === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setPostsFilter(id)}
+                        className={`rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                          active
+                            ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-100"
+                            : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               {postsLoading ? (
                 <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -328,42 +422,37 @@ export default function CommunityProfileClient({ username: usernameParam }) {
                 </div>
               ) : profilePosts.length === 0 ? (
                 <div className="rounded-xl border border-zinc-200 bg-white px-4 py-5 text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-400">
-                  No posts yet.
+                  {postsFilter === "all" ? "No posts yet." : postsFilter === "liked" ? "No liked posts yet." : "No shared posts yet."}
                 </div>
               ) : (
                 <div className="space-y-4">
                   {profilePosts.map((post) => (
-                    <article key={post.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                          {post.author_name} <span className="font-normal text-zinc-500 dark:text-zinc-400">@{post.author_username}</span>
-                        </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{format(new Date(post.created_at), "dd MMM yyyy")}</p>
-                      </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">{post.body}</p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                        <button
-                          type="button"
-                          onClick={() => void onLikeToggle(post)}
-                          className={`rounded-full px-2.5 py-1 ${post.liked ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" : "bg-zinc-100 dark:bg-zinc-800"}`}
-                        >
-                          Likes {post.likeCount || 0}
-                        </button>
-                        <span className="rounded-full bg-zinc-100 px-2.5 py-1 dark:bg-zinc-800">Comments {post.commentCount || 0}</span>
-                        <button
-                          type="button"
-                          onClick={() => setPostShareTarget(post)}
-                          className="rounded-full bg-zinc-100 px-2.5 py-1 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
-                        >
-                          Share {post.share_count || 0}
-                        </button>
-                      </div>
-                    </article>
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      currentUserId={currentUserId}
+                      onLikeToggle={onLikeToggle}
+                      onRequestShare={setPostShareTarget}
+                      onCommentCountChange={bumpCommentCount}
+                      onCommunityMutate={() => {}}
+                      canInteract={Boolean(currentUserId)}
+                      loginNextPath={`/community/user/${encodeURIComponent(usernameParam)}`}
+                      onNotifyError={() => {}}
+                      skin="default"
+                      postDetailHref={`/community/post/${post.id}`}
+                      onPostRemoved={(removedId) => {
+                        setProfilePosts((list) => list.filter((p) => p.id !== removedId));
+                      }}
+                      onPostUpdated={(updatedId, nextPost) => {
+                        setProfilePosts((list) => list.map((p) => (p.id === updatedId ? { ...p, ...nextPost } : p)));
+                      }}
+                    />
                   ))}
                 </div>
               )}
             </section>
           ) : null}
+
         </div>
       ) : null}
       {postShareTarget ? (
