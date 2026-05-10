@@ -1,14 +1,21 @@
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://myowedue.vercel.app";
+import { fetchCommunityPostSitemapRows, getCommunitySiteUrl } from "@/lib/community-seo";
 
-export default function sitemap() {
+export default async function sitemap() {
+  const siteUrl = getCommunitySiteUrl();
   const now = new Date();
 
-  return [
+  const staticEntries = [
     {
       url: `${siteUrl}/`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 1,
+    },
+    {
+      url: `${siteUrl}/community`,
+      lastModified: now,
+      changeFrequency: "daily",
+      priority: 0.9,
     },
     {
       url: `${siteUrl}/login`,
@@ -35,4 +42,14 @@ export default function sitemap() {
       priority: 0.4,
     },
   ];
+
+  const rows = await fetchCommunityPostSitemapRows();
+  const postEntries = rows.map((row) => ({
+    url: `${siteUrl}/community/post/${row.id}`,
+    lastModified: row.updated_at ? new Date(row.updated_at) : now,
+    changeFrequency: "weekly",
+    priority: 0.65,
+  }));
+
+  return [...staticEntries, ...postEntries];
 }

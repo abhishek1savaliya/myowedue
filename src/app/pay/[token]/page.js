@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BackButton from "@/components/BackButton";
 import { notFound, redirect } from "next/navigation";
 import { Copy, Lock, Wallet } from "lucide-react";
 import { connectDB } from "@/lib/db";
@@ -78,9 +79,7 @@ export default async function PaymentLinkPage({ params }) {
 		<main className="payment-link-ui min-h-screen bg-background text-foreground">
 			<section className="mx-auto max-w-4xl px-6 py-12 md:py-16">
 				<div className="flex items-center justify-between">
-					<Link href="/" className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-600">
-						Back to home
-					</Link>
+					<BackButton href="/" label="Back to home" className="text-xs uppercase tracking-wide" />
 					{visibility === "private" ? (
 						<span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-600">
 							<Lock className="h-3 w-3" /> Private

@@ -50,6 +50,81 @@ function nestComments(flat) {
   return roots;
 }
 
+const ROOT_PAGE_DEFAULT = 5;
+
+/** Paginate top-level comment threads (roots), including full reply trees per root. */
+async function fetchCommentRootPage(supabase, postId, limit, cursorCreatedAt) {
+  const lim = Math.min(Math.max(Number(limit) || ROOT_PAGE_DEFAULT, 1), 50);
+  const pageSize = lim + 1;
+
+  let rootsQuery = supabase
+    .from("community_comments")
+    .select("id, post_id, parent_id, author_id, author_name, body, created_at")
+    .eq("post_id", postId)
+    .is("parent_id", null)
+    .order("created_at", { ascending: true })
+    .limit(pageSize);
+
+  if (cursorCreatedAt) {
+    const d = new Date(String(cursorCreatedAt));
+    if (!Number.isNaN(d.getTime())) {
+      rootsQuery = rootsQuery.gt("created_at", d.toISOString());
+    }
+  }
+
+  const { data: rootRows, error: rErr } = await rootsQuery;
+  if (rErr) return { error: rErr };
+
+  const slice = rootRows || [];
+  const hasMore = slice.length > lim;
+  const roots = hasMore ? slice.slice(0, lim) : slice;
+  const rootIds = roots.map((r) => String(r.id));
+
+  if (rootIds.length === 0) {
+    return {
+      comments: [],
+      nextCommentCursor: null,
+      hasMoreComments: false,
+      error: null,
+    };
+  }
+
+  const collected = new Map(roots.map((r) => [String(r.id), r]));
+  let frontier = [...rootIds];
+  let depth = 0;
+  while (frontier.length > 0 && depth < 48) {
+    depth += 1;
+    const { data: layer, error: lErr } = await supabase
+      .from("community_comments")
+      .select("id, post_id, parent_id, author_id, author_name, body, created_at")
+      .eq("post_id", postId)
+      .in("parent_id", frontier);
+    if (lErr) return { error: lErr };
+    if (!layer?.length) break;
+    const next = [];
+    for (const row of layer) {
+      const id = String(row.id);
+      if (!collected.has(id)) {
+        collected.set(id, row);
+        next.push(id);
+      }
+    }
+    frontier = next;
+  }
+
+  const flat = Array.from(collected.values());
+  const nested = nestComments(flat);
+  const lastRoot = roots[roots.length - 1];
+  const nextCommentCursor = hasMore && lastRoot?.created_at ? lastRoot.created_at : null;
+
+  return {
+    comments: nested,
+    nextCommentCursor,
+    hasMoreComments: hasMore,
+    error: null,
+  };
+}
+
 export async function GET(request, { params }) {
   const user = await getSessionUser(request);
 
@@ -65,6 +140,26 @@ export async function GET(request, { params }) {
 
   const { id: postId } = await params;
   if (!postId) return fail("Missing post id", 400);
+
+  const { searchParams } = new URL(request.url);
+  const usePaging = searchParams.has("limit") || searchParams.has("cursor");
+
+  if (usePaging) {
+    const limit = searchParams.get("limit");
+    const cursor = searchParams.get("cursor");
+    const page = await fetchCommentRootPage(supabase, postId, limit, cursor);
+    if (page.error) {
+      const mapped = mapCommunitySupabaseError(page.error.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(page.error.message, 500);
+    }
+    return ok({
+      comments: page.comments,
+      currentUserId: user ? String(user._id) : "",
+      nextCommentCursor: page.nextCommentCursor,
+      hasMoreComments: page.hasMoreComments,
+    });
+  }
 
   const viewerId = user ? String(user._id) : "anon";
   const commentsCacheKey = communityCommentsCacheKey(postId, viewerId);

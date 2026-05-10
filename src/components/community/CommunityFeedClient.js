@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
+import SharePostModal from "@/components/community/SharePostModal";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { BadgeCheck, ChevronRight, Heart, Loader2, MessageCircle, Repeat2, Send } from "lucide-react";
+import { BadgeCheck, ChevronRight, Heart, Loader2, MessageCircle, Pencil, Repeat2, Send, Trash2 } from "lucide-react";
+import { COMMUNITY_POST_EDIT_WINDOW_MS, isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window";
 import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
 
 const COMMUNITY_SETUP_MESSAGE =
@@ -165,43 +168,242 @@ function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, current
   );
 }
 
-function PostCard({
+export function PostCard({
   post,
   currentUserId,
   onLikeToggle,
-  onShare,
+  onRequestShare,
   onCommentCountChange,
   onCommunityMutate,
   canInteract,
   loginNextPath,
   onNotifyError,
   skin = "default",
+  postDetailHref = "",
+  mode = "card",
+  onPostRemoved,
+  onPostUpdated,
 }) {
   const router = useRouter();
   const isX = skin === "x";
-  const [commentsOpen, setCommentsOpen] = useState(false);
+  const isDetail = mode === "detail";
+  const [commentsOpen, setCommentsOpen] = useState(isDetail);
   const [comments, setComments] = useState([]);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [postingComment, setPostingComment] = useState(false);
+  const [nextCommentCursor, setNextCommentCursor] = useState(null);
+  const [hasMoreComments, setHasMoreComments] = useState(false);
+  const nextCommentCursorRef = useRef(null);
+  const loadMoreCommentsSentinelRef = useRef(null);
+  const loadingMoreCommentsRef = useRef(false);
 
   function goLogin() {
     router.push(`/login?next=${encodeURIComponent(loginNextPath)}`);
   }
 
-  const loadComments = useCallback(async () => {
-    setLoadingComments(true);
-    try {
-      const res = await fetch(`/api/community/posts/${post.id}/comments`, { credentials: "include", cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || "Failed to load comments");
-      setComments(data.comments || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingComments(false);
+  const isOwnPost = Boolean(
+    canInteract && currentUserId && String(post.author_id) === String(currentUserId)
+  );
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState(post.body);
+  const [savingPost, setSavingPost] = useState(false);
+  const [deletingPost, setDeletingPost] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [editWindowClosed, setEditWindowClosed] = useState(
+    () => !isCommunityPostEditWindowOpen(post.created_at)
+  );
+
+  useEffect(() => {
+    if (!editing) setEditDraft(post.body);
+  }, [post.body, post.id, editing]);
+
+  useEffect(() => {
+    if (!isOwnPost) return undefined;
+    if (!isCommunityPostEditWindowOpen(post.created_at)) {
+      setEditWindowClosed(true);
+      return undefined;
     }
-  }, [post.id]);
+    setEditWindowClosed(false);
+    const createdMs = new Date(post.created_at).getTime();
+    const msLeft = COMMUNITY_POST_EDIT_WINDOW_MS - (Date.now() - createdMs);
+    if (msLeft <= 0) {
+      setEditWindowClosed(true);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setEditWindowClosed(true);
+      setEditing(false);
+    }, msLeft);
+    return () => clearTimeout(timer);
+  }, [isOwnPost, post.created_at]);
+
+  useEffect(() => {
+    if (editWindowClosed && editing) {
+      setEditing(false);
+      setEditDraft(post.body);
+    }
+  }, [editWindowClosed, editing, post.body]);
+
+  const startEdit = useCallback(() => {
+    if (!canInteract || !isOwnPost || editWindowClosed) return;
+    setEditDraft(post.body);
+    setEditing(true);
+  }, [canInteract, isOwnPost, editWindowClosed, post.body]);
+
+  const cancelEdit = useCallback(() => {
+    setEditing(false);
+    setEditDraft(post.body);
+  }, [post.body]);
+
+  const saveEdit = useCallback(async () => {
+    const t = editDraft.trim();
+    if (!t || savingPost) return;
+    setSavingPost(true);
+    try {
+      const res = await fetch(`/api/community/posts/${post.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ body: t }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed to update post");
+      if (data.post) onPostUpdated?.(post.id, data.post);
+      setEditing(false);
+      onCommunityMutate?.();
+    } catch (err) {
+      onNotifyError?.(err.message || "Failed to update post");
+    } finally {
+      setSavingPost(false);
+    }
+  }, [editDraft, post.id, savingPost, onPostUpdated, onCommunityMutate, onNotifyError]);
+
+  const openDeleteModal = useCallback(() => {
+    if (!canInteract || !isOwnPost || editing || deletingPost) return;
+    setDeleteModalOpen(true);
+  }, [canInteract, isOwnPost, editing, deletingPost]);
+
+  const cancelDeleteModal = useCallback(() => {
+    if (deletingPost) return;
+    setDeleteModalOpen(false);
+  }, [deletingPost]);
+
+  const confirmDeletePost = useCallback(async () => {
+    if (!canInteract || !isOwnPost || deletingPost) return;
+    setDeletingPost(true);
+    try {
+      const res = await fetch(`/api/community/posts/${post.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed to delete post");
+      setDeleteModalOpen(false);
+      onPostRemoved?.(post.id);
+      onCommunityMutate?.();
+    } catch (err) {
+      onNotifyError?.(err.message || "Failed to delete post");
+    } finally {
+      setDeletingPost(false);
+    }
+  }, [canInteract, isOwnPost, deletingPost, post.id, onPostRemoved, onCommunityMutate, onNotifyError]);
+
+  useEffect(() => {
+    if (!deleteModalOpen) return undefined;
+    function onKeyDown(e) {
+      if (e.key === "Escape") cancelDeleteModal();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [deleteModalOpen, cancelDeleteModal]);
+
+  useEffect(() => {
+    nextCommentCursorRef.current = nextCommentCursor;
+  }, [nextCommentCursor]);
+
+  const loadComments = useCallback(
+    async (append = false) => {
+      if (isDetail) {
+        if (append) {
+          if (!nextCommentCursorRef.current || loadingMoreCommentsRef.current) return;
+          loadingMoreCommentsRef.current = true;
+          setLoadingMoreComments(true);
+        } else {
+          setLoadingComments(true);
+        }
+        try {
+          const c = nextCommentCursorRef.current;
+          const qs = new URLSearchParams({ limit: "5" });
+          if (append && c) qs.set("cursor", c);
+          const res = await fetch(`/api/community/posts/${post.id}/comments?${qs.toString()}`, {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.message || "Failed to load comments");
+          const next = data.comments || [];
+          setComments((prev) => (append ? [...prev, ...next] : next));
+          setNextCommentCursor(data.nextCommentCursor || null);
+          setHasMoreComments(Boolean(data.hasMoreComments));
+        } catch (e) {
+          console.error(e);
+        } finally {
+          if (append) {
+            loadingMoreCommentsRef.current = false;
+            setLoadingMoreComments(false);
+          } else {
+            setLoadingComments(false);
+          }
+        }
+        return;
+      }
+
+      setLoadingComments(true);
+      try {
+        const res = await fetch(`/api/community/posts/${post.id}/comments`, { credentials: "include", cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Failed to load comments");
+        setComments(data.comments || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingComments(false);
+      }
+    },
+    [post.id, isDetail]
+  );
+
+  useEffect(() => {
+    if (!isDetail) return undefined;
+    void loadComments(false);
+    return undefined;
+  }, [isDetail, post.id, loadComments]);
+
+  useEffect(() => {
+    if (!isDetail) return undefined;
+    const el = loadMoreCommentsSentinelRef.current;
+    if (!el) return undefined;
+    const ob = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (
+            entry.isIntersecting &&
+            hasMoreComments &&
+            nextCommentCursorRef.current &&
+            !loadingMoreCommentsRef.current &&
+            !loadingComments
+          ) {
+            void loadComments(true);
+          }
+        }
+      },
+      { root: null, rootMargin: "120px", threshold: 0 }
+    );
+    ob.observe(el);
+    return () => ob.disconnect();
+  }, [isDetail, hasMoreComments, loadingComments, loadComments, comments.length]);
 
   async function submitTopComment(e) {
     e.preventDefault();
@@ -222,7 +424,7 @@ function PostCard({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Failed to comment");
       setCommentText("");
-      await loadComments();
+      await loadComments(isDetail ? false : undefined);
       onCommentCountChange(post.id, 1);
       onCommunityMutate?.();
     } catch (err) {
@@ -230,6 +432,173 @@ function PostCard({
     } finally {
       setPostingComment(false);
     }
+  }
+
+  function renderAuthorHeader() {
+    return (
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="flex flex-wrap items-center gap-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <span>{post.author_name}</span>
+            {post.authorVerified ? (
+              <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" title="Verified" />
+            ) : null}
+            {post.author_id === currentUserId ? (
+              <span className="text-xs font-normal text-amber-600 dark:text-amber-400">(you)</span>
+            ) : null}
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  function renderReadonlyPostBlock(forX) {
+    const linkClass = forX
+      ? "-m-1 block rounded-xl p-1 outline-offset-2 hover:bg-stone-50/80 dark:hover:bg-zinc-800/50"
+      : "-m-1 block rounded-xl p-1 outline-offset-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50";
+    const bodyClass =
+      "mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-800 dark:text-zinc-200";
+    if (postDetailHref) {
+      return (
+        <Link href={postDetailHref} className={linkClass}>
+          {renderAuthorHeader()}
+          <p className={bodyClass}>{post.body}</p>
+        </Link>
+      );
+    }
+    return (
+      <>
+        {renderAuthorHeader()}
+        <p className={bodyClass}>{post.body}</p>
+      </>
+    );
+  }
+
+  function renderEditingBlock(forX) {
+    const taClass = forX
+      ? "mt-3 w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400 focus:border-amber-400 focus:outline-none dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-100"
+      : "mt-3 w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[15px] text-zinc-900 placeholder:text-zinc-400 focus:border-amber-400 focus:outline-none dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-100";
+    const saveClass = forX
+      ? "inline-flex items-center justify-center gap-1 rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+      : "inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 dark:bg-amber-600";
+    const cancelClass = forX
+      ? "inline-flex items-center justify-center gap-1 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-stone-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-200 dark:hover:bg-slate-800"
+      : "inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-200";
+    return (
+      <>
+        {renderAuthorHeader()}
+        <textarea
+          value={editDraft}
+          onChange={(e) => setEditDraft(e.target.value)}
+          maxLength={280}
+          rows={4}
+          aria-label="Edit post"
+          className={taClass}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-zinc-500">{editDraft.length}/280</span>
+          <button type="button" disabled={savingPost || !editDraft.trim()} onClick={() => void saveEdit()} className={saveClass}>
+            {savingPost ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            Save
+          </button>
+          <button type="button" disabled={savingPost} onClick={cancelEdit} className={cancelClass}>
+            Cancel
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  function renderOwnerControls(forX) {
+    if (!isOwnPost || editing) return null;
+    const iconBtn = forX
+      ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-zinc-600 shadow-sm transition hover:bg-stone-100 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-300 dark:hover:bg-slate-800 dark:hover:text-zinc-100"
+      : "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-100 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-300 dark:hover:bg-slate-800 dark:hover:text-zinc-100";
+    const delBtn = forX
+      ? `${iconBtn} border-rose-200/90 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/40`
+      : `${iconBtn} border-rose-200/90 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/40`;
+    return (
+      <div className="flex shrink-0 items-center justify-end gap-1.5" role="group" aria-label="Your post">
+        {!editWindowClosed ? (
+          <button type="button" onClick={startEdit} className={iconBtn} aria-label="Edit post" title="Edit post">
+            <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={openDeleteModal}
+          disabled={deletingPost}
+          className={delBtn}
+          aria-label="Delete post"
+          title="Delete post"
+        >
+          {deletingPost ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />}
+        </button>
+      </div>
+    );
+  }
+
+  function renderDeleteModal() {
+    if (!deleteModalOpen || typeof document === "undefined") return null;
+    const panel = isX
+      ? "rounded-2xl border border-stone-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-slate-900"
+      : "rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-slate-900";
+    const cancelBtn = isX
+      ? "inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:bg-stone-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-100 dark:hover:bg-slate-800"
+      : "inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-100 dark:hover:bg-slate-800";
+    const deleteBtn =
+      "inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full bg-rose-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60 dark:bg-rose-600 dark:hover:bg-rose-500";
+
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-zinc-950/50 p-4 backdrop-blur-sm sm:items-center sm:p-6"
+        role="presentation"
+        onClick={cancelDeleteModal}
+      >
+        <div
+          className={`w-full max-w-sm ${panel} overflow-hidden`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-post-dialog-title"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isX ? (
+            <div
+              className="h-1 w-full bg-linear-to-r from-amber-400 via-emerald-500 to-sky-500"
+              aria-hidden
+            />
+          ) : (
+            <div className="h-1 w-full bg-amber-500" aria-hidden />
+          )}
+          <div className="p-5 sm:p-6">
+            <h2 id="delete-post-dialog-title" className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              Delete this post?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              This cannot be undone. Comments and likes on this post will be removed.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button type="button" className={cancelBtn} onClick={cancelDeleteModal} disabled={deletingPost}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={deleteBtn}
+                onClick={() => void confirmDeletePost()}
+                disabled={deletingPost}
+              >
+                {deletingPost ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
   }
 
   if (isX) {
@@ -240,66 +609,54 @@ function PostCard({
           aria-hidden
         />
         <div className="p-4 md:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="flex flex-wrap items-center gap-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                <span>{post.author_name}</span>
-                {post.authorVerified ? (
-                  <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" title="Verified" />
-                ) : null}
-                {post.author_id === currentUserId ? (
-                  <span className="text-xs font-normal text-amber-600 dark:text-amber-400">(you)</span>
-                ) : null}
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-              </p>
+          {editing ? renderEditingBlock(true) : renderReadonlyPostBlock(true)}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-y-2 border-t border-stone-100 pt-3 dark:border-zinc-800">
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canInteract) {
+                    goLogin();
+                    return;
+                  }
+                  onLikeToggle(post);
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                  post.liked
+                    ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+                    : "text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+                }`}
+              >
+                <Heart className={`h-4 w-4 ${post.liked ? "fill-current" : ""}`} strokeWidth={2} />
+                {post.likeCount || 0}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDetail) return;
+                  setCommentsOpen((v) => {
+                    const next = !v;
+                    if (next) void loadComments();
+                    return next;
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+              >
+                <MessageCircle className="h-4 w-4" strokeWidth={2} />
+                {post.commentCount || 0}
+              </button>
+              <button
+                type="button"
+                onClick={() => onRequestShare(post)}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+              >
+                <Repeat2 className="h-4 w-4" strokeWidth={2} />
+                {post.share_count ?? 0}
+              </button>
             </div>
+            {renderOwnerControls(true)}
           </div>
-          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-800 dark:text-zinc-200">{post.body}</p>
-          <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-stone-100 pt-3 dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={() => {
-                if (!canInteract) {
-                  goLogin();
-                  return;
-                }
-                onLikeToggle(post);
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                post.liked
-                  ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
-                  : "text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
-              }`}
-            >
-              <Heart className={`h-4 w-4 ${post.liked ? "fill-current" : ""}`} strokeWidth={2} />
-              {post.likeCount || 0}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setCommentsOpen((v) => {
-                  const next = !v;
-                  if (next) loadComments();
-                  return next;
-                });
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
-            >
-              <MessageCircle className="h-4 w-4" strokeWidth={2} />
-              {post.commentCount || 0}
-            </button>
-            <button
-              type="button"
-              onClick={() => onShare(post)}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-stone-100 dark:text-zinc-400 dark:hover:bg-slate-800"
-            >
-              <Repeat2 className="h-4 w-4" strokeWidth={2} />
-              {post.share_count ?? 0}
-            </button>
-          </div>
-          {commentsOpen ? (
+          {commentsOpen || isDetail ? (
             <div className="mt-4 border-t border-stone-100 pt-4 dark:border-zinc-800">
               {canInteract ? (
                 <form onSubmit={submitTopComment} className="mb-4 flex flex-col gap-2 sm:flex-row">
@@ -338,7 +695,7 @@ function PostCard({
                       postId={post.id}
                       depth={0}
                       onRefresh={() => {
-                        loadComments();
+                        void loadComments(isDetail ? false : undefined);
                         onCommentCountChange(post.id, 1);
                       }}
                       onThreadMutate={onCommunityMutate}
@@ -349,78 +706,78 @@ function PostCard({
                       skin="default"
                     />
                   ))}
-                  {comments.length === 0 ? <p className="text-sm text-zinc-500">No comments yet.</p> : null}
+                  {comments.length === 0 && !loadingComments ? <p className="text-sm text-zinc-500">No comments yet.</p> : null}
+                  {isDetail ? (
+                    <>
+                      <div ref={loadMoreCommentsSentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      {loadingMoreComments ? (
+                        <p className="flex items-center gap-2 py-2 text-sm text-zinc-500">
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                          Loading more…
+                        </p>
+                      ) : null}
+                    </>
+                  ) : null}
                 </div>
               )}
             </div>
           ) : null}
         </div>
+        {renderDeleteModal()}
       </article>
     );
   }
 
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80 md:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="flex flex-wrap items-center gap-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            <span>{post.author_name}</span>
-            {post.authorVerified ? (
-              <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" title="Verified" />
-            ) : null}
-            {post.author_id === currentUserId ? (
-              <span className="text-xs font-normal text-amber-600 dark:text-amber-400">(you)</span>
-            ) : null}
-          </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-          </p>
+      {editing ? renderEditingBlock(false) : renderReadonlyPostBlock(false)}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (!canInteract) {
+                goLogin();
+                return;
+              }
+              onLikeToggle(post);
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              post.liked
+                ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+            }`}
+          >
+            <Heart className={`h-4 w-4 ${post.liked ? "fill-current" : ""}`} strokeWidth={2} />
+            {post.likeCount || 0}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (isDetail) return;
+              setCommentsOpen((v) => {
+                const next = !v;
+                if (next) void loadComments();
+                return next;
+              });
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+          >
+            <MessageCircle className="h-4 w-4" strokeWidth={2} />
+            {post.commentCount || 0}
+          </button>
+          <button
+            type="button"
+            onClick={() => onRequestShare(post)}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
+          >
+            <Repeat2 className="h-4 w-4" strokeWidth={2} />
+            {post.share_count ?? 0}
+          </button>
         </div>
+        {renderOwnerControls(false)}
       </div>
-      <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-800 dark:text-zinc-200">{post.body}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-        <button
-          type="button"
-          onClick={() => {
-            if (!canInteract) {
-              goLogin();
-              return;
-            }
-            onLikeToggle(post);
-          }}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-            post.liked
-              ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
-              : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
-          }`}
-        >
-          <Heart className={`h-4 w-4 ${post.liked ? "fill-current" : ""}`} strokeWidth={2} />
-          {post.likeCount || 0}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setCommentsOpen((v) => {
-              const next = !v;
-              if (next) loadComments();
-              return next;
-            });
-          }}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
-        >
-          <MessageCircle className="h-4 w-4" strokeWidth={2} />
-          {post.commentCount || 0}
-        </button>
-        <button
-          type="button"
-          onClick={() => onShare(post)}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-slate-800"
-        >
-          <Repeat2 className="h-4 w-4" strokeWidth={2} />
-          {post.share_count ?? 0}
-        </button>
-      </div>
-      {commentsOpen ? (
+      {commentsOpen || isDetail ? (
         <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
           {canInteract ? (
             <form onSubmit={submitTopComment} className="mb-4 flex flex-col gap-2 sm:flex-row">
@@ -459,7 +816,7 @@ function PostCard({
                   postId={post.id}
                   depth={0}
                   onRefresh={() => {
-                    loadComments();
+                    void loadComments(isDetail ? false : undefined);
                     onCommentCountChange(post.id, 1);
                   }}
                   onThreadMutate={onCommunityMutate}
@@ -470,11 +827,23 @@ function PostCard({
                   skin="default"
                 />
               ))}
-              {comments.length === 0 ? <p className="text-sm text-zinc-500">No comments yet.</p> : null}
+              {comments.length === 0 && !loadingComments ? <p className="text-sm text-zinc-500">No comments yet.</p> : null}
+              {isDetail ? (
+                <>
+                  <div ref={loadMoreCommentsSentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                  {loadingMoreComments ? (
+                    <p className="flex items-center gap-2 py-2 text-sm text-zinc-500">
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Loading more…
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
             </div>
           )}
         </div>
       ) : null}
+      {renderDeleteModal()}
     </article>
   );
 }
@@ -482,25 +851,8 @@ function PostCard({
 /**
  * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x"; containerClassName?: string }} props
  */
-const FEED_TABS = [
-  { id: "all", label: "All posts" },
-  { id: "liked", label: "Liked" },
-  { id: "shared", label: "Shared" },
-];
-
+/** Tabs for /posts (portal) only; public /community shows a single feed. */
 const FEED_TABS_PORTAL = [
-  { id: "all", label: "My posts" },
-  { id: "liked", label: "Liked" },
-  { id: "shared", label: "Shared" },
-];
-
-const FEED_TABS_X = [
-  { id: "all", label: "All posts" },
-  { id: "liked", label: "Liked" },
-  { id: "shared", label: "Shared" },
-];
-
-const FEED_TABS_PORTAL_X = [
   { id: "all", label: "My posts" },
   { id: "liked", label: "Liked" },
   { id: "shared", label: "Shared" },
@@ -533,16 +885,10 @@ export default function CommunityFeedClient({
   const [posting, setPosting] = useState(false);
   const [configError, setConfigError] = useState(false);
   const [feedTab, setFeedTab] = useState("all");
-  /** From feed API: premium + verified badge preference for signed-in viewer. */
-  const [viewer, setViewer] = useState(null);
-  const [savingVerifiedBadge, setSavingVerifiedBadge] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
 
   const isPortal = variant === "portal";
   const isX = !isPortal && skin === "x";
-  const feedTabs = useMemo(() => {
-    if (!isPortal) return isX ? FEED_TABS_X : FEED_TABS;
-    return isX ? FEED_TABS_PORTAL_X : FEED_TABS_PORTAL;
-  }, [isPortal, isX]);
   const portalMineHome = isPortal;
   const canInteract = Boolean(currentUserId);
 
@@ -567,41 +913,6 @@ export default function CommunityFeedClient({
     if (isMissingCommunityTables(rawMessage)) setConfigError(true);
   }, []);
 
-  const updateVerifiedBadge = useCallback(
-    async (next) => {
-      if (!viewer?.isPremium || savingVerifiedBadge) return;
-      setSavingVerifiedBadge(true);
-      try {
-        const res = await fetch("/api/auth/me", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ showVerifiedBadge: next }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.message || "Failed to save");
-        const uid = data.user?.id ? String(data.user.id) : "";
-        setViewer({
-          isPremium: Boolean(data.user?.isPremium),
-          showVerifiedBadge: Boolean(data.user?.showVerifiedBadge),
-        });
-        if (uid) {
-          setPosts((prev) =>
-            prev.map((p) =>
-              String(p.author_id) === uid ? { ...p, authorVerified: Boolean(data.user?.showVerifiedBadge) } : p
-            )
-          );
-        }
-        dispatchCommunityMutate();
-      } catch (e) {
-        reportActionError(e.message || "Failed to save");
-      } finally {
-        setSavingVerifiedBadge(false);
-      }
-    },
-    [viewer?.isPremium, savingVerifiedBadge, reportActionError]
-  );
-
   /** Refetch liked/shared when session becomes available; ignore user id changes on "all" to avoid double fetch. */
   const tabAuthKey = useMemo(
     () => (feedTab === "liked" || feedTab === "shared" ? currentUserId || "__guest__" : "__all__"),
@@ -616,7 +927,6 @@ export default function CommunityFeedClient({
         setPosts([]);
         setNextCursor(null);
         nextCursorRef.current = null;
-        setViewer(null);
         setLoading(false);
         setError("");
         return;
@@ -651,7 +961,6 @@ export default function CommunityFeedClient({
         setPosts(data.posts || []);
         setNextCursor(data.nextCursor || null);
         setCurrentUserId(data.currentUserId || "");
-        setViewer(data.viewer ?? null);
         feedHydratedRef.current = true;
       } catch (e) {
         if (cancelled) return;
@@ -690,7 +999,6 @@ export default function CommunityFeedClient({
       setPosts((prev) => [...prev, ...(data.posts || [])]);
       setNextCursor(data.nextCursor || null);
       setCurrentUserId(data.currentUserId || "");
-      if (data.viewer !== undefined) setViewer(data.viewer ?? null);
     } catch (e) {
       reportActionError(e.message || "Failed to load more");
     } finally {
@@ -799,43 +1107,19 @@ export default function CommunityFeedClient({
     }
   }
 
-  async function onShare(post) {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const path = shareBasePath.startsWith("/") ? shareBasePath : `/${shareBasePath}`;
-    const shareUrl =
-      origin && post?.id ? `${origin}${path}?post=${encodeURIComponent(post.id)}` : `${origin}${path}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "OWE DUE Community",
-          text: post.body.slice(0, 120),
-          url: shareUrl,
-        });
-      } else if (shareUrl) {
-        await navigator.clipboard.writeText(shareUrl);
-        alert("Link copied to clipboard.");
-      }
-    } catch {
-      /* user cancelled share */
-    }
-    try {
-      const res = await fetch(`/api/community/posts/${post.id}/share`, { method: "POST", credentials: "include" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const nextCount = data.shareCount;
-        setPosts((prev) => {
-          const mapped = prev.map((p) => (p.id === post.id ? { ...p, share_count: nextCount } : p));
-          if (feedTab === "shared" && canInteract && !mapped.some((p) => p.id === post.id)) {
-            return [{ ...post, share_count: nextCount }, ...mapped];
-          }
-          return mapped;
-        });
-        dispatchCommunityMutate();
-      }
-    } catch {
-      /* ignore */
-    }
-  }
+  const applyShareCount = useCallback(
+    (postId, nextCount, snapshotPost) => {
+      setPosts((prev) => {
+        const mapped = prev.map((p) => (p.id === postId ? { ...p, share_count: nextCount } : p));
+        if (feedTab === "shared" && canInteract && snapshotPost && !mapped.some((p) => p.id === postId)) {
+          return [{ ...snapshotPost, share_count: nextCount }, ...mapped];
+        }
+        return mapped;
+      });
+      dispatchCommunityMutate();
+    },
+    [feedTab, canInteract]
+  );
 
   function bumpCommentCount(postId, delta) {
     setPosts((prev) =>
@@ -904,7 +1188,7 @@ export default function CommunityFeedClient({
       role="tablist"
       aria-label="Feed filter"
     >
-      {feedTabs.map((t) => (
+      {FEED_TABS_PORTAL.map((t) => (
         <button
           key={t.id}
           type="button"
@@ -995,13 +1279,22 @@ export default function CommunityFeedClient({
               post={post}
               currentUserId={currentUserId}
               onLikeToggle={onLikeToggle}
-              onShare={onShare}
+              onRequestShare={setShareTarget}
               onCommentCountChange={bumpCommentCount}
               onCommunityMutate={dispatchCommunityMutate}
               canInteract={canInteract}
               loginNextPath={loginNextPath}
               onNotifyError={reportActionError}
               skin={isX ? "x" : "default"}
+              postDetailHref={isPortal ? `/posts/post/${post.id}` : `/community/post/${post.id}`}
+              onPostRemoved={(removedId) => {
+                setPosts((prev) => prev.filter((p) => p.id !== removedId));
+              }}
+              onPostUpdated={(updatedId, nextPost) => {
+                setPosts((prev) =>
+                  prev.map((p) => (p.id === updatedId ? { ...p, ...nextPost } : p))
+                );
+              }}
             />
           ))}
         </div>
@@ -1085,43 +1378,23 @@ export default function CommunityFeedClient({
 
       {composeForm}
       {guestPromo}
-      {tabBar}
-
-      {canInteract && viewer?.isPremium ? (
-        <div
-          className={
-            isX
-              ? "rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80"
-              : "rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-slate-900/80"
-          }
-        >
-          <div className="flex gap-3">
-            <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-sky-500" aria-hidden />
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Verified badge</h2>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                Show a blue check next to your name on posts so others know your account is verified.
-              </p>
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-zinc-800 dark:text-zinc-200">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500 dark:border-zinc-600 dark:bg-slate-900"
-                  checked={Boolean(viewer.showVerifiedBadge)}
-                  disabled={savingVerifiedBadge}
-                  onChange={(e) => void updateVerifiedBadge(e.target.checked)}
-                />
-                <span>Show verified badge publicly</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {isPortal ? tabBar : null}
 
       {error && !configError ? (
         <p className="px-4 text-sm text-rose-600 dark:text-rose-400 sm:px-0">{error}</p>
       ) : null}
 
       <div className={isX ? "min-h-0 flex-1" : undefined}>{feedBody}</div>
+
+      {shareTarget ? (
+        <SharePostModal
+          post={shareTarget}
+          onClose={() => setShareTarget(null)}
+          onShared={(nextCount) => {
+            applyShareCount(shareTarget.id, nextCount, shareTarget);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

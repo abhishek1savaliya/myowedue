@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import BackButton from "@/components/BackButton";
 import PublicFooter from "@/components/PublicFooter";
 import { useEffect, useState } from "react";
 
@@ -71,9 +72,7 @@ export default function ContactUsPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <section className="mx-auto max-w-5xl px-6 py-12 md:py-16">
-        <Link href="/" className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300">
-          Back to home
-        </Link>
+        <BackButton href="/" label="Back to home" className="text-xs uppercase tracking-wide" />
 
         <div className="mt-5 grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
           <article className="rounded-3xl border border-zinc-200 bg-white/80 p-6 md:p-8">

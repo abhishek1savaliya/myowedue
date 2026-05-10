@@ -56,6 +56,11 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://myowedue.vercel.app
 
 export const metadata = {
   metadataBase: new URL(siteUrl),
+  icons: {
+    icon: [{ url: "/owedue-logo.svg", type: "image/svg+xml" }],
+    shortcut: "/owedue-logo.svg",
+    apple: "/owedue-logo.svg",
+  },
   title: {
     default: "OWE DUE | Personal Credit & Debit Tracker",
     template: "%s | OWE DUE",

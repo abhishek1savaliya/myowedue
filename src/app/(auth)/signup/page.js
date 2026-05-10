@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
+import BackButton from "@/components/BackButton";
 import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
 import {
   persistAppearancePreference,
@@ -57,6 +58,9 @@ export default function SignupPage() {
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+      <div className="mb-4">
+        <BackButton href="/" label="Back to home" />
+      </div>
       <div className="mb-1 flex items-center gap-3">
         <div className="rounded-lg bg-linear-to-br from-emerald-400 to-emerald-500 p-2">
           <UserPlus className="h-5 w-5 text-white" />

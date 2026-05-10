@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
+import BackButton from "@/components/BackButton";
 
 const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
 const STATUS_COLORS = {
@@ -111,9 +111,7 @@ export default function TicketDetailPage() {
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <div className="flex items-center gap-3">
-        <Link href="/admin/tickets" className="text-sm text-gray-400 hover:text-amber-400 transition-colors">
-          ← Back to tickets
-        </Link>
+        <BackButton href="/admin/tickets" label="Back to tickets" />
       </div>
 
       {/* Ticket info */}

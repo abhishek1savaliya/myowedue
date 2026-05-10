@@ -3,16 +3,23 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { PenSquare, Users } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { PenSquare, Settings2, Users } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
-import CommunityFeedClient from "@/components/community/CommunityFeedClient";
 import TrendingSidebar from "@/components/community/TrendingSidebar";
 
 const navItem =
   "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold text-zinc-800 transition hover:bg-stone-100 dark:text-zinc-100 dark:hover:bg-zinc-800/80";
 
-export default function CommunityPublicShell() {
+const navActive =
+  "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
+
+export default function CommunityPublicShell({ children }) {
+  const pathname = usePathname();
   const [loggedIn, setLoggedIn] = useState(false);
+
+  const feedActive = pathname === "/community" || pathname.startsWith("/community/post/");
+  const settingsActive = pathname.startsWith("/community/settings");
 
   useEffect(() => {
     let cancelled = false;
@@ -39,9 +46,19 @@ export default function CommunityPublicShell() {
 
       {/* Mobile top */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-stone-200/90 bg-white/90 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-slate-950/90 md:hidden">
-        <Link href="/" className="inline-flex items-center gap-2 font-bold tracking-wide text-zinc-900 dark:text-white">
-          <Image src="/owedue-logo.svg" alt="OWE DUE" width={32} height={32} className="h-8 w-8 rounded-lg" />
-        </Link>
+        <div className="flex min-w-0 items-center gap-2">
+          <Link href="/" className="inline-flex shrink-0 items-center gap-2 font-bold tracking-wide text-zinc-900 dark:text-white">
+            <Image src="/owedue-logo.svg" alt="OWE DUE" width={32} height={32} className="h-8 w-8 rounded-lg" />
+          </Link>
+          <Link
+            href="/community/settings"
+            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-zinc-700 shadow-sm transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 dark:border-zinc-600 dark:bg-slate-900 dark:text-zinc-200 dark:hover:border-amber-500/50 dark:hover:bg-slate-800 ${settingsActive ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-600/50 dark:bg-amber-950/50 dark:text-amber-200" : ""}`}
+            aria-label="Community settings"
+            aria-current={settingsActive ? "page" : undefined}
+          >
+            <Settings2 className="h-5 w-5" strokeWidth={2} />
+          </Link>
+        </div>
         <div className="flex items-center gap-2">
           <PublicModeToggle />
           {loggedIn ? (
@@ -72,20 +89,32 @@ export default function CommunityPublicShell() {
 
       <div className="relative mx-auto flex min-h-[calc(100dvh-56px)] max-w-[1200px] md:min-h-screen">
         {/* Left */}
-        <aside className="sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col border-r border-stone-200 bg-white/90 py-4 pl-4 pr-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-slate-950/90 md:flex">
+        <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-stone-200 bg-white/90 py-4 pl-4 pr-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-slate-950/90 md:flex">
           <Link href="/" className="mb-6 inline-flex items-center gap-2 rounded-lg px-1 font-bold text-zinc-900 dark:text-white" aria-label="OWE DUE home">
             <Image src="/owedue-logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
             <span className="text-sm tracking-wide">OWE DUE</span>
           </Link>
 
-          <nav className="flex flex-1 flex-col gap-0.5" aria-label="Community">
-            <Link href="/community" className={`${navItem} bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200`} aria-current="page">
+          <nav className="mt-1 flex shrink-0 flex-col gap-0.5" aria-label="Community">
+            <Link
+              href="/community"
+              className={`${navItem} ${feedActive ? navActive : ""}`}
+              aria-current={feedActive ? "page" : undefined}
+            >
               <Users className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" strokeWidth={2} />
               Community
             </Link>
+            <Link
+              href="/community/settings"
+              className={`${navItem} ${settingsActive ? navActive : ""}`}
+              aria-current={settingsActive ? "page" : undefined}
+            >
+              <Settings2 className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" strokeWidth={2} />
+              Settings
+            </Link>
           </nav>
 
-          <div className="mt-auto space-y-3 border-t border-stone-200 pt-4 dark:border-zinc-800">
+          <div className="mt-auto shrink-0 space-y-3 border-t border-stone-200 pt-4 dark:border-zinc-800">
             <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Display</p>
             <PublicModeToggle />
             <Link
@@ -98,14 +127,16 @@ export default function CommunityPublicShell() {
           </div>
         </aside>
 
-        {/* Mobile: trending above feed. lg+: feed | right rail (single TrendingSidebar). */}
+        {/* Trending in the right rail (sticky on lg+). Settings: left nav (md+) or mobile header. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
           <main className="relative order-2 min-h-0 min-w-0 flex-1 border-stone-200 dark:border-zinc-800 md:border-x lg:order-1">
-            <CommunityFeedClient variant="public" skin="x" shareBasePath="/community" loginNextPath="/community" />
+            {children}
           </main>
 
-          <aside className="order-1 flex w-full shrink-0 flex-col gap-4 border-b border-stone-200 bg-stone-50/80 px-4 py-4 dark:border-zinc-800 dark:bg-slate-900/40 lg:sticky lg:top-0 lg:order-2 lg:h-screen lg:w-[280px] lg:border-b-0 lg:bg-transparent lg:py-6 lg:pl-4 lg:pr-6">
-            <TrendingSidebar limit={10} variant="shell" />
+          <aside className="order-1 flex w-full shrink-0 flex-col gap-4 border-b border-stone-200 bg-stone-50/80 px-4 py-4 dark:border-zinc-800 dark:bg-slate-900/40 lg:sticky lg:top-0 lg:order-2 lg:h-dvh lg:max-h-screen lg:w-[280px] lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-l lg:border-stone-200 lg:bg-transparent lg:py-6 lg:pl-4 lg:pr-6 dark:lg:border-zinc-800">
+            <div className="space-y-3 lg:shrink-0">
+              <TrendingSidebar limit={10} variant="shell" className="p-3" />
+            </div>
             <div className="hidden rounded-2xl border border-stone-200 bg-white/95 p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80 lg:block">
               <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">Use the full app</h2>
               <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Loader2, TrendingUp } from "lucide-react";
 import { COMMUNITY_MUTATE_EVENT } from "@/lib/community-mutate-event";
 
@@ -9,6 +9,7 @@ import { COMMUNITY_MUTATE_EVENT } from "@/lib/community-mutate-event";
  * @param {{ limit?: number; variant?: "shell" | "portal"; className?: string }} props
  */
 export default function TrendingSidebar({ limit = 10, variant = "shell", className = "" }) {
+  const headingId = useId();
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef(null);
@@ -61,10 +62,10 @@ export default function TrendingSidebar({ limit = 10, variant = "shell", classNa
     : "rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80";
 
   return (
-    <section className={`${cardClass} ${className}`.trim()} aria-labelledby="trending-heading">
+    <section className={`${cardClass} ${className}`.trim()} aria-labelledby={headingId}>
       <div className="flex items-center gap-2">
         <TrendingUp className={`h-5 w-5 shrink-0 ${shell ? "text-amber-600 dark:text-amber-400" : "text-amber-600 dark:text-amber-400"}`} aria-hidden />
-        <h2 id="trending-heading" className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+        <h2 id={headingId} className="text-base font-bold text-zinc-900 dark:text-zinc-100">
           Trending
         </h2>
       </div>

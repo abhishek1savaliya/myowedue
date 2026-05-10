@@ -1,4 +1,4 @@
-import Link from "next/link";
+import BackButton from "@/components/BackButton";
 import PublicFooter from "@/components/PublicFooter";
 import { getCmsPageContent } from "@/lib/cmsPublic";
 
@@ -14,9 +14,7 @@ export default async function PrivacyPolicyPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <section className="mx-auto max-w-4xl px-6 py-12 md:py-16">
-        <Link href="/" className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300">
-          Back to home
-        </Link>
+        <BackButton href="/" label="Back to home" className="text-xs uppercase tracking-wide" />
         <h1 className="mt-4 text-4xl text-black">{content.heading || "Privacy Policy"}</h1>
         <p className="mt-3 text-sm text-zinc-600">Effective date: {content.effectiveDate || "April 13, 2026"}</p>
 
