@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Calendar, Plus, Upload, Trash2, MapPin, Clock, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Calendar, FileDown, Loader2, Plus, Upload, Trash2, MapPin, Clock, X } from "lucide-react";
 import moment from "moment-timezone";
 import EmptyState from "@/components/EmptyState";
 import ModalPortal from "@/components/ModalPortal";
+import { buildEventsPdf, downloadPdfBytes } from "@/lib/events-pdf";
 
 const DEFAULT_TIMEZONE = "Australia/Melbourne";
 const TIMEZONE_OPTIONS = [
@@ -55,6 +56,8 @@ export default function EventsPage() {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null); // eventId to delete
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [pdfBusy, setPdfBusy] = useState(false);
   const fileRef = useRef(null);
 
   async function loadEvents() {
@@ -72,6 +75,17 @@ export default function EventsPage() {
   useEffect(() => {
     loadEvents();
   }, []);
+
+  useEffect(() => {
+    const valid = new Set(events.map((e) => String(e._id)));
+    setSelectedIds((prev) => {
+      const next = new Set();
+      prev.forEach((id) => {
+        if (valid.has(id)) next.add(id);
+      });
+      return next;
+    });
+  }, [events]);
 
   function openCreate() {
     setEditingId(null);
@@ -175,21 +189,77 @@ export default function EventsPage() {
   const upcoming = events.filter((e) => new Date(e.startTime) >= new Date());
   const past = events.filter((e) => new Date(e.startTime) < new Date());
 
+  const selectedCount = selectedIds.size;
+  const allSelected = events.length > 0 && selectedCount === events.length;
+
+  const toggleSelect = useCallback((id) => {
+    const s = String(id);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(events.map((e) => String(e._id))));
+  }, [events]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const sortByStart = useCallback((list) => [...list].sort((a, b) => new Date(a.startTime) - new Date(b.startTime)), []);
+
+  const runPdfExport = useCallback(
+    async (list, subtitle) => {
+      if (!list.length) return;
+      setPdfBusy(true);
+      setError("");
+      try {
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const bytes = await buildEventsPdf({
+          events: sortByStart(list),
+          title: "Events",
+          subtitle,
+          appUrl: origin || process.env.NEXT_PUBLIC_SITE_URL || undefined,
+        });
+        const day = moment().format("YYYY-MM-DD");
+        downloadPdfBytes(bytes, `myowedue-events-${day}.pdf`);
+      } catch {
+        setError("Could not create PDF. Try again.");
+      } finally {
+        setPdfBusy(false);
+      }
+    },
+    [sortByStart]
+  );
+
+  const exportPdfAll = useCallback(() => {
+    void runPdfExport(events, `All events (${events.length})`);
+  }, [events, runPdfExport]);
+
+  const exportPdfSelected = useCallback(() => {
+    const picked = events.filter((e) => selectedIds.has(String(e._id)));
+    void runPdfExport(picked, `Selected events (${picked.length})`);
+  }, [events, selectedIds, runPdfExport]);
+
   return (
     <div className="mx-auto max-w-3xl px-3 py-5 sm:px-4 sm:py-8">
       {/* Header */}
       <div className="mb-5 sm:mb-6">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
-            <h1 className="text-xl font-bold text-black sm:text-2xl">Events</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl dark:text-zinc-50">Events</h1>
             <p className="mt-0.5 text-xs text-zinc-500 sm:text-sm">
               Manage your events. Get notified 3 days, 3 hours &amp; 1 hour before.
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <label
-            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-300 px-3 py-2.5 text-sm font-medium text-zinc-700 transition hover:border-black hover:text-black sm:flex-none ${importing ? "pointer-events-none opacity-60" : ""}`}
+            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500 sm:flex-none ${importing ? "pointer-events-none opacity-60" : ""}`}
             title="Import .ics file"
           >
             <Upload size={15} />
@@ -204,8 +274,9 @@ export default function EventsPage() {
             />
           </label>
           <button
+            type="button"
             onClick={openCreate}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-black px-3 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 sm:flex-none"
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-zinc-900 px-3 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 sm:flex-none"
           >
             <Plus size={15} /> New Event
           </button>
@@ -373,12 +444,60 @@ export default function EventsPage() {
         />
       ) : (
         <div className="space-y-8">
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-700 dark:bg-zinc-900/40">
+            <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Export PDF (matches app theme)</p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={allSelected ? clearSelection : selectAll}
+                  disabled={pdfBusy}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  {allSelected ? "Clear selection" : "Select all"}
+                </button>
+                {selectedCount > 0 ? (
+                  <span className="self-center text-xs text-zinc-500 dark:text-zinc-400">
+                    {selectedCount} selected
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={exportPdfAll}
+                  disabled={pdfBusy}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:flex-none"
+                >
+                  {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                  All events
+                </button>
+                <button
+                  type="button"
+                  onClick={exportPdfSelected}
+                  disabled={pdfBusy || selectedCount === 0}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 sm:flex-none"
+                >
+                  {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                  Selected
+                </button>
+              </div>
+            </div>
+          </div>
+
           {upcoming.length > 0 && (
             <section>
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-zinc-400">Upcoming</h2>
               <div className="space-y-3">
                 {upcoming.map((event) => (
-                  <EventCard key={event._id} event={event} onEdit={openEdit} onDelete={handleDelete} />
+                  <EventCard
+                    key={event._id}
+                    event={event}
+                    selected={selectedIds.has(String(event._id))}
+                    onToggleSelect={() => toggleSelect(event._id)}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                  />
                 ))}
               </div>
             </section>
@@ -388,7 +507,14 @@ export default function EventsPage() {
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-zinc-400">Past</h2>
               <div className="space-y-3">
                 {past.map((event) => (
-                  <EventCard key={event._id} event={event} onEdit={openEdit} onDelete={handleDelete} />
+                  <EventCard
+                    key={event._id}
+                    event={event}
+                    selected={selectedIds.has(String(event._id))}
+                    onToggleSelect={() => toggleSelect(event._id)}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                  />
                 ))}
               </div>
             </section>
@@ -399,16 +525,25 @@ export default function EventsPage() {
   );
 }
 
-function EventCard({ event, onEdit, onDelete }) {
+function EventCard({ event, selected, onToggleSelect, onEdit, onDelete }) {
   const isPast = new Date(event.startTime) < new Date();
   const timezone = event.timezone || DEFAULT_TIMEZONE;
   return (
     <div
-      className={`rounded-2xl border px-4 py-3.5 transition sm:px-5 sm:py-4 ${isPast ? "border-zinc-100 bg-zinc-50 opacity-60" : "border-zinc-200 bg-white"}`}
+      className={`rounded-xl border px-3 py-3.5 transition sm:px-4 sm:py-4 ${isPast ? "border-zinc-100 bg-zinc-50/90 opacity-80 dark:border-zinc-800 dark:bg-zinc-900/50" : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/60"}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start gap-3">
+        <label className="mt-0.5 flex shrink-0 cursor-pointer items-center">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400 dark:border-zinc-600 dark:bg-zinc-900 dark:focus:ring-zinc-500"
+            aria-label={`Select ${event.title}`}
+          />
+        </label>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-black">{event.title}</p>
+          <p className="truncate font-semibold text-zinc-900 dark:text-zinc-50">{event.title}</p>
           <div className="mt-1 flex flex-col gap-0.5 text-xs text-zinc-500 sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-1">
             <span className="flex items-center gap-1">
               <Clock size={12} />
@@ -426,16 +561,18 @@ function EventCard({ event, onEdit, onDelete }) {
           )}
         </div>
         {!isPast && (
-          <div className="flex shrink-0 gap-0.5">
+          <div className="flex shrink-0 gap-0.5 self-start">
             <button
+              type="button"
               onClick={() => onEdit(event)}
-              className="rounded-lg px-2.5 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-black active:bg-zinc-200"
+              className="rounded-lg px-2.5 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 active:bg-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               Edit
             </button>
             <button
+              type="button"
               onClick={() => onDelete(event._id)}
-              className="rounded-lg px-2.5 py-2 text-xs text-zinc-500 hover:bg-red-50 hover:text-red-600 active:bg-red-100"
+              className="rounded-lg px-2.5 py-2 text-xs text-zinc-500 hover:bg-red-50 hover:text-red-600 active:bg-red-100 dark:hover:bg-red-950/40"
             >
               <Trash2 size={14} />
             </button>
