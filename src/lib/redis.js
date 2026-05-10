@@ -142,7 +142,33 @@ export function communityCommentsCacheKey(postId, viewerId) {
 
 /** Aggregated trending topics (GET /api/community/trending). */
 export function communityTrendingCacheKey(limit = 10) {
-  return `community:trending:v1:${encodeKeyPart(String(limit))}`;
+  return `community:trending:v2:${encodeKeyPart(String(limit))}`;
+}
+
+/** Drop cached trending aggregates only (scan). */
+export async function clearCommunityTrendingCache() {
+  try {
+    const client = await getRedisClient();
+    if (!client) return false;
+
+    const keysToDelete = new Set();
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await client.scan(cursor, { match: "community:trending:*", count: 100 });
+      cursor = String(nextCursor);
+      for (const key of keys || []) {
+        keysToDelete.add(String(key));
+      }
+    } while (cursor !== "0");
+
+    if (keysToDelete.size > 0) {
+      await client.del(...Array.from(keysToDelete));
+    }
+    return true;
+  } catch (error) {
+    handleRedisError("Redis trending cache clear failed", error);
+    return false;
+  }
 }
 
 /** Invalidate cached community feeds and comment threads (after writes). */
@@ -151,7 +177,7 @@ export async function clearCommunityCaches() {
     const client = await getRedisClient();
     if (!client) return false;
 
-    const patterns = ["community:feed:v1:*", "community:comments:v1:*", "community:trending:v1:*"];
+    const patterns = ["community:feed:v1:*", "community:comments:v1:*", "community:trending:*"];
     const keysToDelete = new Set();
     for (const pattern of patterns) {
       let cursor = "0";

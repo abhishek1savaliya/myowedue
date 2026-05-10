@@ -68,22 +68,32 @@ function tokenOk(word) {
 
 function phraseValid(phrase) {
   const t = phrase.toLowerCase().trim().replace(/\s+/g, " ");
-  if (!t || t.length < 2) return false;
+  if (!t) return false;
+  const shortOk = t.length >= 2 || /[^\u0000-\u007F]/.test(t);
+  if (!shortOk) return false;
   if (isSpamTopic(t)) return false;
   const parts = t.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return false;
   if (parts.every((p) => STOP.has(p))) return false;
   if (parts.length === 1) {
-    if (parts[0].length < 2) return false;
-    if (parts[0].length < 3 && !ACRONYM_ALLOW.has(parts[0])) return false;
-    return !STOP.has(parts[0]);
+    const p0 = parts[0];
+    if (p0.length < 1) return false;
+    const hasNonAscii = /[^\u0000-\u007F]/.test(p0);
+    if (p0.length === 1) {
+      return hasNonAscii && /\p{L}|\p{N}/u.test(p0) && !STOP.has(p0);
+    }
+    if (!hasNonAscii) {
+      if (p0.length === 2 && !ACRONYM_ALLOW.has(p0)) return false;
+      if (p0.length < 3 && !ACRONYM_ALLOW.has(p0)) return false;
+    }
+    return !STOP.has(p0);
   }
   return parts.some((p) => tokenOk(p) || /[\d.]/.test(p));
 }
 
 function splitOnConjunctions(chunk) {
   return String(chunk || "")
-    .split(/\s+and\s+/i)
+    .split(/\s+(?:and|&|und|et|或|和|与|以及)\s+/i)
     .map((s) => s.trim())
     .filter(Boolean);
 }
@@ -127,6 +137,13 @@ export function extractPostTopics(body) {
       const norm = normalizeTechPhrase(piece);
       if (phraseValid(norm)) candidates.push(norm);
     }
+  }
+
+  // Any-script word runs (Compromise nouns are English-centric; this seeds trending for all languages.)
+  const wordRuns = forNlp.match(/\p{L}[\p{L}\p{M}\p{N}]*/gu) || [];
+  for (const w of wordRuns) {
+    const norm = normalizeTechPhrase(w);
+    if (phraseValid(norm)) candidates.push(norm);
   }
 
   const seen = new Set();
