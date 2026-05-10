@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronRight, Heart, Loader2, MessageCircle, Repeat2, Send } from "lucide-react";
+import { BadgeCheck, ChevronRight, Heart, Loader2, MessageCircle, Repeat2, Send } from "lucide-react";
+import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
 
 const COMMUNITY_SETUP_MESSAGE =
-  "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql then supabase/migrations/002_community_post_shares.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
+  "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql, 002_community_post_shares.sql, and 003_post_topics.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
 
 function isMissingCommunityTables(message) {
   const m = String(message || "").toLowerCase();
@@ -17,6 +18,7 @@ function isMissingCommunityTables(message) {
     m.includes("community_post_shares") ||
     m.includes("community tables") ||
     m.includes("001_community") ||
+    m.includes("post_topics") ||
     m.includes("supabase → sql") ||
     (m.includes("relation") && m.includes("does not exist")) ||
     m.includes("pgrst204") ||
@@ -29,7 +31,7 @@ function formatCommunityError(message) {
   return String(message || "Something went wrong.");
 }
 
-function CommentBranch({ node, postId, depth, onRefresh, currentUserId, canInteract, loginNextPath, onNotifyError, skin = "default" }) {
+function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, currentUserId, canInteract, loginNextPath, onNotifyError, skin = "default" }) {
   const router = useRouter();
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -59,6 +61,7 @@ function CommentBranch({ node, postId, depth, onRefresh, currentUserId, canInter
       if (!res.ok) throw new Error(data.message || "Failed to reply");
       setReplyText("");
       setReplyOpen(false);
+      onThreadMutate?.();
       onRefresh();
     } catch (err) {
       onNotifyError?.(err.message || "Failed to reply");
@@ -148,6 +151,7 @@ function CommentBranch({ node, postId, depth, onRefresh, currentUserId, canInter
               postId={postId}
               depth={depth + 1}
               onRefresh={onRefresh}
+              onThreadMutate={onThreadMutate}
               currentUserId={currentUserId}
               canInteract={canInteract}
               loginNextPath={loginNextPath}
@@ -167,6 +171,7 @@ function PostCard({
   onLikeToggle,
   onShare,
   onCommentCountChange,
+  onCommunityMutate,
   canInteract,
   loginNextPath,
   onNotifyError,
@@ -219,6 +224,7 @@ function PostCard({
       setCommentText("");
       await loadComments();
       onCommentCountChange(post.id, 1);
+      onCommunityMutate?.();
     } catch (err) {
       onNotifyError?.(err.message || "Failed to comment");
     } finally {
@@ -236,10 +242,13 @@ function PostCard({
         <div className="p-4 md:p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                {post.author_name}
+              <p className="flex flex-wrap items-center gap-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                <span>{post.author_name}</span>
+                {post.authorVerified ? (
+                  <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" title="Verified" />
+                ) : null}
                 {post.author_id === currentUserId ? (
-                  <span className="ml-1 text-xs font-normal text-amber-600 dark:text-amber-400">(you)</span>
+                  <span className="text-xs font-normal text-amber-600 dark:text-amber-400">(you)</span>
                 ) : null}
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -332,6 +341,7 @@ function PostCard({
                         loadComments();
                         onCommentCountChange(post.id, 1);
                       }}
+                      onThreadMutate={onCommunityMutate}
                       currentUserId={currentUserId}
                       canInteract={canInteract}
                       loginNextPath={loginNextPath}
@@ -353,10 +363,13 @@ function PostCard({
     <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80 md:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            {post.author_name}
+          <p className="flex flex-wrap items-center gap-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <span>{post.author_name}</span>
+            {post.authorVerified ? (
+              <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" title="Verified" />
+            ) : null}
             {post.author_id === currentUserId ? (
-              <span className="ml-1 text-xs font-normal text-amber-600 dark:text-amber-400">(you)</span>
+              <span className="text-xs font-normal text-amber-600 dark:text-amber-400">(you)</span>
             ) : null}
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -449,6 +462,7 @@ function PostCard({
                     loadComments();
                     onCommentCountChange(post.id, 1);
                   }}
+                  onThreadMutate={onCommunityMutate}
                   currentUserId={currentUserId}
                   canInteract={canInteract}
                   loginNextPath={loginNextPath}
@@ -466,10 +480,16 @@ function PostCard({
 }
 
 /**
- * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x" }} props
+ * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x"; containerClassName?: string }} props
  */
 const FEED_TABS = [
   { id: "all", label: "All posts" },
+  { id: "liked", label: "Liked" },
+  { id: "shared", label: "Shared" },
+];
+
+const FEED_TABS_PORTAL = [
+  { id: "all", label: "My posts" },
   { id: "liked", label: "Liked" },
   { id: "shared", label: "Shared" },
 ];
@@ -480,9 +500,17 @@ const FEED_TABS_X = [
   { id: "shared", label: "Shared" },
 ];
 
-function buildPostsQuery(tab, cursor) {
+const FEED_TABS_PORTAL_X = [
+  { id: "all", label: "My posts" },
+  { id: "liked", label: "Liked" },
+  { id: "shared", label: "Shared" },
+];
+
+/** Portal home tab lists only the signed-in user’s posts (`filter=mine`). Community lists everyone. */
+function buildPostsQuery(tab, cursor, portalMineHome) {
   const p = new URLSearchParams();
-  if (tab && tab !== "all") p.set("filter", tab);
+  if (portalMineHome && tab === "all") p.set("filter", "mine");
+  else if (tab && tab !== "all") p.set("filter", tab);
   if (cursor) p.set("cursor", cursor);
   const qs = p.toString();
   return qs ? `/api/community/posts?${qs}` : "/api/community/posts";
@@ -493,6 +521,7 @@ export default function CommunityFeedClient({
   shareBasePath = "/community",
   loginNextPath = "/community",
   skin = "default",
+  containerClassName = "",
 }) {
   const [posts, setPosts] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -504,10 +533,17 @@ export default function CommunityFeedClient({
   const [posting, setPosting] = useState(false);
   const [configError, setConfigError] = useState(false);
   const [feedTab, setFeedTab] = useState("all");
+  /** From feed API: premium + verified badge preference for signed-in viewer. */
+  const [viewer, setViewer] = useState(null);
+  const [savingVerifiedBadge, setSavingVerifiedBadge] = useState(false);
 
   const isPortal = variant === "portal";
   const isX = !isPortal && skin === "x";
-  const feedTabs = isX ? FEED_TABS_X : FEED_TABS;
+  const feedTabs = useMemo(() => {
+    if (!isPortal) return isX ? FEED_TABS_X : FEED_TABS;
+    return isX ? FEED_TABS_PORTAL_X : FEED_TABS_PORTAL;
+  }, [isPortal, isX]);
+  const portalMineHome = isPortal;
   const canInteract = Boolean(currentUserId);
 
   const nextCursorRef = useRef(null);
@@ -531,6 +567,41 @@ export default function CommunityFeedClient({
     if (isMissingCommunityTables(rawMessage)) setConfigError(true);
   }, []);
 
+  const updateVerifiedBadge = useCallback(
+    async (next) => {
+      if (!viewer?.isPremium || savingVerifiedBadge) return;
+      setSavingVerifiedBadge(true);
+      try {
+        const res = await fetch("/api/auth/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ showVerifiedBadge: next }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Failed to save");
+        const uid = data.user?.id ? String(data.user.id) : "";
+        setViewer({
+          isPremium: Boolean(data.user?.isPremium),
+          showVerifiedBadge: Boolean(data.user?.showVerifiedBadge),
+        });
+        if (uid) {
+          setPosts((prev) =>
+            prev.map((p) =>
+              String(p.author_id) === uid ? { ...p, authorVerified: Boolean(data.user?.showVerifiedBadge) } : p
+            )
+          );
+        }
+        dispatchCommunityMutate();
+      } catch (e) {
+        reportActionError(e.message || "Failed to save");
+      } finally {
+        setSavingVerifiedBadge(false);
+      }
+    },
+    [viewer?.isPremium, savingVerifiedBadge, reportActionError]
+  );
+
   /** Refetch liked/shared when session becomes available; ignore user id changes on "all" to avoid double fetch. */
   const tabAuthKey = useMemo(
     () => (feedTab === "liked" || feedTab === "shared" ? currentUserId || "__guest__" : "__all__"),
@@ -545,6 +616,7 @@ export default function CommunityFeedClient({
         setPosts([]);
         setNextCursor(null);
         nextCursorRef.current = null;
+        setViewer(null);
         setLoading(false);
         setError("");
         return;
@@ -556,7 +628,7 @@ export default function CommunityFeedClient({
       setNextCursor(null);
       nextCursorRef.current = null;
       try {
-        const res = await fetch(buildPostsQuery(feedTab, null), { credentials: "include", cache: "no-store" });
+        const res = await fetch(buildPostsQuery(feedTab, null, portalMineHome), { credentials: "include", cache: "no-store" });
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (res.status === 503) {
@@ -579,6 +651,7 @@ export default function CommunityFeedClient({
         setPosts(data.posts || []);
         setNextCursor(data.nextCursor || null);
         setCurrentUserId(data.currentUserId || "");
+        setViewer(data.viewer ?? null);
         feedHydratedRef.current = true;
       } catch (e) {
         if (cancelled) return;
@@ -598,7 +671,7 @@ export default function CommunityFeedClient({
     return () => {
       cancelled = true;
     };
-  }, [feedTab, tabAuthKey]);
+  }, [feedTab, tabAuthKey, portalMineHome]);
 
   const loadMore = useCallback(async () => {
     const cursor = nextCursorRef.current;
@@ -608,7 +681,7 @@ export default function CommunityFeedClient({
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const res = await fetch(buildPostsQuery(feedTab, cursor), {
+      const res = await fetch(buildPostsQuery(feedTab, cursor, portalMineHome), {
         credentials: "include",
         cache: "no-store",
       });
@@ -617,13 +690,14 @@ export default function CommunityFeedClient({
       setPosts((prev) => [...prev, ...(data.posts || [])]);
       setNextCursor(data.nextCursor || null);
       setCurrentUserId(data.currentUserId || "");
+      if (data.viewer !== undefined) setViewer(data.viewer ?? null);
     } catch (e) {
       reportActionError(e.message || "Failed to load more");
     } finally {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [feedTab, currentUserId, reportActionError]);
+  }, [feedTab, currentUserId, reportActionError, portalMineHome]);
 
   useEffect(() => {
     const el = loadMoreSentinelRef.current;
@@ -678,6 +752,7 @@ export default function CommunityFeedClient({
       if (feedTab === "all") {
         setPosts((prev) => [data.post, ...prev]);
       }
+      dispatchCommunityMutate();
     } catch (err) {
       reportActionError(err.message || "Failed to post");
     } finally {
@@ -702,6 +777,7 @@ export default function CommunityFeedClient({
         }
         return;
       }
+      dispatchCommunityMutate();
       const liked = data.liked;
       if (feedTab === "liked" && !liked) {
         setPosts((prev) => prev.filter((p) => p.id !== post.id));
@@ -754,6 +830,7 @@ export default function CommunityFeedClient({
           }
           return mapped;
         });
+        dispatchCommunityMutate();
       }
     } catch {
       /* ignore */
@@ -812,7 +889,7 @@ export default function CommunityFeedClient({
 
   const title = isPortal ? "Posts" : "Community";
   const subtitle = isPortal
-    ? "Share updates, like posts, and reply in threads — same feed as the open Community page."
+    ? "This page shows only your posts. Open Community to read and join the full public feed."
     : "Anyone can read and share posts. Sign in to publish, like, or comment.";
 
   const showComposer = isPortal || canInteract;
@@ -920,6 +997,7 @@ export default function CommunityFeedClient({
               onLikeToggle={onLikeToggle}
               onShare={onShare}
               onCommentCountChange={bumpCommentCount}
+              onCommunityMutate={dispatchCommunityMutate}
               canInteract={canInteract}
               loginNextPath={loginNextPath}
               onNotifyError={reportActionError}
@@ -948,10 +1026,22 @@ export default function CommunityFeedClient({
                 </a>{" "}
                 to see posts you&apos;ve liked or shared.
               </>
+            ) : isPortal && feedTab === "all" && !canInteract ? (
+              <>
+                <a
+                  href={`/login?next=${encodeURIComponent(loginNextPath)}`}
+                  className="font-semibold text-amber-700 underline hover:text-amber-800 dark:text-amber-400"
+                >
+                  Sign in
+                </a>{" "}
+                to see your posts here.
+              </>
             ) : feedTab === "liked" ? (
               "You haven’t liked any posts yet."
             ) : feedTab === "shared" ? (
               "You haven’t shared any posts yet. Use Repost on a post to add it here."
+            ) : isPortal ? (
+              "You haven’t posted yet."
             ) : (
               "No posts yet. Be the first to share!"
             )}
@@ -960,14 +1050,12 @@ export default function CommunityFeedClient({
       </>
     );
 
+  const rootShell = isX
+    ? `mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col space-y-5 px-3 py-4 text-[15px] md:px-4 md:py-6 ${containerClassName}`.trim()
+    : `mx-auto max-w-xl space-y-6 ${containerClassName}`.trim();
+
   return (
-    <div
-      className={
-        isX
-          ? "mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col space-y-5 px-3 py-4 text-[15px] md:px-4 md:py-6"
-          : "mx-auto max-w-xl space-y-6"
-      }
-    >
+    <div className={rootShell}>
       {isX ? (
         <header className="space-y-1">
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
@@ -998,6 +1086,36 @@ export default function CommunityFeedClient({
       {composeForm}
       {guestPromo}
       {tabBar}
+
+      {canInteract && viewer?.isPremium ? (
+        <div
+          className={
+            isX
+              ? "rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80"
+              : "rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-slate-900/80"
+          }
+        >
+          <div className="flex gap-3">
+            <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-sky-500" aria-hidden />
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Verified badge</h2>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                Show a blue check next to your name on posts so others know your account is verified.
+              </p>
+              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-zinc-800 dark:text-zinc-200">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500 dark:border-zinc-600 dark:bg-slate-900"
+                  checked={Boolean(viewer.showVerifiedBadge)}
+                  disabled={savingVerifiedBadge}
+                  onChange={(e) => void updateVerifiedBadge(e.target.checked)}
+                />
+                <span>Show verified badge publicly</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {error && !configError ? (
         <p className="px-4 text-sm text-rose-600 dark:text-rose-400 sm:px-0">{error}</p>

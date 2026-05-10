@@ -29,6 +29,8 @@ const UserSchema = new Schema(
     },
     darkMode: { type: Boolean, default: false },
     isPremium: { type: Boolean, default: false },
+    /** When true (and subscription active), community posts show a verified badge for this author. */
+    showVerifiedBadge: { type: Boolean, default: false },
     subscriptionPlan: {
       type: String,
       enum: ["free", "pro_monthly", "pro_yearly"],
@@ -74,6 +76,7 @@ if (mongoose.models.User) {
   }
   if (!User.schema.path("darkMode")) missingPaths.darkMode = { type: Boolean, default: false };
   if (!User.schema.path("isPremium")) missingPaths.isPremium = { type: Boolean, default: false };
+  if (!User.schema.path("showVerifiedBadge")) missingPaths.showVerifiedBadge = { type: Boolean, default: false };
   if (!User.schema.path("subscriptionPlan")) {
     missingPaths.subscriptionPlan = {
       type: String,

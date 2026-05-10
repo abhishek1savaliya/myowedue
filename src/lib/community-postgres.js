@@ -143,6 +143,13 @@ export async function prepareCommunityPostgresSchema() {
       console.info("[community] Postgres community_post_shares ensured (002_community_post_shares.sql).");
     }
 
+    const topicsRel = await clientPool.query(`SELECT to_regclass('public.post_topics') AS rel`);
+    if (!topicsRel.rows[0]?.rel) {
+      const sql003 = readFileSync(join(process.cwd(), "supabase", "migrations", "003_post_topics.sql"), "utf8");
+      await runMigrationWithPool(clientPool, sql003);
+      console.info("[community] Postgres post_topics ensured (003_post_topics.sql).");
+    }
+
     schemaReady = true;
     return { ok: true, existed: true };
   } catch (e) {

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { PenSquare, Users } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import CommunityFeedClient from "@/components/community/CommunityFeedClient";
+import TrendingSidebar from "@/components/community/TrendingSidebar";
 
 const navItem =
   "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold text-zinc-800 transition hover:bg-stone-100 dark:text-zinc-100 dark:hover:bg-zinc-800/80";
@@ -97,33 +98,35 @@ export default function CommunityPublicShell() {
           </div>
         </aside>
 
-        {/* Feed */}
-        <main className="relative min-h-0 min-w-0 flex-1 border-stone-200 dark:border-zinc-800 md:border-x">
-          <CommunityFeedClient variant="public" skin="x" shareBasePath="/community" loginNextPath="/community" />
-        </main>
+        {/* Mobile: trending above feed. lg+: feed | right rail (single TrendingSidebar). */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
+          <main className="relative order-2 min-h-0 min-w-0 flex-1 border-stone-200 dark:border-zinc-800 md:border-x lg:order-1">
+            <CommunityFeedClient variant="public" skin="x" shareBasePath="/community" loginNextPath="/community" />
+          </main>
 
-        {/* Right — only real app links */}
-        <aside className="sticky top-0 hidden w-[280px] shrink-0 flex-col gap-4 py-6 pl-4 pr-6 lg:flex">
-          <div className="rounded-2xl border border-stone-200 bg-white/95 p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80">
-            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">Use the full app</h2>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-              Track dues, files, and reminders alongside this community feed.
+          <aside className="order-1 flex w-full shrink-0 flex-col gap-4 border-b border-stone-200 bg-stone-50/80 px-4 py-4 dark:border-zinc-800 dark:bg-slate-900/40 lg:sticky lg:top-0 lg:order-2 lg:h-screen lg:w-[280px] lg:border-b-0 lg:bg-transparent lg:py-6 lg:pl-4 lg:pr-6">
+            <TrendingSidebar limit={10} variant="shell" />
+            <div className="hidden rounded-2xl border border-stone-200 bg-white/95 p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/80 lg:block">
+              <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">Use the full app</h2>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                Track dues, files, and reminders alongside this community feed.
+              </p>
+              <Link
+                href={appHref}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600"
+              >
+                {loggedIn ? "Open dashboard" : "Sign in"}
+              </Link>
+            </div>
+
+            <p className="hidden text-xs text-zinc-500 dark:text-zinc-500 lg:block">
+              © {new Date().getFullYear()} OWE DUE ·{" "}
+              <Link href="/" className="font-medium text-amber-700 hover:underline dark:text-amber-400">
+                Home
+              </Link>
             </p>
-            <Link
-              href={appHref}
-              className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600"
-            >
-              {loggedIn ? "Open dashboard" : "Sign in"}
-            </Link>
-          </div>
-
-          <p className="text-xs text-zinc-500 dark:text-zinc-500">
-            © {new Date().getFullYear()} OWE DUE ·{" "}
-            <Link href="/" className="font-medium text-amber-700 hover:underline dark:text-amber-400">
-              Home
-            </Link>
-          </p>
-        </aside>
+          </aside>
+        </div>
       </div>
     </div>
   );

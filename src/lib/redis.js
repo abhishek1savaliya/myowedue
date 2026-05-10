@@ -140,13 +140,18 @@ export function communityCommentsCacheKey(postId, viewerId) {
   return `community:comments:v1:${encodeKeyPart(postId)}:${encodeKeyPart(viewerId || "anon")}`;
 }
 
+/** Aggregated trending topics (GET /api/community/trending). */
+export function communityTrendingCacheKey(limit = 10) {
+  return `community:trending:v1:${encodeKeyPart(String(limit))}`;
+}
+
 /** Invalidate cached community feeds and comment threads (after writes). */
 export async function clearCommunityCaches() {
   try {
     const client = await getRedisClient();
     if (!client) return false;
 
-    const patterns = ["community:feed:v1:*", "community:comments:v1:*"];
+    const patterns = ["community:feed:v1:*", "community:comments:v1:*", "community:trending:v1:*"];
     const keysToDelete = new Set();
     for (const pattern of patterns) {
       let cursor = "0";

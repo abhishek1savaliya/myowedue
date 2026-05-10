@@ -62,5 +62,6 @@ export function safeUser(user) {
     fontPreset: isPremium ? user.fontPreset || DEFAULT_FONT_PRESET : DEFAULT_FONT_PRESET,
     fontSizePreset: isPremium ? user.fontSizePreset || DEFAULT_FONT_SIZE_PRESET : DEFAULT_FONT_SIZE_PRESET,
     concurrentSessionLimit: Math.min(5, Math.max(1, Number(user.concurrentSessionLimit || 1))),
+    showVerifiedBadge: isPremium ? Boolean(user.showVerifiedBadge) : false,
   };
 }

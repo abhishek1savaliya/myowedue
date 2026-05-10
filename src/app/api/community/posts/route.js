@@ -1,15 +1,27 @@
 import { fail, ok } from "@/lib/api";
+import { attachAuthorVerifiedToPosts } from "@/lib/community-author-verified";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
+import { extractPostTopics } from "@/lib/post-topic-extraction";
 import { communityFeedCacheKey, clearCommunityCaches, getRedisJSON, setRedisJSON } from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { hasActivePremium } from "@/lib/subscription";
 
 const PAGE_SIZE = 10;
 const COMMUNITY_FEED_CACHE_TTL_SEC = 45;
 
-function serveFeedCache(cacheKey, payload) {
-  void setRedisJSON(cacheKey, payload, COMMUNITY_FEED_CACHE_TTL_SEC);
-  return ok(payload);
+function viewerPayload(sessionUser) {
+  if (!sessionUser) return null;
+  return {
+    isPremium: hasActivePremium(sessionUser),
+    showVerifiedBadge: Boolean(sessionUser.showVerifiedBadge),
+  };
+}
+
+function serveFeedCache(cacheKey, payload, sessionUser) {
+  const body = { ...payload, viewer: sessionUser ? viewerPayload(sessionUser) : null };
+  void setRedisJSON(cacheKey, body, COMMUNITY_FEED_CACHE_TTL_SEC);
+  return ok(body);
 }
 
 function displayName(user) {
@@ -36,7 +48,7 @@ function aggregateEngagement(likesRows, commentRows, currentUserId) {
 
 function parseFeedFilter(searchParams) {
   const f = String(searchParams.get("filter") || "all").toLowerCase();
-  if (f === "mine") return "shared";
+  if (f === "mine") return "mine";
   if (f === "liked" || f === "shared") return f;
   return "all";
 }
@@ -65,6 +77,14 @@ async function enrichPostsWithEngagement(supabase, page, currentUserId) {
   return { posts: enriched };
 }
 
+async function enrichAndVerifyPosts(supabase, page, currentUserId) {
+  const enriched = await enrichPostsWithEngagement(supabase, page, currentUserId);
+  if (enriched.error) return enriched;
+  if (!enriched.posts?.length) return enriched;
+  enriched.posts = await attachAuthorVerifiedToPosts(enriched.posts);
+  return enriched;
+}
+
 export async function GET(request) {
   const user = await getSessionUser(request);
 
@@ -86,14 +106,14 @@ export async function GET(request) {
   const viewerCacheId = currentUserId || "anon";
   const feedCacheKey = communityFeedCacheKey(filter, cursor || "", viewerCacheId);
 
-  if ((filter === "liked" || filter === "shared") && !user) {
+  if ((filter === "liked" || filter === "shared" || filter === "mine") && !user) {
     const payload = { posts: [], nextCursor: null, currentUserId: "", requiresAuth: true, filter };
-    return serveFeedCache(feedCacheKey, payload);
+    return serveFeedCache(feedCacheKey, payload, null);
   }
 
   const cachedFeed = await getRedisJSON(feedCacheKey);
   if (cachedFeed && typeof cachedFeed === "object" && Array.isArray(cachedFeed.posts)) {
-    return ok(cachedFeed);
+    return ok({ ...cachedFeed, viewer: user ? viewerPayload(user) : null });
   }
 
   if (filter === "liked") {
@@ -121,7 +141,7 @@ export async function GET(request) {
     const postIds = likePage.map((r) => r.post_id);
 
     if (postIds.length === 0) {
-      return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter });
+      return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter }, user);
     }
 
     const { data: postsRaw, error: pErr } = await supabase
@@ -138,7 +158,7 @@ export async function GET(request) {
     const byId = new Map((postsRaw || []).map((p) => [p.id, p]));
     const page = likePage.map((r) => byId.get(r.post_id)).filter(Boolean);
 
-    const enriched = await enrichPostsWithEngagement(supabase, page, currentUserId);
+    const enriched = await enrichAndVerifyPosts(supabase, page, currentUserId);
     if (enriched.error) {
       const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
       if (mapped) return fail(mapped, 503);
@@ -146,7 +166,7 @@ export async function GET(request) {
     }
 
     const nextCursor = hasMoreLikes ? likePage[likePage.length - 1]?.created_at : null;
-    return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter });
+    return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter }, user);
   }
 
   if (filter === "shared") {
@@ -174,7 +194,7 @@ export async function GET(request) {
     const postIds = sharePage.map((r) => r.post_id);
 
     if (postIds.length === 0) {
-      return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter });
+      return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter }, user);
     }
 
     const { data: postsRaw, error: pErr } = await supabase
@@ -191,7 +211,7 @@ export async function GET(request) {
     const byId = new Map((postsRaw || []).map((p) => [p.id, p]));
     const page = sharePage.map((r) => byId.get(r.post_id)).filter(Boolean);
 
-    const enriched = await enrichPostsWithEngagement(supabase, page, currentUserId);
+    const enriched = await enrichAndVerifyPosts(supabase, page, currentUserId);
     if (enriched.error) {
       const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
       if (mapped) return fail(mapped, 503);
@@ -199,7 +219,45 @@ export async function GET(request) {
     }
 
     const nextCursor = hasMoreShares ? sharePage[sharePage.length - 1]?.created_at : null;
-    return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter });
+    return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter }, user);
+  }
+
+  if (filter === "mine") {
+    let mineQuery = supabase
+      .from("community_posts")
+      .select("id, author_id, author_name, body, share_count, created_at")
+      .eq("author_id", currentUserId)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE + 1);
+
+    if (cursor) {
+      mineQuery = mineQuery.lt("created_at", cursor);
+    }
+
+    const { data: minePosts, error: mErr } = await mineQuery;
+    if (mErr) {
+      const mapped = mapCommunitySupabaseError(mErr.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(mErr.message || "Failed to load posts", 500);
+    }
+
+    const mineSlice = minePosts || [];
+    const hasMoreMine = mineSlice.length > PAGE_SIZE;
+    const page = hasMoreMine ? mineSlice.slice(0, PAGE_SIZE) : mineSlice;
+
+    if (page.length === 0) {
+      return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter }, user);
+    }
+
+    const enriched = await enrichAndVerifyPosts(supabase, page, currentUserId);
+    if (enriched.error) {
+      const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(enriched.error.message, 500);
+    }
+
+    const nextCursor = hasMoreMine ? page[page.length - 1]?.created_at : null;
+    return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter }, user);
   }
 
   let query = supabase
@@ -224,10 +282,10 @@ export async function GET(request) {
   const page = hasMore ? slice.slice(0, PAGE_SIZE) : slice;
 
   if (page.length === 0) {
-    return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter });
+    return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter }, user);
   }
 
-  const enriched = await enrichPostsWithEngagement(supabase, page, currentUserId);
+  const enriched = await enrichAndVerifyPosts(supabase, page, currentUserId);
   if (enriched.error) {
     const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
     if (mapped) return fail(mapped, 503);
@@ -236,7 +294,7 @@ export async function GET(request) {
 
   const nextCursor = hasMore ? page[page.length - 1]?.created_at : null;
 
-  return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter });
+  return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter }, user);
 }
 
 export async function POST(request) {
@@ -281,14 +339,22 @@ export async function POST(request) {
     return fail(insErr.message || "Failed to create post", 500);
   }
 
+  const topics = extractPostTopics(body);
+  if (topics.length > 0) {
+    const rows = topics.map((topic) => ({ post_id: data.id, topic }));
+    const { error: topicErr } = await supabase.from("post_topics").insert(rows);
+    if (topicErr) {
+      const msg = String(topicErr.message || "").toLowerCase();
+      const missing = msg.includes("post_topics") && (msg.includes("does not exist") || msg.includes("schema"));
+      if (!missing) {
+        console.warn("[community] post_topics insert:", topicErr.message);
+      }
+    }
+  }
+
   await clearCommunityCaches();
 
-  return ok({
-    post: {
-      ...data,
-      likeCount: 0,
-      commentCount: 0,
-      liked: false,
-    },
-  });
+  const basePost = { ...data, likeCount: 0, commentCount: 0, liked: false };
+  const [post] = await attachAuthorVerifiedToPosts([basePost]);
+  return ok({ post });
 }

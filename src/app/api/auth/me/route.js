@@ -4,16 +4,17 @@ import { safeUser } from "@/lib/auth";
 import User from "@/models/User";
 import { connectDB } from "@/lib/db";
 import Notification from "@/models/Notification";
-import { clearDashboardCache, publishNotificationEvent } from "@/lib/redis";
+import { clearCommunityCaches, clearDashboardCache, publishNotificationEvent } from "@/lib/redis";
+import { hasActivePremium } from "@/lib/subscription";
 
-export async function GET() {
-  const { user, error } = await requireUser();
+export async function GET(request) {
+  const { user, error } = await requireUser(request);
   if (error) return error;
   return ok({ user: safeUser(user) });
 }
 
 export async function PUT(request) {
-  const { user, error } = await requireUser();
+  const { user, error } = await requireUser(request);
   if (error) return error;
 
   try {
@@ -65,5 +66,39 @@ export async function PUT(request) {
     return ok({ user: safeUser(updated), message: "Profile updated" });
   } catch {
     return fail("Failed to update profile", 500);
+  }
+}
+
+/** Toggle public verified badge on community posts (premium only). */
+export async function PATCH(request) {
+  const { user, error } = await requireUser(request);
+  if (error) return error;
+
+  try {
+    const body = await request.json();
+    if (typeof body.showVerifiedBadge !== "boolean") {
+      return fail("showVerifiedBadge must be a boolean", 422);
+    }
+    if (!hasActivePremium(user)) {
+      return fail("An active premium subscription is required to show a verified badge.", 403);
+    }
+
+    await connectDB();
+    const updated = await User.findByIdAndUpdate(
+      user._id,
+      { $set: { showVerifiedBadge: body.showVerifiedBadge } },
+      { returnDocument: "after" }
+    );
+    if (!updated) return fail("User not found", 404);
+
+    await clearCommunityCaches();
+
+    return ok({
+      user: safeUser(updated),
+      showVerifiedBadge: Boolean(updated.showVerifiedBadge),
+      message: "Community badge preference updated",
+    });
+  } catch {
+    return fail("Failed to update preference", 500);
   }
 }
