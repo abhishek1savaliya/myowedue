@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import PublicFooter from "@/components/PublicFooter";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import HomeTrendingSection from "@/components/HomeTrendingSection";
-import HomeLogoThree from "@/components/HomeLogoThree";
 import { ArrowRight } from "lucide-react";
 import { getCmsPageContent } from "@/lib/cmsPublic";
 
@@ -87,7 +86,7 @@ export default async function Home() {
       <div className="frontpage-aurora pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(245,158,11,0.14),transparent_34%),radial-gradient(circle_at_84%_84%,rgba(16,185,129,0.12),transparent_34%)]" />
 
       <section className="relative mx-auto max-w-6xl px-4 pb-16 pt-10 sm:px-6 md:pb-20 md:pt-14">
-        <header className="frontpage-reveal flex items-center justify-between gap-3">
+        <header className="frontpage-reveal flex items-center justify-between gap-3 border-b border-zinc-200/80 pb-6 dark:border-zinc-700/80">
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <Image
               src="/owedue-logo.svg"
@@ -98,46 +97,45 @@ export default async function Home() {
               priority
             />
             <div className="min-w-0">
-              <p className="text-lg font-bold tracking-[0.12em] text-black sm:text-xl">OWE DUE</p>
-              <p className="truncate text-[11px] text-zinc-600 sm:text-xs">Personal credit and debit tracker</p>
+              <p className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-xl">OWE DUE</p>
+              <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400 sm:text-xs">Personal credit & debit tracker</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <PublicModeToggle />
             <Link
               href="/login"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-300 px-3 py-2 text-center text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-amber-400 hover:text-amber-600 sm:px-4"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-center text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-700 sm:px-4"
             >
-              Login
+              Log in
             </Link>
           </div>
         </header>
 
-        <div className="frontpage-reveal frontpage-delay-1 mt-6 flex justify-center md:mt-8">
-          <HomeLogoThree size={132} />
-        </div>
-
-        <div className="mt-12 grid gap-10 md:mt-16 md:grid-cols-[1.2fr_0.8fr] md:items-end">
+        <div className="mt-10 grid gap-10 md:mt-14 md:grid-cols-[1.15fr_0.85fr] md:items-start md:gap-12">
           <div className="frontpage-reveal frontpage-delay-1">
-            <p className="frontpage-badge inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+            <p className="inline-flex rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-200">
               {content.heroBadge || "Built for independent earners"}
             </p>
-            <h1 className="mt-5 max-w-3xl text-4xl leading-tight text-black md:text-5xl">
+            <h1 className="mt-5 max-w-3xl text-3xl font-semibold leading-[1.15] tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl md:text-[2.65rem] md:leading-[1.12]">
               {content.heroTitle || "Track every due without the chaos."}
             </h1>
-            <div className="mt-5 max-w-2xl text-sm leading-7 text-zinc-600 md:text-base cms-html" dangerouslySetInnerHTML={{ __html: content.heroDescription || "Manage dues in one premium workspace." }} />
+            <div
+              className="cms-html mt-5 max-w-2xl text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-300 md:text-base [&_a]:text-amber-700 dark:[&_a]:text-amber-300 [&_strong]:text-zinc-900 dark:[&_strong]:text-zinc-100"
+              dangerouslySetInnerHTML={{ __html: content.heroDescription || "Manage dues in one premium workspace." }}
+            />
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
                 href="/signup"
-                className="frontpage-primary-cta inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-amber-400 to-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-amber-500 hover:to-amber-600 sm:w-auto"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white sm:w-auto"
               >
                 {content.ctaPrimary || "Create your account"}
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 opacity-90" aria-hidden />
               </Link>
               <Link
                 href="/login"
-                className="inline-flex w-full items-center justify-center rounded-xl border border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:w-auto"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-500 dark:bg-zinc-800/90 dark:text-zinc-100 dark:hover:border-zinc-400 dark:hover:bg-zinc-700 sm:w-auto"
               >
                 {content.ctaSecondary || "Already have an account"}
               </Link>
@@ -148,29 +146,36 @@ export default async function Home() {
                 {heroStats.map((stat, idx) => (
                   <div
                     key={`${stat.label || "stat"}-${idx}`}
-                    className="frontpage-lift frontpage-stat rounded-2xl border border-zinc-200 bg-white/80 px-4 py-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)]"
+                    className="frontpage-lift frontpage-stat rounded-2xl border border-zinc-200 bg-white/80 px-4 py-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-zinc-600 dark:bg-zinc-900/70"
                     style={{ "--frontpage-delay": `${180 + idx * 90}ms` }}
                   >
-                    <p className="text-2xl font-bold text-black">{stat.value || "-"}</p>
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{stat.label || "Label"}</p>
+                    <p className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{stat.value || "-"}</p>
+                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{stat.label || "Label"}</p>
                   </div>
                 ))}
               </div>
             ) : null}
           </div>
 
-          <div className="frontpage-reveal frontpage-delay-2 frontpage-lift rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:p-6">
-            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{content.highlightTitle || "Try now"}</p>
-            <div className="mt-4 space-y-3 text-sm text-zinc-700">
-              {highlightItems.length ? (
-                highlightItems.map((item, idx) => (
-                  <p key={`${item}-${idx}`} className="frontpage-highlight rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-                    {item}
+          <div className="frontpage-reveal frontpage-delay-2">
+            <div className="frontpage-lift rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-600 dark:bg-zinc-900/80 md:p-6">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{content.highlightTitle || "Highlights"}</p>
+              <div className="mt-4 space-y-2.5 text-sm text-zinc-700 dark:text-zinc-300">
+                {highlightItems.length ? (
+                  highlightItems.map((item, idx) => (
+                    <p
+                      key={`${item}-${idx}`}
+                      className="frontpage-highlight rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-zinc-800 dark:border-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-100"
+                    >
+                      {item}
+                    </p>
+                  ))
+                ) : (
+                  <p className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-zinc-600 dark:border-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
+                    No highlights configured yet.
                   </p>
-                ))
-              ) : (
-                <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">No highlights configured yet.</p>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
