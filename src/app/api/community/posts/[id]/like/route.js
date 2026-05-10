@@ -38,8 +38,17 @@ export async function POST(request, { params }) {
       if (mapped) return fail(mapped, 503);
       return fail(delErr.message, 500);
     }
+    const { count: likeCount, error: countErr } = await supabase
+      .from("community_post_likes")
+      .select("*", { count: "exact", head: true })
+      .eq("post_id", postId);
+    if (countErr) {
+      const mapped = mapCommunitySupabaseError(countErr.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(countErr.message || "Like count failed", 500);
+    }
     await clearCommunityCaches();
-    return ok({ liked: false });
+    return ok({ liked: false, likeCount: likeCount ?? 0 });
   }
 
   const { error: insErr } = await supabase.from("community_post_likes").insert({ post_id: postId, user_id: uid });
@@ -65,6 +74,16 @@ export async function POST(request, { params }) {
     });
   }
 
+  const { count: likeCount, error: countErr } = await supabase
+    .from("community_post_likes")
+    .select("*", { count: "exact", head: true })
+    .eq("post_id", postId);
+  if (countErr) {
+    const mapped = mapCommunitySupabaseError(countErr.message, setup);
+    if (mapped) return fail(mapped, 503);
+    return fail(countErr.message || "Like count failed", 500);
+  }
+
   await clearCommunityCaches();
-  return ok({ liked: true });
+  return ok({ liked: true, likeCount: likeCount ?? 0 });
 }
