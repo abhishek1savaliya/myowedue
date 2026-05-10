@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/api";
+import { notifyCommunityActivity, formatUserDisplayName } from "@/lib/community-notifications";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityCaches } from "@/lib/redis";
 import { getSessionUser } from "@/lib/session";
@@ -21,7 +22,7 @@ export async function POST(request, { params }) {
 
   const { data: row, error: fetchErr } = await supabase
     .from("community_posts")
-    .select("share_count")
+    .select("share_count, author_id, body")
     .eq("id", postId)
     .maybeSingle();
 
@@ -53,6 +54,19 @@ export async function POST(request, { params }) {
     if (shareErr) {
       console.warn("[community] community_post_shares upsert:", shareErr.message);
     }
+  }
+
+  const ownerId = row.author_id != null ? String(row.author_id) : "";
+  const actorId = user ? String(user._id) : "";
+  if (ownerId && ownerId !== actorId) {
+    void notifyCommunityActivity({
+      recipientUserId: ownerId,
+      actorUserId: actorId || undefined,
+      actorName: user ? formatUserDisplayName(user) : "Someone",
+      kind: "post_share",
+      postId,
+      postBodySnippet: row.body,
+    });
   }
 
   await clearCommunityCaches();

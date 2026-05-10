@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/api";
+import { notifyCommunityActivity, formatUserDisplayName } from "@/lib/community-notifications";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityCaches } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
@@ -47,6 +48,23 @@ export async function POST(request, { params }) {
     if (mapped) return fail(mapped, 503);
     return fail(insErr.message, 500);
   }
+
+  const { data: postRow } = await supabase
+    .from("community_posts")
+    .select("author_id, body")
+    .eq("id", postId)
+    .maybeSingle();
+  if (postRow?.author_id && String(postRow.author_id) !== uid) {
+    void notifyCommunityActivity({
+      recipientUserId: String(postRow.author_id),
+      actorUserId: uid,
+      actorName: formatUserDisplayName(user),
+      kind: "post_like",
+      postId,
+      postBodySnippet: postRow.body,
+    });
+  }
+
   await clearCommunityCaches();
   return ok({ liked: true });
 }

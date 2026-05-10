@@ -1,5 +1,6 @@
 import { fail, ok } from "@/lib/api";
 import { attachAuthorVerifiedToPosts } from "@/lib/community-author-verified";
+import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { extractPostTopics } from "@/lib/post-topic-extraction";
 import { communityFeedCacheKey, clearCommunityCaches, getRedisJSON, setRedisJSON } from "@/lib/redis";
@@ -82,6 +83,7 @@ async function enrichAndVerifyPosts(supabase, page, currentUserId) {
   if (enriched.error) return enriched;
   if (!enriched.posts?.length) return enriched;
   enriched.posts = await attachAuthorVerifiedToPosts(enriched.posts);
+  enriched.posts = await attachAuthorUsernamesToPosts(supabase, enriched.posts);
   return enriched;
 }
 
@@ -355,6 +357,7 @@ export async function POST(request) {
   await clearCommunityCaches();
 
   const basePost = { ...data, likeCount: 0, commentCount: 0, liked: false };
-  const [post] = await attachAuthorVerifiedToPosts([basePost]);
+  const [verified] = await attachAuthorVerifiedToPosts([basePost]);
+  const [post] = await attachAuthorUsernamesToPosts(supabase, [verified]);
   return ok({ post });
 }

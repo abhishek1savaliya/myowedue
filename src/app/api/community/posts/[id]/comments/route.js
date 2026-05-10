@@ -1,4 +1,6 @@
 import { fail, ok } from "@/lib/api";
+import { formatUserDisplayName, notifyCommunityActivity } from "@/lib/community-notifications";
+import { attachAuthorUsernamesToCommentTree } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityCaches, communityCommentsCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
@@ -6,12 +8,57 @@ import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-
 
 const COMMUNITY_COMMENTS_CACHE_TTL_SEC = 60;
 
-function displayName(user) {
-  const n = String(user?.name || "").trim();
-  if (n) return n;
-  const f = String(user?.firstName || "").trim();
-  const l = String(user?.lastName || "").trim();
-  return `${f} ${l}`.trim() || "Member";
+function collectCommentIds(nodes, out = []) {
+  for (const n of nodes || []) {
+    const id = commentRowId(n);
+    if (id) out.push(id);
+    collectCommentIds(n.replies, out);
+  }
+  return out;
+}
+
+/** Attach per-comment like counts and whether the viewer liked (requires community_comment_likes table). */
+async function attachCommentLikes(supabase, tree, viewerId) {
+  const ids = collectCommentIds(tree, []);
+  if (ids.length === 0) return tree;
+
+  const { data: likeRows, error: likeErr } = await supabase
+    .from("community_comment_likes")
+    .select("comment_id, user_id")
+    .in("comment_id", ids);
+
+  if (likeErr || !likeRows) {
+    function walkBare(nodes) {
+      return (nodes || []).map((n) => ({
+        ...n,
+        commentLikeCount: 0,
+        commentLiked: false,
+        replies: walkBare(n.replies),
+      }));
+    }
+    return walkBare(tree);
+  }
+
+  const countBy = new Map();
+  const liked = new Set();
+  for (const r of likeRows) {
+    const cid = String(r.comment_id);
+    countBy.set(cid, (countBy.get(cid) || 0) + 1);
+    if (viewerId && String(r.user_id) === String(viewerId)) liked.add(cid);
+  }
+
+  function walk(nodes) {
+    return (nodes || []).map((n) => {
+      const id = commentRowId(n);
+      return {
+        ...n,
+        commentLikeCount: id ? countBy.get(id) || 0 : 0,
+        commentLiked: id ? liked.has(id) : false,
+        replies: walk(n.replies),
+      };
+    });
+  }
+  return walk(tree);
 }
 
 function commentParentId(c) {
@@ -53,7 +100,7 @@ function nestComments(flat) {
 const ROOT_PAGE_DEFAULT = 5;
 
 /** Paginate top-level comment threads (roots), including full reply trees per root. */
-async function fetchCommentRootPage(supabase, postId, limit, cursorCreatedAt) {
+async function fetchCommentRootPage(supabase, postId, limit, cursorCreatedAt, viewerId) {
   const lim = Math.min(Math.max(Number(limit) || ROOT_PAGE_DEFAULT, 1), 50);
   const pageSize = lim + 1;
 
@@ -114,11 +161,13 @@ async function fetchCommentRootPage(supabase, postId, limit, cursorCreatedAt) {
 
   const flat = Array.from(collected.values());
   const nested = nestComments(flat);
+  const nestedWithLikes = await attachCommentLikes(supabase, nested, viewerId);
+  const nestedWithNames = await attachAuthorUsernamesToCommentTree(supabase, nestedWithLikes);
   const lastRoot = roots[roots.length - 1];
   const nextCommentCursor = hasMore && lastRoot?.created_at ? lastRoot.created_at : null;
 
   return {
-    comments: nested,
+    comments: nestedWithNames,
     nextCommentCursor,
     hasMoreComments: hasMore,
     error: null,
@@ -147,7 +196,8 @@ export async function GET(request, { params }) {
   if (usePaging) {
     const limit = searchParams.get("limit");
     const cursor = searchParams.get("cursor");
-    const page = await fetchCommentRootPage(supabase, postId, limit, cursor);
+    const viewerId = user ? String(user._id) : "";
+    const page = await fetchCommentRootPage(supabase, postId, limit, cursor, viewerId);
     if (page.error) {
       const mapped = mapCommunitySupabaseError(page.error.message, setup);
       if (mapped) return fail(mapped, 503);
@@ -161,8 +211,8 @@ export async function GET(request, { params }) {
     });
   }
 
-  const viewerId = user ? String(user._id) : "anon";
-  const commentsCacheKey = communityCommentsCacheKey(postId, viewerId);
+  const viewerKey = user ? String(user._id) : "anon";
+  const commentsCacheKey = communityCommentsCacheKey(postId, viewerKey);
   const cached = await getRedisJSON(commentsCacheKey);
   if (cached && typeof cached === "object" && Array.isArray(cached.comments)) {
     return ok(cached);
@@ -180,9 +230,14 @@ export async function GET(request, { params }) {
     return fail(qErr.message, 500);
   }
 
+  const nested = nestComments(rows || []);
+  const viewerId = user ? String(user._id) : "";
+  const withLikes = await attachCommentLikes(supabase, nested, viewerId);
+  const withNames = await attachAuthorUsernamesToCommentTree(supabase, withLikes);
+
   const payload = {
-    comments: nestComments(rows || []),
-    currentUserId: user ? String(user._id) : "",
+    comments: withNames,
+    currentUserId: viewerId,
   };
   void setRedisJSON(commentsCacheKey, payload, COMMUNITY_COMMENTS_CACHE_TTL_SEC);
   return ok(payload);
@@ -220,10 +275,11 @@ export async function POST(request, { params }) {
     return fail("Comment must be 1–500 characters.", 422);
   }
 
+  let parentAuthorId = null;
   if (parentId) {
     const { data: parent, error: pErr } = await supabase
       .from("community_comments")
-      .select("id, post_id")
+      .select("id, post_id, author_id")
       .eq("id", parentId)
       .maybeSingle();
     if (pErr) {
@@ -234,6 +290,7 @@ export async function POST(request, { params }) {
     if (!parent || parent.post_id !== postId) {
       return fail("Invalid reply target.", 422);
     }
+    parentAuthorId = parent.author_id != null ? String(parent.author_id) : null;
   }
 
   const { data, error: insErr } = await supabase
@@ -242,7 +299,7 @@ export async function POST(request, { params }) {
       post_id: postId,
       parent_id: parentId || null,
       author_id: String(user._id),
-      author_name: displayName(user),
+      author_name: formatUserDisplayName(user),
       body,
     })
     .select("id, post_id, parent_id, author_id, author_name, body, created_at")
@@ -256,5 +313,34 @@ export async function POST(request, { params }) {
 
   await clearCommunityCaches();
 
-  return ok({ comment: { ...data, replies: [] } });
+  const actorId = String(user._id);
+  const actorName = formatUserDisplayName(user);
+  const { data: postRow } = await supabase.from("community_posts").select("author_id, body").eq("id", postId).maybeSingle();
+  const postOwnerId = postRow?.author_id ? String(postRow.author_id) : "";
+
+  if (postOwnerId && actorId !== postOwnerId) {
+    const base = {
+      actorUserId: actorId,
+      actorName,
+      postId,
+      postBodySnippet: postRow?.body,
+      commentSnippet: body,
+    };
+    if (!parentId) {
+      void notifyCommunityActivity({ ...base, recipientUserId: postOwnerId, kind: "comment_on_post" });
+    } else if (parentAuthorId === postOwnerId) {
+      void notifyCommunityActivity({ ...base, recipientUserId: postOwnerId, kind: "reply_to_comment" });
+    } else {
+      void notifyCommunityActivity({ ...base, recipientUserId: postOwnerId, kind: "reply_on_post" });
+      if (parentAuthorId && parentAuthorId !== actorId) {
+        void notifyCommunityActivity({ ...base, recipientUserId: parentAuthorId, kind: "reply_to_comment" });
+      }
+    }
+  }
+
+  const singleTree = await attachCommentLikes(supabase, [{ ...data, replies: [] }], actorId);
+  const namedTree = await attachAuthorUsernamesToCommentTree(supabase, singleTree);
+  const commentPayload = namedTree[0] || { ...data, replies: [], commentLikeCount: 0, commentLiked: false };
+
+  return ok({ comment: commentPayload });
 }

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { PenSquare, Settings2, Users } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
+import CommunityNotificationsSidebar from "@/components/community/CommunityNotificationsSidebar";
 import TrendingSidebar from "@/components/community/TrendingSidebar";
 
 const navItem =
@@ -90,7 +91,7 @@ export default function CommunityPublicShell({ children }) {
       <div className="relative mx-auto flex min-h-[calc(100dvh-56px)] max-w-[1200px] md:min-h-screen">
         {/* Left */}
         <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-zinc-200 bg-white/95 py-4 pl-4 pr-3 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-950/95 md:flex">
-          <Link href="/" className="mb-6 inline-flex items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-900 dark:text-zinc-50" aria-label="OWE DUE home">
+          <Link href="/" className="mb-6 inline-flex shrink-0 items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-900 dark:text-zinc-50" aria-label="OWE DUE home">
             <Image src="/owedue-logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
             <span className="text-sm tracking-wide">OWE DUE</span>
           </Link>
@@ -114,7 +115,11 @@ export default function CommunityPublicShell({ children }) {
             </Link>
           </nav>
 
-          <div className="mt-auto shrink-0 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-zinc-200 pt-4 dark:border-zinc-700">
+            <CommunityNotificationsSidebar loggedIn={loggedIn} />
+          </div>
+
+          <div className="mt-4 shrink-0 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
             <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Display</p>
             <PublicModeToggle />
             <Link

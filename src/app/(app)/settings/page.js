@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Moon, Sun } from "lucide-react";
+import { AlertCircle, Check, Lock, Loader2, Moon, Sun, X } from "lucide-react";
 import Loader from "@/components/Loader";
+import { useCommunityUsernameCheck } from "@/hooks/useCommunityUsernameCheck";
+import { COMMUNITY_USERNAME_MAX, COMMUNITY_USERNAME_MIN } from "@/lib/community-usernames";
 import { FONT_PRESETS, FONT_SIZE_PRESETS } from "@/lib/appearance";
 import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
 import {
@@ -33,6 +35,9 @@ export default function SettingsPage() {
   const [recentLogins, setRecentLogins] = useState([]);
   const [loadingLoginActivity, setLoadingLoginActivity] = useState(true);
   const [loginActivityMessage, setLoginActivityMessage] = useState("");
+  const [communityUsername, setCommunityUsername] = useState("");
+  const [savedCommunityUsername, setSavedCommunityUsername] = useState("");
+  const [usernameMessage, setUsernameMessage] = useState("");
 
   async function loadProfile() {
     setLoadingProfile(true);
@@ -70,6 +75,10 @@ export default function SettingsPage() {
         isPremium: premium,
       });
       setNotificationsEnabled(user.notificationsEnabled !== false);
+      const handle = typeof user.communityUsername === "string" ? user.communityUsername : "";
+      setCommunityUsername(handle);
+      setSavedCommunityUsername(handle);
+      setUsernameMessage("");
     }
 
     setLoadingProfile(false);
@@ -92,6 +101,22 @@ export default function SettingsPage() {
     loadProfile();
     loadLoginActivity();
   }, []);
+
+  const usernameCheckEnabled = !loadingProfile && Boolean(profile.email);
+  const { checking: usernameChecking, result: usernameCheck } = useCommunityUsernameCheck(communityUsername, {
+    enabled: usernameCheckEnabled,
+  });
+
+  const normalizedDraft = communityUsername.trim().toLowerCase().replace(/^@+/, "");
+  const normalizedSaved = savedCommunityUsername.trim().toLowerCase();
+  const usernameUnchanged = normalizedDraft === normalizedSaved;
+  const canSubmitCommunityUsername =
+    usernameCheckEnabled &&
+    !usernameChecking &&
+    normalizedDraft.length > 0 &&
+    !usernameUnchanged &&
+    usernameCheck?.available === true &&
+    usernameCheck?.configured !== false;
 
   async function saveProfile(e) {
     e.preventDefault();
@@ -122,6 +147,28 @@ export default function SettingsPage() {
     }
 
     setProfileMessage(res.ok ? "Profile updated" : data.message || "Failed to update profile");
+  }
+
+  async function saveCommunityUsername(e) {
+    e.preventDefault();
+    if (!canSubmitCommunityUsername) return;
+    setUsernameMessage("Saving…");
+    try {
+      const res = await fetch("/api/community/username", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username: communityUsername }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && typeof data.username === "string") {
+        setCommunityUsername(data.username);
+        setSavedCommunityUsername(data.username);
+      }
+      setUsernameMessage(res.ok ? "Username saved." : data.message || "Failed to save username.");
+    } catch {
+      setUsernameMessage("Failed to save username.");
+    }
   }
 
   async function saveSettings() {
@@ -248,6 +295,92 @@ export default function SettingsPage() {
         )}
 
         {profileMessage ? <p className="mt-3 text-sm text-zinc-600">{profileMessage}</p> : null}
+      </section>
+
+      <section
+        className={`max-w-3xl rounded-2xl border border-zinc-200 bg-white p-5 ${profile.email && !savedCommunityUsername ? "ring-2 ring-amber-200" : ""}`}
+      >
+        <h2 className="text-base font-semibold text-black">Community username</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Unique @handle for community posts and replies. {COMMUNITY_USERNAME_MIN}–{COMMUNITY_USERNAME_MAX} characters (a–z, 0–9, _). Availability is checked as you type.
+        </p>
+        {profile.email && !savedCommunityUsername ? (
+          <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-800">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            You have not set a community username yet.
+          </p>
+        ) : null}
+        {loadingProfile ? (
+          <Loader className="mt-4" />
+        ) : (
+          <form onSubmit={saveCommunityUsername} className="mt-4 space-y-3">
+            <div
+              className={`flex max-w-lg rounded-xl border bg-white ${
+                usernameChecking
+                  ? "border-zinc-300"
+                  : usernameCheck?.available === true
+                    ? "border-emerald-500"
+                    : usernameCheck && usernameCheck.available === false
+                      ? "border-rose-500"
+                      : "border-zinc-300"
+              }`}
+            >
+              <span className="flex items-center border-r border-zinc-200 px-3 text-sm text-zinc-500">@</span>
+              <input
+                id="community-username"
+                value={communityUsername}
+                onChange={(e) => setCommunityUsername(e.target.value)}
+                placeholder="your_handle"
+                autoComplete="username"
+                maxLength={COMMUNITY_USERNAME_MAX + 4}
+                className="min-w-0 flex-1 rounded-r-xl px-3 py-2 text-sm outline-none"
+                aria-label="Community username"
+                aria-invalid={usernameCheck?.available === false}
+              />
+            </div>
+            <div className="min-h-5 text-xs text-zinc-600">
+              {usernameChecking ? (
+                <span className="inline-flex items-center gap-1.5 text-zinc-500">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  Checking…
+                </span>
+              ) : usernameCheck?.status === "short" ? (
+                <span className="text-amber-800">At least {COMMUNITY_USERNAME_MIN} characters ({usernameCheck.needed ?? ""} more).</span>
+              ) : usernameCheck?.status === "long" ? (
+                <span className="text-rose-600">Max {COMMUNITY_USERNAME_MAX} characters.</span>
+              ) : usernameCheck?.status === "invalid_chars" ? (
+                <span className="text-rose-600">Only a–z, 0–9, and underscore.</span>
+              ) : usernameCheck?.status === "reserved" ? (
+                <span className="text-rose-600">Reserved.</span>
+              ) : usernameCheck?.status === "taken" ? (
+                <span className="inline-flex items-center gap-1 text-rose-600">
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                  Taken
+                </span>
+              ) : usernameCheck?.status === "available" ? (
+                <span className="inline-flex items-center gap-1 text-emerald-700">
+                  <Check className="h-3.5 w-3.5" aria-hidden />
+                  Available
+                </span>
+              ) : usernameCheck?.status === "yours" ? (
+                <span className="inline-flex items-center gap-1 text-zinc-500">
+                  <Check className="h-3.5 w-3.5" aria-hidden />
+                  Your current username
+                </span>
+              ) : usernameCheck?.configured === false ? (
+                <span className="text-zinc-500">Community database not configured.</span>
+              ) : null}
+            </div>
+            <button
+              type="submit"
+              disabled={!canSubmitCommunityUsername}
+              className="rounded-xl border border-black bg-black px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Save username
+            </button>
+          </form>
+        )}
+        {usernameMessage ? <p className="mt-3 text-sm text-zinc-600">{usernameMessage}</p> : null}
       </section>
 
       <section className="max-w-xl space-y-4 rounded-2xl border border-zinc-200 bg-white p-5">

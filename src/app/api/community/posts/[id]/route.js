@@ -1,5 +1,6 @@
 import { fail, ok } from "@/lib/api";
 import { attachAuthorVerifiedToPosts } from "@/lib/community-author-verified";
+import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames";
 import { isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { extractPostTopics } from "@/lib/post-topic-extraction";
@@ -75,7 +76,8 @@ export async function GET(request, { params }) {
     commentCount: commentCount[row.id] || 0,
     liked: likedByMe.has(row.id),
   };
-  const [post] = await attachAuthorVerifiedToPosts([base]);
+  const [verified] = await attachAuthorVerifiedToPosts([base]);
+  const [post] = await attachAuthorUsernamesToPosts(supabase, [verified]);
 
   return ok({ post, currentUserId });
 }
@@ -196,7 +198,8 @@ export async function PATCH(request, { params }) {
     commentCount: commentCount[fresh.id] || 0,
     liked: likedByMe.has(fresh.id),
   };
-  const [post] = await attachAuthorVerifiedToPosts([base]);
+  const [verified] = await attachAuthorVerifiedToPosts([base]);
+  const [post] = await attachAuthorUsernamesToPosts(supabase, [verified]);
   return ok({ post });
 }
 

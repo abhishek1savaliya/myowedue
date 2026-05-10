@@ -122,6 +122,11 @@ export function notificationsCacheKey(userId) {
   return `notifications:${String(userId)}:list`;
 }
 
+/** GET /api/notifications?scope=community — post/thread activity only. */
+export function communityPostNotificationsCacheKey(userId) {
+  return `notifications:${String(userId)}:community_posts`;
+}
+
 export function cardsCacheKey(userId) {
   return `cards:${String(userId)}:list`;
 }

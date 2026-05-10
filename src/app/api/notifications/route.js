@@ -1,8 +1,11 @@
 import { connectDB } from "@/lib/db";
 import { fail, ok } from "@/lib/api";
+import { maybeSendCommunityUsernamePrompt } from "@/lib/community-username-prompt";
 import { requireUser } from "@/lib/session";
 import Notification from "@/models/Notification";
+import { COMMUNITY_POST_NOTIFICATION_TYPES } from "@/lib/community-post-notification-types";
 import {
+  communityPostNotificationsCacheKey,
   delRedisKey,
   getRedisJSON,
   notificationsCacheKey,
@@ -10,11 +13,17 @@ import {
   setRedisJSON,
 } from "@/lib/redis";
 
-export async function GET() {
-  const { user, error } = await requireUser();
+export async function GET(request) {
+  const { user, error } = await requireUser(request);
   if (error) return error;
 
-  const cacheKey = notificationsCacheKey(user._id);
+  void maybeSendCommunityUsernamePrompt(user).catch(() => {});
+
+  const { searchParams } = new URL(request.url);
+  const scopeCommunity =
+    searchParams.get("scope") === "community" || searchParams.get("scope") === "community_posts";
+
+  const cacheKey = scopeCommunity ? communityPostNotificationsCacheKey(user._id) : notificationsCacheKey(user._id);
   const cached = await getRedisJSON(cacheKey);
   if (cached) return ok(cached);
 
@@ -31,15 +40,19 @@ export async function GET() {
       return ok(payload);
     }
 
-    const notifications = await Notification.find({ userId: user._id })
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .lean();
+    const query = scopeCommunity
+      ? { userId: user._id, type: { $in: COMMUNITY_POST_NOTIFICATION_TYPES } }
+      : { userId: user._id };
+
+    const limit = scopeCommunity ? 15 : 20;
+
+    const notifications = await Notification.find(query).sort({ createdAt: -1 }).limit(limit).lean();
 
     const payload = {
       notifications,
       notificationCount: notifications.length,
       notificationsEnabled: true,
+      ...(scopeCommunity ? { scope: "community" } : {}),
     };
 
     await setRedisJSON(cacheKey, payload, 45);
@@ -55,7 +68,7 @@ export async function GET() {
 }
 
 export async function DELETE(request) {
-  const { user, error } = await requireUser();
+  const { user, error } = await requireUser(request);
   if (error) return error;
 
   try {
@@ -73,6 +86,7 @@ export async function DELETE(request) {
     if (!deleted) return fail("Notification not found", 404);
 
     await delRedisKey(notificationsCacheKey(user._id));
+    await delRedisKey(communityPostNotificationsCacheKey(user._id));
     await publishNotificationEvent(user._id, "deleted");
     return ok({ message: "Notification deleted" });
   } catch (caughtError) {

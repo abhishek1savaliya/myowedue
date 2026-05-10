@@ -11,7 +11,7 @@ import { COMMUNITY_POST_EDIT_WINDOW_MS, isCommunityPostEditWindowOpen } from "@/
 import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
 
 const COMMUNITY_SETUP_MESSAGE =
-  "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql, 002_community_post_shares.sql, and 003_post_topics.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
+  "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql through 006_community_username_length_6_12.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
 
 function isMissingCommunityTables(message) {
   const m = String(message || "").toLowerCase();
@@ -19,6 +19,8 @@ function isMissingCommunityTables(message) {
     m.includes("schema cache") ||
     m.includes("community_posts") ||
     m.includes("community_post_shares") ||
+    m.includes("community_comment_likes") ||
+    m.includes("community_usernames") ||
     m.includes("community tables") ||
     m.includes("001_community") ||
     m.includes("post_topics") ||
@@ -34,14 +36,64 @@ function formatCommunityError(message) {
   return String(message || "Something went wrong.");
 }
 
-function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, currentUserId, canInteract, loginNextPath, onNotifyError, skin = "default" }) {
+function CommentBranch({
+  node,
+  postId,
+  depth,
+  onRefresh,
+  onThreadMutate,
+  currentUserId,
+  canInteract,
+  loginNextPath,
+  onNotifyError,
+  skin = "default",
+  onSharePost,
+}) {
   const router = useRouter();
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [commentLiked, setCommentLiked] = useState(Boolean(node.commentLiked));
+  const [commentLikeCount, setCommentLikeCount] = useState(Number(node.commentLikeCount ?? 0));
+  const [likeBusy, setLikeBusy] = useState(false);
+
+  useEffect(() => {
+    setCommentLiked(Boolean(node.commentLiked));
+    setCommentLikeCount(Number(node.commentLikeCount ?? 0));
+  }, [node.id, node.commentLiked, node.commentLikeCount]);
 
   function goLogin() {
     router.push(`/login?next=${encodeURIComponent(loginNextPath)}`);
+  }
+
+  async function toggleCommentLike() {
+    if (!canInteract) {
+      goLogin();
+      return;
+    }
+    if (likeBusy) return;
+    setLikeBusy(true);
+    const prevLiked = commentLiked;
+    const prevCount = commentLikeCount;
+    setCommentLiked(!prevLiked);
+    setCommentLikeCount(Math.max(0, prevCount + (prevLiked ? -1 : 1)));
+    try {
+      const res = await fetch(`/api/community/posts/${postId}/comments/${node.id}/like`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed");
+      if (typeof data.commentLikeCount === "number") setCommentLikeCount(data.commentLikeCount);
+      if (typeof data.liked === "boolean") setCommentLiked(data.liked);
+      onThreadMutate?.();
+    } catch (err) {
+      setCommentLiked(prevLiked);
+      setCommentLikeCount(prevCount);
+      onNotifyError?.(err.message || "Failed to update like");
+    } finally {
+      setLikeBusy(false);
+    }
   }
 
   async function submitReply(e) {
@@ -94,29 +146,63 @@ function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, current
             : "rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60"
         }
       >
-        <p className={`text-xs font-semibold ${isX ? "text-zinc-100" : "text-zinc-800 dark:text-zinc-200"}`}>
-          {node.author_name}
+        <p className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-semibold ${isX ? "text-zinc-100" : "text-zinc-800 dark:text-zinc-200"}`}>
+          <span>{node.author_name}</span>
+          {node.author_username ? (
+            <span className={`font-normal ${isX ? "text-zinc-500" : "text-zinc-500 dark:text-zinc-400"}`}>@{node.author_username}</span>
+          ) : null}
           {node.author_id === currentUserId ? (
-            <span className={`ml-1 font-normal ${isX ? "text-sky-400" : "text-zinc-500 dark:text-zinc-400"}`}>(you)</span>
+            <span className={`font-normal ${isX ? "text-sky-400" : "text-zinc-500 dark:text-zinc-400"}`}>(you)</span>
           ) : null}
         </p>
         <p className={`mt-1 whitespace-pre-wrap text-sm ${isX ? "text-zinc-200" : "text-zinc-700 dark:text-zinc-300"}`}>{node.body}</p>
         <p className={`mt-1 text-[11px] ${isX ? "text-zinc-500" : "text-zinc-500"}`}>
           {formatDistanceToNow(new Date(node.created_at), { addSuffix: true })}
         </p>
-        <button
-          type="button"
-          onClick={() => {
-            if (!canInteract) {
-              goLogin();
-              return;
-            }
-            setReplyOpen((v) => !v);
-          }}
-          className={`mt-2 text-xs font-semibold ${isX ? "text-sky-500 hover:underline" : "text-zinc-700 hover:underline dark:text-zinc-300"}`}
-        >
-          {!canInteract ? "Sign in to reply" : replyOpen ? "Cancel" : "Reply"}
-        </button>
+        <div className={`mt-2 flex flex-wrap items-center gap-2 ${isX ? "" : ""}`}>
+          <button
+            type="button"
+            onClick={() => void toggleCommentLike()}
+            disabled={likeBusy}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold transition disabled:opacity-50 ${
+              commentLiked
+                ? isX
+                  ? "bg-rose-950/50 text-rose-300"
+                  : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+                : isX
+                  ? "text-zinc-400 hover:bg-zinc-900"
+                  : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800/80"
+            }`}
+          >
+            <Heart className={`h-3.5 w-3.5 ${commentLiked ? "fill-current" : ""}`} strokeWidth={2} />
+            {commentLikeCount}
+          </button>
+          {onSharePost ? (
+            <button
+              type="button"
+              onClick={() => onSharePost()}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800/80 ${
+                isX ? "text-zinc-400 hover:bg-zinc-900" : ""
+              }`}
+            >
+              <Repeat2 className="h-3.5 w-3.5" strokeWidth={2} />
+              Share
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              if (!canInteract) {
+                goLogin();
+                return;
+              }
+              setReplyOpen((v) => !v);
+            }}
+            className={`text-xs font-semibold ${isX ? "text-sky-500 hover:underline" : "text-zinc-700 hover:underline dark:text-zinc-300"}`}
+          >
+            {!canInteract ? "Sign in to reply" : replyOpen ? "Cancel" : "Reply"}
+          </button>
+        </div>
         {replyOpen && canInteract ? (
           <form onSubmit={submitReply} className="mt-2 flex flex-col gap-2 sm:flex-row">
             <input
@@ -160,6 +246,7 @@ function CommentBranch({ node, postId, depth, onRefresh, onThreadMutate, current
               loginNextPath={loginNextPath}
               onNotifyError={onNotifyError}
               skin={skin}
+              onSharePost={onSharePost}
             />
           ))}
         </div>
@@ -438,8 +525,11 @@ export function PostCard({
     return (
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="flex flex-wrap items-center gap-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             <span>{post.author_name}</span>
+            {post.author_username ? (
+              <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">@{post.author_username}</span>
+            ) : null}
             {post.authorVerified ? (
               <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" title="Verified" />
             ) : null}
@@ -698,6 +788,7 @@ export function PostCard({
                       loginNextPath={loginNextPath}
                       onNotifyError={onNotifyError}
                       skin="default"
+                      onSharePost={() => onRequestShare(post)}
                     />
                   ))}
                   {comments.length === 0 && !loadingComments ? <p className="text-sm text-zinc-500">No comments yet.</p> : null}
@@ -819,6 +910,7 @@ export function PostCard({
                   loginNextPath={loginNextPath}
                   onNotifyError={onNotifyError}
                   skin="default"
+                  onSharePost={() => onRequestShare(post)}
                 />
               ))}
               {comments.length === 0 && !loadingComments ? <p className="text-sm text-zinc-500">No comments yet.</p> : null}

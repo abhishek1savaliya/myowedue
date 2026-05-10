@@ -41,6 +41,8 @@ const UserSchema = new Schema(
     fontPreset: { type: String, default: "manrope" },
     fontSizePreset: { type: String, default: "size-4" },
     concurrentSessionLimit: { type: Number, min: 1, max: 5, default: 1 },
+    /** After we send the one-time "set your @username" notification, this is true. */
+    communityUsernamePromptSent: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -89,6 +91,9 @@ if (mongoose.models.User) {
   if (!User.schema.path("fontPreset")) missingPaths.fontPreset = { type: String, default: "manrope" };
   if (!User.schema.path("fontSizePreset")) missingPaths.fontSizePreset = { type: String, default: "size-4" };
   if (!User.schema.path("concurrentSessionLimit")) missingPaths.concurrentSessionLimit = { type: Number, min: 1, max: 5, default: 1 };
+  if (!User.schema.path("communityUsernamePromptSent")) {
+    missingPaths.communityUsernamePromptSent = { type: Boolean, default: false };
+  }
 
   if (Object.keys(missingPaths).length > 0) {
     User.schema.add(missingPaths);

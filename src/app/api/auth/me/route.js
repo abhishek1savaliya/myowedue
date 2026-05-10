@@ -4,13 +4,35 @@ import { safeUser } from "@/lib/auth";
 import User from "@/models/User";
 import { connectDB } from "@/lib/db";
 import Notification from "@/models/Notification";
-import { clearCommunityCaches, clearDashboardCache, publishNotificationEvent } from "@/lib/redis";
+import { maybeSendCommunityUsernamePrompt } from "@/lib/community-username-prompt";
+import {
+  clearCommunityCaches,
+  clearDashboardCache,
+  communityPostNotificationsCacheKey,
+  delRedisKey,
+  notificationsCacheKey,
+  publishNotificationEvent,
+} from "@/lib/redis";
 import { hasActivePremium } from "@/lib/subscription";
+import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 
 export async function GET(request) {
   const { user, error } = await requireUser(request);
   if (error) return error;
-  return ok({ user: safeUser(user) });
+
+  const base = safeUser(user);
+  let communityUsername = null;
+  if (isSupabaseCommunityConfigured()) {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const { data } = await supabase.from("community_usernames").select("username").eq("user_id", String(user._id)).maybeSingle();
+      communityUsername = data?.username ?? null;
+    }
+  }
+
+  void maybeSendCommunityUsernamePrompt(user).catch(() => {});
+
+  return ok({ user: { ...base, communityUsername } });
 }
 
 export async function PUT(request) {
@@ -58,6 +80,8 @@ export async function PUT(request) {
 
     if (typeof notificationsEnabled === "boolean" && notificationsEnabled === false) {
       await Notification.deleteMany({ userId: user._id });
+      await delRedisKey(notificationsCacheKey(user._id));
+      await delRedisKey(communityPostNotificationsCacheKey(user._id));
       await publishNotificationEvent(user._id, "cleared");
     }
 
