@@ -5,4 +5,5 @@ export const COMMUNITY_POST_NOTIFICATION_TYPES = [
   "community_post_comment",
   "community_comment_reply",
   "community_comment_like",
+  "community_follow",
 ];

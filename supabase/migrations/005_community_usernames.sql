@@ -5,7 +5,7 @@ create table if not exists public.community_usernames (
   username text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint community_username_format check (username ~ '^[a-z0-9_]{3,30}$'),
+  constraint community_username_format check (username ~ '^[a-z0-9_]{6,21}$'),
   constraint community_usernames_username_unique unique (username)
 );
 

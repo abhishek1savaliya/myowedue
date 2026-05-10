@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  COMMUNITY_USERNAME_MAX,
+  COMMUNITY_USERNAME_MIN,
+  normalizeSavedUsernameHandle,
+} from "@/lib/community-usernames";
 
 const DEBOUNCE_MS = 320;
 
 /**
  * Debounced GET /api/community/username/check for the current draft value.
+ * When the draft matches the already-saved handle (normalized), skips the network and
+ * returns a local "yours" result — no database round-trip.
+ *
  * @param {string} draft Raw input (may be incomplete while typing).
- * @param {{ enabled: boolean }} opts Skip network when false (e.g. logged out).
+ * @param {{ enabled: boolean; savedNormalized?: string }} opts
  */
-export function useCommunityUsernameCheck(draft, { enabled }) {
+export function useCommunityUsernameCheck(draft, { enabled, savedNormalized = "" }) {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState(null);
   const latestIdRef = useRef(0);
@@ -25,6 +33,21 @@ export function useCommunityUsernameCheck(draft, { enabled }) {
     if (q.length === 0) {
       setResult(null);
       setChecking(false);
+      return undefined;
+    }
+
+    const draftNorm = normalizeSavedUsernameHandle(draft);
+    const savedNorm = normalizeSavedUsernameHandle(savedNormalized);
+    if (savedNorm.length > 0 && draftNorm === savedNorm) {
+      setChecking(false);
+      setResult({
+        configured: true,
+        status: "yours",
+        available: true,
+        normalized: savedNorm,
+        min: COMMUNITY_USERNAME_MIN,
+        max: COMMUNITY_USERNAME_MAX,
+      });
       return undefined;
     }
 
@@ -48,7 +71,7 @@ export function useCommunityUsernameCheck(draft, { enabled }) {
     }, DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [draft, enabled]);
+  }, [draft, enabled, savedNormalized]);
 
   return { checking, result };
 }

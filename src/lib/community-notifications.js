@@ -32,8 +32,8 @@ function isValidRecipientId(id) {
  *   recipientUserId: string;
  *   actorUserId?: string;
  *   actorName?: string;
- *   kind: "post_like" | "post_share" | "comment_on_post" | "reply_on_post" | "reply_to_comment" | "comment_like";
- *   postId: string;
+ *   kind: "post_like" | "post_share" | "comment_on_post" | "reply_on_post" | "reply_to_comment" | "comment_like" | "user_follow";
+ *   postId?: string;
  *   postBodySnippet?: string;
  *   commentSnippet?: string;
  *   metaExtra?: Record<string, unknown>;
@@ -102,13 +102,18 @@ export async function notifyCommunityActivity(p) {
           ? `${actorName} liked your comment: "${commentSnippet}"`
           : `${actorName} liked your comment.`;
         break;
+      case "user_follow":
+        type = "community_follow";
+        title = "New follower";
+        message = `${actorName} started following you.`;
+        break;
       default:
         return;
     }
 
     const meta = {
-      postId: String(p.postId),
       communityKind: p.kind,
+      ...(p.postId != null && String(p.postId).length > 0 ? { postId: String(p.postId) } : {}),
       ...(p.metaExtra && typeof p.metaExtra === "object" ? p.metaExtra : {}),
     };
 

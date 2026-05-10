@@ -1,5 +1,5 @@
 import { fail, ok } from "@/lib/api";
-import { normalizeCommunityUsername } from "@/lib/community-usernames";
+import { COMMUNITY_USERNAME_MAX, COMMUNITY_USERNAME_MIN, normalizeCommunityUsername } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityCaches } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
@@ -78,6 +78,16 @@ export async function PUT(request) {
     const msg = String(upsertErr.message || "").toLowerCase();
     if (msg.includes("unique") || msg.includes("duplicate")) {
       return fail("That username is already taken.", 409);
+    }
+    if (
+      msg.includes("community_username_format") ||
+      msg.includes("check constraint") ||
+      msg.includes("violates check constraint")
+    ) {
+      return fail(
+        `This username is not allowed by the database (length ${COMMUNITY_USERNAME_MIN}–${COMMUNITY_USERNAME_MAX}, a–z, 0–9, _). If you recently raised the limit, run the latest Supabase migration for community_usernames.`,
+        422
+      );
     }
     const mapped = mapCommunitySupabaseError(upsertErr.message, setup);
     if (mapped) return fail(mapped, 503);

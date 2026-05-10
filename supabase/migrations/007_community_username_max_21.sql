@@ -1,5 +1,4 @@
--- Tighten community username length to 6–21 characters (matches app validation).
--- If this fails, shorten or drop conflicting rows in community_usernames first.
+-- Raise max username length from 12 to 21 (if you already ran 006 with the old 6–12 constraint).
 
 alter table public.community_usernames drop constraint if exists community_username_format;
 

@@ -1,6 +1,6 @@
 /** Allowed length for new usernames (must match DB check when migration applied). */
 export const COMMUNITY_USERNAME_MIN = 6;
-export const COMMUNITY_USERNAME_MAX = 12;
+export const COMMUNITY_USERNAME_MAX = 21;
 
 /** Reserved handles (lowercase). */
 export const RESERVED_COMMUNITY_USERNAMES = new Set([
@@ -51,6 +51,34 @@ export function normalizeCommunityUsername(raw) {
     throw new Error("That username is reserved.");
   }
   return s;
+}
+
+/**
+ * Non-throwing validation for forms (save button + submit handler).
+ * @param {string} raw
+ * @returns {{ ok: true, normalized: string } | { ok: false, error: string }}
+ */
+export function tryNormalizeCommunityUsername(raw) {
+  try {
+    return { ok: true, normalized: normalizeCommunityUsername(raw) };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || "Invalid username") };
+  }
+}
+
+/** Compare handles from DB / state (trim, lowercase, strip leading @). */
+export function normalizeSavedUsernameHandle(raw) {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, "");
+}
+
+/** Public community profile URL for a handle (path only). Empty input → /community. */
+export function communityProfilePathByUsername(raw) {
+  const s = normalizeSavedUsernameHandle(raw);
+  if (!s) return "/community";
+  return `/community/user/${encodeURIComponent(s)}`;
 }
 
 /**

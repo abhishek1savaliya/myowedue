@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Check, Lock, Loader2, Moon, Sun, X } from "lucide-react";
+import { AlertCircle, Check, Lock, Loader2, Moon, PenSquare, Sun, X } from "lucide-react";
 import Loader from "@/components/Loader";
 import { useCommunityUsernameCheck } from "@/hooks/useCommunityUsernameCheck";
-import { COMMUNITY_USERNAME_MAX, COMMUNITY_USERNAME_MIN } from "@/lib/community-usernames";
+import {
+  COMMUNITY_USERNAME_MAX,
+  COMMUNITY_USERNAME_MIN,
+  normalizeSavedUsernameHandle,
+  tryNormalizeCommunityUsername,
+} from "@/lib/community-usernames";
 import { FONT_PRESETS, FONT_SIZE_PRESETS } from "@/lib/appearance";
 import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
 import {
@@ -38,9 +43,14 @@ export default function SettingsPage() {
   const [communityUsername, setCommunityUsername] = useState("");
   const [savedCommunityUsername, setSavedCommunityUsername] = useState("");
   const [usernameMessage, setUsernameMessage] = useState("");
+  /** When false and a handle exists, show read-only @handle with edit control. */
+  const [communityUsernameEditMode, setCommunityUsernameEditMode] = useState(true);
+  /** Only true after a successful /api/auth/me — avoids blocking Save when profile state is still initial empty. */
+  const [profileLoadedOk, setProfileLoadedOk] = useState(false);
 
   async function loadProfile() {
     setLoadingProfile(true);
+    setProfileLoadedOk(false);
     const res = await fetch("/api/auth/me", { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
 
@@ -78,7 +88,9 @@ export default function SettingsPage() {
       const handle = typeof user.communityUsername === "string" ? user.communityUsername : "";
       setCommunityUsername(handle);
       setSavedCommunityUsername(handle);
+      setCommunityUsernameEditMode(normalizeSavedUsernameHandle(handle).length === 0);
       setUsernameMessage("");
+      setProfileLoadedOk(true);
     }
 
     setLoadingProfile(false);
@@ -102,21 +114,34 @@ export default function SettingsPage() {
     loadLoginActivity();
   }, []);
 
-  const usernameCheckEnabled = !loadingProfile && Boolean(profile.email);
+  const savedNorm = normalizeSavedUsernameHandle(savedCommunityUsername);
+  const hasSavedCommunityUsername = savedNorm.length > 0;
+  const usernameCheckEnabled =
+    !loadingProfile && profileLoadedOk && (!hasSavedCommunityUsername || communityUsernameEditMode);
   const { checking: usernameChecking, result: usernameCheck } = useCommunityUsernameCheck(communityUsername, {
     enabled: usernameCheckEnabled,
+    savedNormalized: savedNorm,
   });
 
-  const normalizedDraft = communityUsername.trim().toLowerCase().replace(/^@+/, "");
-  const normalizedSaved = savedCommunityUsername.trim().toLowerCase();
-  const usernameUnchanged = normalizedDraft === normalizedSaved;
-  const canSubmitCommunityUsername =
-    usernameCheckEnabled &&
-    !usernameChecking &&
-    normalizedDraft.length > 0 &&
-    !usernameUnchanged &&
-    usernameCheck?.available === true &&
-    usernameCheck?.configured !== false;
+  /** If /api/auth/me omitted Supabase handle but check confirms this name is already yours, sync saved state. */
+  useEffect(() => {
+    if (usernameCheck?.status !== "yours" || typeof usernameCheck.normalized !== "string") return;
+    const n = usernameCheck.normalized;
+    setSavedCommunityUsername((prev) => (normalizeSavedUsernameHandle(prev) === n ? prev : n));
+    setCommunityUsername((prev) => (normalizeSavedUsernameHandle(prev) === n ? prev : n));
+  }, [usernameCheck?.status, usernameCheck?.normalized]);
+
+  const usernameParsed = useMemo(() => tryNormalizeCommunityUsername(communityUsername), [communityUsername]);
+  const usernameUnchanged =
+    hasSavedCommunityUsername && usernameParsed.ok && usernameParsed.normalized === savedNorm;
+
+  const saveUsernameHint = (() => {
+    if (loadingProfile) return "";
+    if (!profileLoadedOk) return "Sign in and refresh this page to save your community username.";
+    if (!usernameParsed.ok && String(communityUsername || "").trim()) return usernameParsed.error || "Fix the username above.";
+    if (usernameParsed.ok && usernameUnchanged) return "Change the handle to something new to enable Save.";
+    return "";
+  })();
 
   async function saveProfile(e) {
     e.preventDefault();
@@ -151,23 +176,37 @@ export default function SettingsPage() {
 
   async function saveCommunityUsername(e) {
     e.preventDefault();
-    if (!canSubmitCommunityUsername) return;
+    const parsed = tryNormalizeCommunityUsername(communityUsername);
+    if (!parsed.ok) {
+      setUsernameMessage(parsed.error);
+      return;
+    }
+    const currentSaved = normalizeSavedUsernameHandle(savedCommunityUsername);
+    if (currentSaved.length > 0 && parsed.normalized === currentSaved) {
+      setUsernameMessage("No changes to save.");
+      return;
+    }
+    if (loadingProfile || !profileLoadedOk) {
+      setUsernameMessage("Still loading your account. Try again in a moment.");
+      return;
+    }
     setUsernameMessage("Saving…");
     try {
       const res = await fetch("/api/community/username", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username: communityUsername }),
+        body: JSON.stringify({ username: parsed.normalized }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && typeof data.username === "string") {
         setCommunityUsername(data.username);
         setSavedCommunityUsername(data.username);
+        setCommunityUsernameEditMode(false);
       }
       setUsernameMessage(res.ok ? "Username saved." : data.message || "Failed to save username.");
-    } catch {
-      setUsernameMessage("Failed to save username.");
+    } catch (err) {
+      setUsernameMessage(err?.message || "Failed to save username.");
     }
   }
 
@@ -312,6 +351,28 @@ export default function SettingsPage() {
         ) : null}
         {loadingProfile ? (
           <Loader className="mt-4" />
+        ) : hasSavedCommunityUsername && !communityUsernameEditMode ? (
+          <div className="mt-4 max-w-lg space-y-3">
+            <div className="flex items-stretch gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2.5">
+                <span className="shrink-0 text-sm text-zinc-500">@</span>
+                <p className="min-w-0 truncate text-sm font-medium text-black">{savedNorm}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCommunityUsername(savedCommunityUsername);
+                  setUsernameMessage("");
+                  setCommunityUsernameEditMode(true);
+                }}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+                aria-label="Edit username"
+              >
+                <PenSquare className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500">Use the edit button to change your handle.</p>
+          </div>
         ) : (
           <form onSubmit={saveCommunityUsername} className="mt-4 space-y-3">
             <div
@@ -332,7 +393,7 @@ export default function SettingsPage() {
                 onChange={(e) => setCommunityUsername(e.target.value)}
                 placeholder="your_handle"
                 autoComplete="username"
-                maxLength={COMMUNITY_USERNAME_MAX + 4}
+                maxLength={COMMUNITY_USERNAME_MAX}
                 className="min-w-0 flex-1 rounded-r-xl px-3 py-2 text-sm outline-none"
                 aria-label="Community username"
                 aria-invalid={usernameCheck?.available === false}
@@ -371,13 +432,33 @@ export default function SettingsPage() {
                 <span className="text-zinc-500">Community database not configured.</span>
               ) : null}
             </div>
-            <button
-              type="submit"
-              disabled={!canSubmitCommunityUsername}
-              className="rounded-xl border border-black bg-black px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Save username
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="submit"
+                disabled={loadingProfile || !profileLoadedOk}
+                className="rounded-xl border border-black bg-black px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Save username
+              </button>
+              {hasSavedCommunityUsername ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCommunityUsername(savedCommunityUsername);
+                    setUsernameMessage("");
+                    setCommunityUsernameEditMode(false);
+                  }}
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+            {saveUsernameHint ? (
+              <p className="text-xs text-zinc-500" role="status">
+                {saveUsernameHint}
+              </p>
+            ) : null}
           </form>
         )}
         {usernameMessage ? <p className="mt-3 text-sm text-zinc-600">{usernameMessage}</p> : null}

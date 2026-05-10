@@ -9,9 +9,10 @@ import { formatDistanceToNow } from "date-fns";
 import { BadgeCheck, ChevronRight, Heart, Loader2, MessageCircle, Pencil, Repeat2, Send, Trash2 } from "lucide-react";
 import { COMMUNITY_POST_EDIT_WINDOW_MS, isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window";
 import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
+import { normalizeSavedUsernameHandle } from "@/lib/community-usernames";
 
 const COMMUNITY_SETUP_MESSAGE =
-  "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql through 006_community_username_length_6_12.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
+  "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql through 007_community_username_max_21.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
 
 function isMissingCommunityTables(message) {
   const m = String(message || "").toLowerCase();
@@ -34,6 +35,50 @@ function isMissingCommunityTables(message) {
 function formatCommunityError(message) {
   if (isMissingCommunityTables(message)) return COMMUNITY_SETUP_MESSAGE;
   return String(message || "Something went wrong.");
+}
+
+function communityUserProfileHref(username) {
+  const s = normalizeSavedUsernameHandle(String(username || ""));
+  if (!s) return null;
+  return `/community/user/${encodeURIComponent(s)}`;
+}
+
+function CommunityAuthorAttribution({ displayName, username, isSelf, verified, isX, className }) {
+  const href = communityUserProfileHref(username);
+  const handleMuted = isX ? "text-zinc-500" : "text-zinc-500 dark:text-zinc-400";
+  const youMuted = isX ? "text-sky-400" : "text-zinc-500 dark:text-zinc-400";
+
+  return (
+    <p className={className}>
+      {href ? (
+        <Link href={href} className="font-semibold hover:underline" onClick={(e) => e.stopPropagation()}>
+          {displayName}
+        </Link>
+      ) : (
+        <span className="font-semibold">{displayName}</span>
+      )}
+      {username ? (
+        <>
+          {" "}
+          {href ? (
+            <Link
+              href={href}
+              className={`font-normal ${handleMuted} hover:underline`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              @{username}
+            </Link>
+          ) : (
+            <span className={`font-normal ${handleMuted}`}>@{username}</span>
+          )}
+        </>
+      ) : null}
+      {verified ? (
+        <BadgeCheck className="ml-1 inline h-4 w-4 shrink-0 align-text-bottom text-sky-500" aria-label="Verified" />
+      ) : null}
+      {isSelf ? <span className={`font-normal ${youMuted}`}> (you)</span> : null}
+    </p>
+  );
 }
 
 function CommentBranch({
@@ -146,15 +191,14 @@ function CommentBranch({
             : "rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60"
         }
       >
-        <p className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-semibold ${isX ? "text-zinc-100" : "text-zinc-800 dark:text-zinc-200"}`}>
-          <span>{node.author_name}</span>
-          {node.author_username ? (
-            <span className={`font-normal ${isX ? "text-zinc-500" : "text-zinc-500 dark:text-zinc-400"}`}>@{node.author_username}</span>
-          ) : null}
-          {node.author_id === currentUserId ? (
-            <span className={`font-normal ${isX ? "text-sky-400" : "text-zinc-500 dark:text-zinc-400"}`}>(you)</span>
-          ) : null}
-        </p>
+        <CommunityAuthorAttribution
+          displayName={node.author_name}
+          username={node.author_username}
+          isSelf={node.author_id === currentUserId}
+          verified={Boolean(node.authorVerified)}
+          isX={isX}
+          className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-semibold ${isX ? "text-zinc-100" : "text-zinc-800 dark:text-zinc-200"}`}
+        />
         <p className={`mt-1 whitespace-pre-wrap text-sm ${isX ? "text-zinc-200" : "text-zinc-700 dark:text-zinc-300"}`}>{node.body}</p>
         <p className={`mt-1 text-[11px] ${isX ? "text-zinc-500" : "text-zinc-500"}`}>
           {formatDistanceToNow(new Date(node.created_at), { addSuffix: true })}
@@ -525,18 +569,14 @@ export function PostCard({
     return (
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            <span>{post.author_name}</span>
-            {post.author_username ? (
-              <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">@{post.author_username}</span>
-            ) : null}
-            {post.authorVerified ? (
-              <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" title="Verified" />
-            ) : null}
-            {post.author_id === currentUserId ? (
-              <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">(you)</span>
-            ) : null}
-          </p>
+          <CommunityAuthorAttribution
+            displayName={post.author_name}
+            username={post.author_username}
+            isSelf={post.author_id === currentUserId}
+            verified={post.authorVerified}
+            isX={isX}
+            className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold ${isX ? "text-zinc-100" : "text-zinc-900 dark:text-zinc-100"}`}
+          />
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
           </p>
@@ -553,10 +593,12 @@ export function PostCard({
       "mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-800 dark:text-zinc-200";
     if (postDetailHref) {
       return (
-        <Link href={postDetailHref} className={linkClass}>
+        <>
           {renderAuthorHeader()}
-          <p className={bodyClass}>{post.body}</p>
-        </Link>
+          <Link href={postDetailHref} className={linkClass}>
+            <p className={bodyClass}>{post.body}</p>
+          </Link>
+        </>
       );
     }
     return (

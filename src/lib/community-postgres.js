@@ -1,7 +1,8 @@
 /**
  * Community “Posts” live in Supabase Postgres (SQL). The rest of the app uses MongoDB.
  * If SUPABASE_DATABASE_URL is set, we can auto-create community tables from
- * supabase/migrations/001_community.sql when they are missing.
+ * supabase/migrations when they are missing (001–003 core feed; 004 comment likes;
+ * 005 usernames).
  *
  * Use Session mode (port 5432) or Direct connection — transaction pooler (6543) often cannot run DDL.
  */
@@ -99,14 +100,41 @@ function getPool() {
   return pool;
 }
 
+const migrationsDir = join(process.cwd(), "supabase", "migrations");
+
+/**
+ * Migrations added after the initial 001–003 bootstrap must run even when `schemaReady`
+ * is already true (older processes never created these tables).
+ * @param {import("pg").Pool} clientPool
+ */
+async function ensureLateCommunityMigrations(clientPool) {
+  const usernamesRel = await clientPool.query(`SELECT to_regclass('public.community_usernames') AS rel`);
+  if (!usernamesRel.rows[0]?.rel) {
+    const sql005 = readFileSync(join(migrationsDir, "005_community_usernames.sql"), "utf8");
+    await runMigrationWithPool(clientPool, sql005);
+    console.info("[community] Postgres community_usernames ensured (005_community_usernames.sql).");
+  }
+
+  const commentsRel = await clientPool.query(`SELECT to_regclass('public.community_comments') AS rel`);
+  const commentLikesRel = await clientPool.query(`SELECT to_regclass('public.community_comment_likes') AS rel`);
+  if (commentsRel.rows[0]?.rel && !commentLikesRel.rows[0]?.rel) {
+    const sql004 = readFileSync(join(migrationsDir, "004_community_comment_likes.sql"), "utf8");
+    await runMigrationWithPool(clientPool, sql004);
+    console.info("[community] Postgres community_comment_likes ensured (004_community_comment_likes.sql).");
+  }
+
+  const followsRel = await clientPool.query(`SELECT to_regclass('public.community_follows') AS rel`);
+  if (!followsRel.rows[0]?.rel) {
+    const sql008 = readFileSync(join(migrationsDir, "008_community_follows.sql"), "utf8");
+    await runMigrationWithPool(clientPool, sql008);
+    console.info("[community] Postgres community_follows ensured (008_community_follows.sql).");
+  }
+}
+
 /**
  * @returns {Promise<{ skipped?: boolean; ok?: boolean; existed?: boolean; created?: boolean; error?: string }>}
  */
 export async function prepareCommunityPostgresSchema() {
-  if (schemaReady) {
-    return { ok: true };
-  }
-
   const rawUrl = getSupabaseDatabaseUrl();
   if (!rawUrl) {
     return { skipped: true };
@@ -129,26 +157,35 @@ export async function prepareCommunityPostgresSchema() {
   }
 
   try {
+    await ensureLateCommunityMigrations(clientPool);
+
+    if (schemaReady) {
+      return { ok: true, existed: true };
+    }
+
     const postsRel = await clientPool.query(`SELECT to_regclass('public.community_posts') AS rel`);
     if (!postsRel.rows[0]?.rel) {
-      const sql001 = readFileSync(join(process.cwd(), "supabase", "migrations", "001_community.sql"), "utf8");
+      const sql001 = readFileSync(join(migrationsDir, "001_community.sql"), "utf8");
       await runMigrationWithPool(clientPool, sql001);
       console.info("[community] Postgres community tables ensured (001_community.sql).");
     }
 
     const sharesRel = await clientPool.query(`SELECT to_regclass('public.community_post_shares') AS rel`);
     if (!sharesRel.rows[0]?.rel) {
-      const sql002 = readFileSync(join(process.cwd(), "supabase", "migrations", "002_community_post_shares.sql"), "utf8");
+      const sql002 = readFileSync(join(migrationsDir, "002_community_post_shares.sql"), "utf8");
       await runMigrationWithPool(clientPool, sql002);
       console.info("[community] Postgres community_post_shares ensured (002_community_post_shares.sql).");
     }
 
     const topicsRel = await clientPool.query(`SELECT to_regclass('public.post_topics') AS rel`);
     if (!topicsRel.rows[0]?.rel) {
-      const sql003 = readFileSync(join(process.cwd(), "supabase", "migrations", "003_post_topics.sql"), "utf8");
+      const sql003 = readFileSync(join(migrationsDir, "003_post_topics.sql"), "utf8");
       await runMigrationWithPool(clientPool, sql003);
       console.info("[community] Postgres post_topics ensured (003_post_topics.sql).");
     }
+
+    // 004 depends on community_comments from 001; run again after core bootstrap.
+    await ensureLateCommunityMigrations(clientPool);
 
     schemaReady = true;
     return { ok: true, existed: true };

@@ -4,9 +4,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { PenSquare, Settings2, Users } from "lucide-react";
+import { Home, PenSquare, Settings2 } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import CommunityNotificationsSidebar from "@/components/community/CommunityNotificationsSidebar";
+import CommunitySidebarProfile from "@/components/community/CommunitySidebarProfile";
+import CommunitySidebarSearch from "@/components/community/CommunitySidebarSearch";
 import TrendingSidebar from "@/components/community/TrendingSidebar";
 
 const navItem =
@@ -19,7 +21,7 @@ export default function CommunityPublicShell({ children }) {
   const pathname = usePathname();
   const [loggedIn, setLoggedIn] = useState(false);
 
-  const feedActive = pathname === "/community" || pathname.startsWith("/community/post/");
+  const homeActive = pathname === "/community" || pathname.startsWith("/community/post/");
   const settingsActive = pathname.startsWith("/community/settings");
 
   useEffect(() => {
@@ -89,21 +91,25 @@ export default function CommunityPublicShell({ children }) {
       </header>
 
       <div className="relative mx-auto flex min-h-[calc(100dvh-56px)] max-w-[1200px] md:min-h-screen">
-        {/* Left */}
-        <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-zinc-200 bg-white/95 py-4 pl-4 pr-3 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-950/95 md:flex">
-          <Link href="/" className="mb-6 inline-flex shrink-0 items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-900 dark:text-zinc-50" aria-label="OWE DUE home">
+        {/* Left — same surface language as home: cream/white, zinc borders */}
+        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-zinc-200/90 bg-white/80 py-4 pl-4 pr-3 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-950/90 md:flex">
+          <Link
+            href="/"
+            className="mb-5 inline-flex shrink-0 items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+            aria-label="OWE DUE home"
+          >
             <Image src="/owedue-logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
             <span className="text-sm tracking-wide">OWE DUE</span>
           </Link>
 
-          <nav className="mt-1 flex shrink-0 flex-col gap-0.5" aria-label="Community">
+          <nav className="flex shrink-0 flex-col gap-0.5" aria-label="Community">
             <Link
               href="/community"
-              className={`${navItem} ${feedActive ? navActive : ""}`}
-              aria-current={feedActive ? "page" : undefined}
+              className={`${navItem} ${homeActive ? navActive : ""}`}
+              aria-current={homeActive ? "page" : undefined}
             >
-              <Users className="h-5 w-5 shrink-0 text-zinc-500 dark:text-zinc-400" strokeWidth={2} />
-              Community
+              <Home className="h-5 w-5 shrink-0 text-zinc-500 dark:text-zinc-400" strokeWidth={2} />
+              Home
             </Link>
             <Link
               href="/community/settings"
@@ -114,6 +120,8 @@ export default function CommunityPublicShell({ children }) {
               Settings
             </Link>
           </nav>
+
+          <CommunitySidebarSearch />
 
           <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-zinc-200 pt-4 dark:border-zinc-700">
             <CommunityNotificationsSidebar loggedIn={loggedIn} />
@@ -130,11 +138,14 @@ export default function CommunityPublicShell({ children }) {
               Post
             </Link>
           </div>
+
+          <div className="mt-4 shrink-0 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+            <CommunitySidebarProfile loggedIn={loggedIn} />
+          </div>
         </aside>
 
-        {/* Trending in the right rail (sticky on lg+). Settings: left nav (md+) or mobile header. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
-          <main className="relative order-2 min-h-0 min-w-0 flex-1 border-zinc-200 dark:border-zinc-700 md:border-x lg:order-1">
+          <main className="relative order-2 min-h-0 min-w-0 flex-1 border-zinc-200 bg-background dark:border-zinc-700 md:border-x lg:order-1">
             {children}
           </main>
 
@@ -142,7 +153,7 @@ export default function CommunityPublicShell({ children }) {
             <div className="space-y-3 lg:shrink-0">
               <TrendingSidebar limit={10} variant="shell" className="p-3" />
             </div>
-            <div className="hidden rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-600 dark:bg-zinc-900/90 lg:block">
+            <div className="hidden rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-zinc-600 dark:bg-zinc-900/90 lg:block">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Use the full app</h2>
               <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                 Track dues, files, and reminders alongside this community feed.
