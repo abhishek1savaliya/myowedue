@@ -19,10 +19,10 @@ import { hasActivePremium } from "@/lib/subscription";
 import { enqueueCommunityJob } from "@/lib/queue/producers";
 
 const PAGE_SIZE = 10;
-const COMMUNITY_FEED_CACHE_TTL_SEC = 45;
+const COMMUNITY_FEED_CACHE_TTL_SEC = 120;
 const PHASE2_SIGNAL_WINDOW_DAYS = 30;
 const PERSONALIZED_CURSOR_PREFIX = "p2:";
-const PERSONALIZED_MAX_CANDIDATES = 500;
+const PERSONALIZED_MAX_CANDIDATES = 200;
 
 function viewerPayload(sessionUser) {
   if (!sessionUser) return null;
@@ -84,13 +84,15 @@ function buildPersonalizedCursor(rankOffset, dbOffset) {
   return `${PERSONALIZED_CURSOR_PREFIX}${Math.max(0, Number(rankOffset) || 0)}:${Math.max(0, Number(dbOffset) || 0)}`;
 }
 
-async function enrichPostsWithEngagement(supabase, page, currentUserId) {
+async function enrichAndVerifyPosts(supabase, page, currentUserId) {
   const postIds = page.map((p) => p.id);
   if (postIds.length === 0) return { posts: [] };
 
-  const [likesRes, commentsRes] = await Promise.all([
+  const [likesRes, commentsRes, verifiedPosts, usernamePosts] = await Promise.all([
     supabase.from("community_post_likes").select("post_id, user_id").in("post_id", postIds),
     supabase.from("community_comments").select("post_id").in("post_id", postIds),
+    attachAuthorVerifiedToPosts(page),
+    attachAuthorUsernamesToPosts(supabase, page),
   ]);
 
   if (likesRes.error) return { error: likesRes.error };
@@ -98,23 +100,19 @@ async function enrichPostsWithEngagement(supabase, page, currentUserId) {
 
   const { likeCount, commentCount, likedByMe } = aggregateEngagement(likesRes.data, commentsRes.data, currentUserId);
 
-  const enriched = page.map((p) => ({
+  const verifiedMap = new Map((verifiedPosts || []).map((p) => [p.id, p.authorVerified]));
+  const usernameMap = new Map((usernamePosts || []).map((p) => [p.id, p.author_username]));
+
+  const posts = page.map((p) => ({
     ...p,
     likeCount: likeCount[p.id] || 0,
     commentCount: commentCount[p.id] || 0,
     liked: likedByMe.has(p.id),
+    authorVerified: verifiedMap.get(p.id) || false,
+    author_username: usernameMap.get(p.id) || null,
   }));
 
-  return { posts: enriched };
-}
-
-async function enrichAndVerifyPosts(supabase, page, currentUserId) {
-  const enriched = await enrichPostsWithEngagement(supabase, page, currentUserId);
-  if (enriched.error) return enriched;
-  if (!enriched.posts?.length) return enriched;
-  enriched.posts = await attachAuthorVerifiedToPosts(enriched.posts);
-  enriched.posts = await attachAuthorUsernamesToPosts(supabase, enriched.posts);
-  return enriched;
+  return { posts };
 }
 
 export async function GET(request) {
@@ -312,16 +310,16 @@ export async function GET(request) {
         .order("created_at", { ascending: false })
         .range(dbOffset, dbOffset + PERSONALIZED_MAX_CANDIDATES - 1),
       supabase.from("community_follows").select("following_id").eq("follower_id", currentUserId),
-      supabase.from("community_post_likes").select("post_id").eq("user_id", currentUserId).limit(250),
-      supabase.from("community_post_shares").select("post_id").eq("user_id", currentUserId).limit(250),
-      supabase.from("community_comments").select("post_id, body").eq("author_id", currentUserId).limit(250),
+      supabase.from("community_post_likes").select("post_id").eq("user_id", currentUserId).limit(200),
+      supabase.from("community_post_shares").select("post_id").eq("user_id", currentUserId).limit(200),
+      supabase.from("community_comments").select("post_id, body").eq("author_id", currentUserId).limit(200),
       supabase
         .from("community_feed_signals")
         .select("post_id, event_type, watch_time_ms, scroll_duration_ms, dwell_ms")
         .eq("user_id", currentUserId)
         .gte("created_at", signalsSince)
         .order("created_at", { ascending: false })
-        .limit(600),
+        .limit(400),
       supabase.from("community_user_interest_vectors").select("embedding").eq("user_id", currentUserId).maybeSingle(),
     ]);
 
@@ -351,15 +349,19 @@ export async function GET(request) {
       .toLowerCase()
       .split(/[^a-z0-9_]+/g)
       .filter((x) => x && x.length >= 3)
-      .slice(0, 800);
+      .slice(0, 500);
 
     const candidateIds = candidates.map((p) => p.id);
-    const [candidateLikes, candidateComments] = await Promise.all([
+
+    const [candidateLikes, candidateComments, postVecRes] = await Promise.all([
       candidateIds.length > 0
         ? supabase.from("community_post_likes").select("post_id").in("post_id", candidateIds)
         : { data: [], error: null },
       candidateIds.length > 0
         ? supabase.from("community_comments").select("post_id").in("post_id", candidateIds)
+        : { data: [], error: null },
+      candidateIds.length > 0
+        ? supabase.from("community_post_embeddings").select("post_id, embedding").in("post_id", candidateIds)
         : { data: [], error: null },
     ]);
 
@@ -386,18 +388,13 @@ export async function GET(request) {
 
     let rankedAll = phase1.posts;
 
-    // Phase 2 blend (embeddings + online interaction signals).
     try {
-      const postVecRes = await supabase
-        .from("community_post_embeddings")
-        .select("post_id, embedding")
-        .in("post_id", candidates.map((p) => p.id));
-      if (!postVecRes.error) {
+      if (!postVecRes.error && postVecRes.data?.length) {
         const postEmbeddingsById = new Map((postVecRes.data || []).map((r) => [String(r.post_id), r.embedding]));
         let userEmbedding = userVecRes.data?.embedding || null;
-        if (!userEmbedding) {
+        if (!userEmbedding && userInterestTokens.length > 0) {
           userEmbedding = await embedText(userInterestTokens.join(" "));
-          await supabase.from("community_user_interest_vectors").upsert(
+          supabase.from("community_user_interest_vectors").upsert(
             {
               user_id: currentUserId,
               embedding: vectorToPgLiteral(userEmbedding),
@@ -405,17 +402,19 @@ export async function GET(request) {
               updated_at: new Date().toISOString(),
             },
             { onConflict: "user_id" }
-          );
+          ).then(() => {}).catch(() => {});
         }
-        const signalsByPostId = buildSignalsScoreMap(signalRes.data || []);
-        rankedAll = rerankWithPhase2({
-          phase1Posts: phase1.posts,
-          phase1ScoresByPostId: phase1.scoreMap,
-          postEmbeddingsById,
-          userEmbedding,
-          signalsByPostId,
-          pageSize: phase1.posts.length,
-        });
+        if (userEmbedding) {
+          const signalsByPostId = buildSignalsScoreMap(signalRes.data || []);
+          rankedAll = rerankWithPhase2({
+            phase1Posts: phase1.posts,
+            phase1ScoresByPostId: phase1.scoreMap,
+            postEmbeddingsById,
+            userEmbedding,
+            signalsByPostId,
+            pageSize: phase1.posts.length,
+          });
+        }
       }
     } catch {
       // Graceful fallback to phase1.
@@ -427,19 +426,28 @@ export async function GET(request) {
     if (nextPersonalizedOffset < rankedAll.length) {
       nextCursor = buildPersonalizedCursor(nextPersonalizedOffset, dbOffset);
     } else if (hasMoreHistoricalCandidates) {
-      // Stage 2: move to older historical window and continue infinite scroll.
       nextCursor = buildPersonalizedCursor(0, dbOffset + PERSONALIZED_MAX_CANDIDATES);
     }
 
-    const enriched = await enrichAndVerifyPosts(supabase, rankedPage, currentUserId);
-    if (enriched.error) {
-      const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
-      if (mapped) return fail(mapped, 503);
-      return fail(enriched.error.message, 500);
-    }
+    const myLikedSet = new Set((likesRes.data || []).map((r) => r.post_id));
+    const [verifiedPosts, usernamePosts] = await Promise.all([
+      attachAuthorVerifiedToPosts(rankedPage),
+      attachAuthorUsernamesToPosts(supabase, rankedPage),
+    ]);
+    const verifiedMap = new Map((verifiedPosts || []).map((p) => [p.id, p.authorVerified]));
+    const usernameMap = new Map((usernamePosts || []).map((p) => [p.id, p.author_username]));
+
+    const finalPosts = rankedPage.map((p) => ({
+      ...p,
+      likeCount: likesMap.get(p.id) || 0,
+      commentCount: commentsMap.get(p.id) || 0,
+      liked: myLikedSet.has(p.id),
+      authorVerified: verifiedMap.get(p.id) || false,
+      author_username: usernameMap.get(p.id) || null,
+    }));
 
     const payload = {
-      posts: enriched.posts,
+      posts: finalPosts,
       nextCursor,
       currentUserId,
       filter,

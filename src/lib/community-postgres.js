@@ -210,6 +210,10 @@ async function ensureLateCommunityMigrations(clientPool) {
  * @returns {Promise<{ skipped?: boolean; ok?: boolean; existed?: boolean; created?: boolean; error?: string }>}
  */
 export async function prepareCommunityPostgresSchema() {
+  if (schemaReady) {
+    return { ok: true, existed: true };
+  }
+
   const rawUrl = getSupabaseDatabaseUrl();
   if (!rawUrl) {
     return { skipped: true };
@@ -233,10 +237,6 @@ export async function prepareCommunityPostgresSchema() {
 
   try {
     await ensureLateCommunityMigrations(clientPool);
-
-    if (schemaReady) {
-      return { ok: true, existed: true };
-    }
 
     const postsRel = await clientPool.query(`SELECT to_regclass('public.community_posts') AS rel`);
     if (!postsRel.rows[0]?.rel) {
