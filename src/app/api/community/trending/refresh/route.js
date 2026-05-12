@@ -4,6 +4,7 @@ import { reindexAllCommunityPostTopics } from "@/lib/community-reindex-topics";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityTrendingCache } from "@/lib/redis";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { enqueueCommunityJob } from "@/lib/queue/producers";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -64,6 +65,21 @@ export async function POST(request) {
   let lastProcessedId = "";
 
   if (reindex) {
+    const queued = await enqueueCommunityJob("reindex-topics", {
+      maxPosts: Number.isFinite(maxPosts) ? maxPosts : 10_000,
+      afterId,
+    });
+    if (queued) {
+      return ok({
+        trendingCacheCleared: false,
+        reindex: true,
+        queued: true,
+        postsProcessed: 0,
+        truncated: false,
+        lastProcessedId: "",
+      });
+    }
+
     try {
       const result = await reindexAllCommunityPostTopics(supabase, {
         maxPosts: Number.isFinite(maxPosts) ? maxPosts : 10_000,

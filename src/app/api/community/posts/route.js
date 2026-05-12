@@ -16,6 +16,7 @@ import {
 import { getSessionUser, requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 import { hasActivePremium } from "@/lib/subscription";
+import { enqueueCommunityJob } from "@/lib/queue/producers";
 
 const PAGE_SIZE = 10;
 const COMMUNITY_FEED_CACHE_TTL_SEC = 45;
@@ -528,23 +529,24 @@ export async function POST(request) {
     return fail(insErr.message || "Failed to create post", 500);
   }
 
-  // Async embedding creation for phase 2 ranking.
-  void (async () => {
-    try {
-      const vector = await embedText(body);
-      await supabase.from("community_post_embeddings").upsert(
-        {
-          post_id: data.id,
-          embedding: vectorToPgLiteral(vector),
-          model: embeddingModelName(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "post_id" }
-      );
-    } catch {
-      // no-op
-    }
-  })();
+  enqueueCommunityJob("generate-embedding", { postId: data.id, body }).catch(() => {
+    void (async () => {
+      try {
+        const vector = await embedText(body);
+        await supabase.from("community_post_embeddings").upsert(
+          {
+            post_id: data.id,
+            embedding: vectorToPgLiteral(vector),
+            model: embeddingModelName(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "post_id" }
+        );
+      } catch {
+        // no-op
+      }
+    })();
+  });
 
   const topics = extractPostTopics(body);
   if (topics.length > 0) {

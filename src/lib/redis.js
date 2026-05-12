@@ -187,6 +187,10 @@ export async function clearCommunityCaches() {
     const client = await getRedisClient();
     if (!client) return false;
 
+    const { enqueueCacheInvalidation } = await import("@/lib/queue/producers");
+    const queued = await enqueueCacheInvalidation("clear-community-cache", {});
+    if (queued) return true;
+
     const patterns = ["community:feed:v1:*", "community:feed:personalized:v1:*", "community:comments:v1:*", "community:trending:*"];
     const keysToDelete = new Set();
     for (const pattern of patterns) {
@@ -236,7 +240,6 @@ export async function clearUserApiCache(userId) {
     if (!client) return false;
 
     const userIdText = String(userId);
-    // Fast path: clear known hot keys immediately to reduce write latency.
     const quickKeys = [
       `dashboard:${userIdText}`,
       `people:${userIdText}`,
@@ -254,6 +257,10 @@ export async function clearUserApiCache(userId) {
       `dashboard:${userIdText}:GBP`,
     ];
     await client.del(...quickKeys);
+
+    const { enqueueCacheInvalidation } = await import("@/lib/queue/producers");
+    const queued = await enqueueCacheInvalidation("clear-user-cache", { userId: userIdText });
+    if (queued) return true;
 
     const patterns = [
       `dashboard:${userIdText}:*`,

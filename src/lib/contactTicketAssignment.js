@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/db";
 import ContactMessage from "@/models/ContactMessage";
 import AdminUser from "@/models/AdminUser";
-import { sendMail } from "@/lib/mailer";
+import { enqueueEmail } from "@/lib/queue/producers";
 
 /**
  * Assigns a contact ticket (typically status "queued") to the least-loaded active
@@ -80,7 +80,7 @@ export async function tryAssignContactTicket(ticket) {
 
 export async function notifyQueuedTicketDelivered(ticket) {
   try {
-    await sendMail({
+    await enqueueEmail({
       to: ticket.email,
       subject: "Your message was delivered to our support team",
       headline: "Your message was successfully sent",

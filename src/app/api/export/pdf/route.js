@@ -7,6 +7,7 @@ import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 import { fail } from "@/lib/api";
 import { getFontPreset, getFontSizePreset } from "@/lib/appearance";
 import { supportsPremiumExports } from "@/lib/subscription";
+import { enqueuePdf } from "@/lib/queue/producers";
 
 function money(value) {
   return Number(value || 0).toFixed(2);
@@ -63,6 +64,26 @@ export async function GET() {
       }
     })
   );
+
+  const jobId = await enqueuePdf("export-dues-report", {
+    type: "export-dues-report",
+    transactions: decryptedTx.map((t) => ({
+      personName: t.personId?.name || "Unknown",
+      amount: t.amount,
+      type: t.type,
+      currency: t.currency || "USD",
+      date: t.date,
+      status: t.status,
+      notes: t.notes,
+    })),
+    userName: user.name,
+    userEmail: user.email,
+    fontPreset: user.fontPreset,
+    fontSizePreset: user.fontSizePreset,
+  });
+  if (jobId) {
+    return Response.json({ jobId, status: "processing" }, { status: 202 });
+  }
 
   const totalCredit = decryptedTx
     .filter((item) => item.type === "credit")

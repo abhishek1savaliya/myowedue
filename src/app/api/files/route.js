@@ -17,6 +17,7 @@ import { requireUser } from "@/lib/session";
 import FileAccessRequest from "@/models/FileAccessRequest";
 import Folder from "@/models/Folder";
 import StoredFile from "@/models/StoredFile";
+import { enqueueFileOps } from "@/lib/queue/producers";
 
 const DEFAULT_FILE_LIMIT = 12;
 const MAX_FILE_LIMIT = 30;
@@ -137,10 +138,18 @@ export async function DELETE(request) {
     const fileIds = files.map((file) => file._id);
     await StoredFile.deleteMany({ _id: { $in: fileIds }, userId: user._id });
 
+    const cloudinaryFiles = files.map((file) => ({
+      publicId: file.publicId,
+      resourceType: file.resourceType || "raw",
+      cloudinaryType: file.cloudinaryType || "upload",
+    }));
+
+    const queued = await enqueueFileOps("bulk-delete-cloudinary", { files: cloudinaryFiles });
+
     await Promise.all([
       FileAccessRequest.deleteMany({ fileId: { $in: fileIds } }),
       Folder.updateMany({ userId: user._id }, { $pull: { fileIds: { $in: fileIds } } }),
-      ...files.map((file) => destroyCloudinaryAsset(file).catch(() => false)),
+      ...(queued ? [] : files.map((file) => destroyCloudinaryAsset(file).catch(() => false))),
       clearUserApiCache(user._id),
       logActivity(user._id, "files_deleted", `Deleted ${files.length} files`),
     ]);

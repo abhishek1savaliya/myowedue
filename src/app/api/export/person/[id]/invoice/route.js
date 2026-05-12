@@ -9,6 +9,7 @@ import { normalizeCurrency, convertFromUSD } from "@/lib/currency";
 import { getUsdRatesForUsage } from "@/lib/exchangeRates";
 import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 import { supportsPremiumExports } from "@/lib/subscription";
+import { enqueuePdf } from "@/lib/queue/producers";
 
 export const runtime = "nodejs";
 
@@ -153,6 +154,27 @@ export async function GET(request, { params }) {
         }
       })
     );
+
+    const invoiceJobId = await enqueuePdf("export-invoice", {
+      type: "export-invoice",
+      transactions: decryptedTransactions.map((tx) => ({
+        amount: Number(tx.amount || 0),
+        type: tx.type,
+        currency: tx.currency || "USD",
+        date: tx.date,
+        status: tx.status,
+        notes: tx.notes,
+      })),
+      userName: user.name,
+      userEmail: user.email,
+      personName: person.name,
+      personEmail: person.email,
+      targetCurrency,
+      scope,
+    });
+    if (invoiceJobId) {
+      return Response.json({ jobId: invoiceJobId, status: "processing" }, { status: 202 });
+    }
 
     const convertedTransactions = decryptedTransactions.map((tx) => {
       const originalAmount = Number(tx.amount || 0);

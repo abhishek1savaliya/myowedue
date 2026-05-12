@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/adminSession";
 import { fail } from "@/lib/api";
 import { buildSuperadminStatsBundle } from "@/lib/buildSuperadminStatsBundle";
 import { buildSuperadminAnalyticsPdfBuffer } from "@/lib/superadminReportPdf";
+import { enqueuePdf } from "@/lib/queue/producers";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,15 @@ export async function GET() {
   }
 
   try {
+    const jobId = await enqueuePdf("admin-report", {
+      type: "admin-report",
+      adminName: admin.name,
+      adminEmail: admin.email,
+    });
+    if (jobId) {
+      return Response.json({ jobId, status: "processing" }, { status: 202 });
+    }
+
     const bundle = await buildSuperadminStatsBundle();
     const buffer = await buildSuperadminAnalyticsPdfBuffer(bundle, {
       name: admin.name,

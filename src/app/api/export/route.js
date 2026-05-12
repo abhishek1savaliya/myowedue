@@ -8,6 +8,7 @@ import { deriveUserKey, decryptTransaction } from "@/lib/crypto";
 import { getFontPreset, getFontSizePreset } from "@/lib/appearance";
 import { formatDateOnly, formatDateTimeLabel, nextDateOnly, parseDateOnly } from "@/lib/datetime";
 import { supportsPremiumExports } from "@/lib/subscription";
+import { enqueuePdf } from "@/lib/queue/producers";
 
 export const runtime = "nodejs";
 
@@ -100,6 +101,28 @@ export async function GET(request) {
       if (!supportsPremiumExports(user)) {
         return fail("Premium subscription required for PDF export", 403);
       }
+
+      const jobId = await enqueuePdf("export-transactions", {
+        type: "export-transactions",
+        transactions: decryptedTx.map((t) => ({
+          personName: t.personId?.name || "Unknown",
+          amount: t.amount,
+          type: t.type,
+          currency: t.currency,
+          date: t.date,
+          status: t.status,
+        })),
+        userName: user.name,
+        userEmail: user.email,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        fontPreset: user.fontPreset,
+        fontSizePreset: user.fontSizePreset,
+      });
+      if (jobId) {
+        return Response.json({ jobId, status: "processing" }, { status: 202 });
+      }
+
       return await generatePDF(user, decryptedTx, startDateStr, endDateStr);
     }
 

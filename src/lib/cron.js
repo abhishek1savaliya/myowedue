@@ -10,6 +10,7 @@ import { activeQuery } from "@/lib/bin";
 import { refreshExchangeRatesIfNeeded } from "@/lib/exchangeRates";
 import { generateDailyNotificationsForUser } from "@/lib/notifications";
 import { publishNotificationEvent } from "@/lib/redis";
+import { enqueueCronJob } from "@/lib/queue/producers";
 
 let started = false;
 
@@ -17,7 +18,6 @@ export function startReminderCron() {
   if (started || process.env.ENABLE_CRON !== "true") return;
   started = true;
 
-  // Refresh currency rates at most twice a day to respect provider limits.
   cron.schedule("0 */12 * * *", async () => {
     try {
       await refreshExchangeRatesIfNeeded({ force: true });
@@ -28,9 +28,21 @@ export function startReminderCron() {
 
   cron.schedule("0 9 * * *", async () => {
     await connectDB();
-    const users = await User.find({});
+    const users = await User.find({}).select("_id").lean();
 
-    for (const user of users) {
+    let dispatched = false;
+    for (const u of users) {
+      const userId = u._id.toString();
+      const a = await enqueueCronJob("user-daily-notifications", { userId });
+      const b = await enqueueCronJob("user-bin-cleanup", { userId });
+      const c = await enqueueCronJob("user-reminder-emails", { userId });
+      if (a && b && c) dispatched = true;
+    }
+
+    if (dispatched) return;
+
+    const fullUsers = await User.find({});
+    for (const user of fullUsers) {
       if (user.notificationsEnabled !== false) {
         await generateDailyNotificationsForUser(user._id);
       }
@@ -42,7 +54,6 @@ export function startReminderCron() {
 
       if (!shouldSend) continue;
 
-      // Permanent cleanup for expired bin records.
       await Person.deleteMany({ userId: user._id, isDeleted: true, restoreUntil: { $lt: new Date() } });
       await Transaction.deleteMany({ userId: user._id, isDeleted: true, restoreUntil: { $lt: new Date() } });
 
@@ -66,47 +77,53 @@ export function startReminderCron() {
     }
   });
 
-  // Every 15 minutes: check for upcoming events and send notifications.
-  // Notification schedule: 3 days before, 3 hours before, 1 hour before.
   cron.schedule("*/15 * * * *", async () => {
     try {
       await connectDB();
       const now = new Date();
       const RETENTION_DAYS = 7;
 
-      // Windows (in ms) around each threshold — ±10 min to tolerate cron drift
       const windows = [
-        { key: "threeDays",  ms: 3 * 24 * 60 * 60 * 1000, label: "3 days" },
-        { key: "threeHours", ms: 3 * 60 * 60 * 1000,       label: "3 hours" },
-        { key: "oneHour",    ms: 1 * 60 * 60 * 1000,        label: "1 hour" },
+        { key: "threeDays", ms: 3 * 24 * 60 * 60 * 1000, label: "3 days" },
+        { key: "threeHours", ms: 3 * 60 * 60 * 1000, label: "3 hours" },
+        { key: "oneHour", ms: 1 * 60 * 60 * 1000, label: "1 hour" },
       ];
-      const WINDOW = 10 * 60 * 1000; // ±10 minutes
+      const WINDOW = 10 * 60 * 1000;
 
       for (const { key, ms, label } of windows) {
-        const low  = new Date(now.getTime() + ms - WINDOW);
+        const low = new Date(now.getTime() + ms - WINDOW);
         const high = new Date(now.getTime() + ms + WINDOW);
 
         const filter = { isDeleted: false, startTime: { $gte: low, $lte: high } };
         filter[`notifiedAt.${key}`] = false;
 
-        const events = await Event.find(filter).lean();
+        const events = await Event.find(filter).select("_id").lean();
+
+        let allDispatched = true;
         for (const event of events) {
-          // Create in-app notification
-          const expiresAt = new Date(now.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000);
-          await Notification.create({
-            userId: event.userId,
-            type: "event_reminder",
-            title: `Upcoming event: ${event.title}`,
-            message: `"${event.title}" starts in ${label} (${new Date(event.startTime).toLocaleString()}).${event.location ? ` Location: ${event.location}` : ""}`,
-            meta: { eventId: event._id.toString(), threshold: key },
-            expiresAt,
+          const ok = await enqueueCronJob("event-reminders", {
+            eventId: event._id.toString(),
+            key,
+            label,
           });
+          if (!ok) { allDispatched = false; break; }
+        }
 
-          // Mark this threshold as notified
-          await Event.updateOne({ _id: event._id }, { $set: { [`notifiedAt.${key}`]: true } });
-
-          // Push real-time update
-          await publishNotificationEvent(event.userId.toString(), "created").catch(() => {});
+        if (!allDispatched) {
+          const fullEvents = await Event.find(filter).lean();
+          for (const event of fullEvents) {
+            const expiresAt = new Date(now.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000);
+            await Notification.create({
+              userId: event.userId,
+              type: "event_reminder",
+              title: `Upcoming event: ${event.title}`,
+              message: `"${event.title}" starts in ${label} (${new Date(event.startTime).toLocaleString()}).${event.location ? ` Location: ${event.location}` : ""}`,
+              meta: { eventId: event._id.toString(), threshold: key },
+              expiresAt,
+            });
+            await Event.updateOne({ _id: event._id }, { $set: { [`notifiedAt.${key}`]: true } });
+            await publishNotificationEvent(event.userId.toString(), "created").catch(() => {});
+          }
         }
       }
     } catch (err) {

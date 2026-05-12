@@ -3,7 +3,7 @@ import { fail, ok } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import Transaction from "@/models/Transaction";
 import { sendDueReminderToPerson } from "@/lib/reminders";
-import { sendMail } from "@/lib/mailer";
+import { enqueueEmail } from "@/lib/queue/producers";
 import { activeQuery } from "@/lib/bin";
 
 export async function POST(request) {
@@ -36,7 +36,7 @@ export async function GET() {
   );
 
   if (user.email) {
-    await sendMail({
+    await enqueueEmail({
       to: user.email,
       subject: "Your pending dues summary",
       headline: "Pending dues overview",
