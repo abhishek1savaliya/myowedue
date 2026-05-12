@@ -8,7 +8,7 @@ import { communityProfilePathByUsername } from "@/lib/community-usernames";
 const cardShell =
   "rounded-3xl border border-zinc-800/90 bg-zinc-900 p-5 text-white shadow-[0_4px_24px_rgba(0,0,0,0.12)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_4px_28px_rgba(0,0,0,0.35)]";
 
-export default function CommunitySidebarProfile({ loggedIn }) {
+export default function CommunitySidebarProfile({ loggedIn, authChecked = true }) {
   const [me, setMe] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -34,6 +34,12 @@ export default function CommunitySidebarProfile({ loggedIn }) {
       cancelled = true;
     };
   }, [loggedIn]);
+
+  if (!authChecked || (!loggedIn && !loaded)) {
+    return (
+      <div className="h-38 animate-pulse rounded-3xl border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800" aria-hidden />
+    );
+  }
 
   if (!loggedIn) {
     return (

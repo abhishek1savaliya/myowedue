@@ -1036,6 +1036,7 @@ export default function CommunityFeedClient({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
+  const [authResolved, setAuthResolved] = useState(false);
   const [composer, setComposer] = useState("");
   const [posting, setPosting] = useState(false);
   const [configError, setConfigError] = useState(false);
@@ -1103,6 +1104,7 @@ export default function CommunityFeedClient({
         if (res.status === 503) {
           setConfigError(true);
           setError(data.message || "Community is not configured.");
+          setAuthResolved(true);
           if (!hasSeed) setPosts([]);
           return;
         }
@@ -1111,10 +1113,12 @@ export default function CommunityFeedClient({
           if (isMissingCommunityTables(msg)) {
             setConfigError(true);
             setError(COMMUNITY_SETUP_MESSAGE);
+            setAuthResolved(true);
             if (!hasSeed) setPosts([]);
             return;
           }
           if (hasSeed) {
+            setAuthResolved(true);
             setError(msg);
             return;
           }
@@ -1124,6 +1128,7 @@ export default function CommunityFeedClient({
         setPosts(data.posts || []);
         setNextCursor(data.nextCursor || null);
         setCurrentUserId(data.currentUserId || "");
+        setAuthResolved(true);
         feedHydratedRef.current = true;
       } catch (e) {
         if (cancelled) return;
@@ -1135,7 +1140,10 @@ export default function CommunityFeedClient({
           setError(msg);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setAuthResolved(true);
+        }
       }
     }
 
@@ -1342,7 +1350,7 @@ export default function CommunityFeedClient({
     ? "This page shows only your posts. Open Community to read and join the full public feed."
     : "Anyone can read and share posts. Sign in to publish, like, or comment.";
 
-  const showComposer = isPortal || canInteract;
+  const showComposer = authResolved && (isPortal || canInteract);
 
   const tabBar = (
     <div
@@ -1409,7 +1417,7 @@ export default function CommunityFeedClient({
   ) : null;
 
   const guestPromo =
-    !showComposer && !isPortal ? (
+    authResolved && !showComposer && !isPortal ? (
       <div
         className={
           isX

@@ -13,7 +13,7 @@ const POST_TYPES = new Set(COMMUNITY_POST_NOTIFICATION_TYPES);
  * Left-rail list of community post/thread notifications only (likes, shares, comments).
  * @param {{ loggedIn: boolean; appearance?: "default" | "onDark" }} props
  */
-export default function CommunityNotificationsSidebar({ loggedIn, appearance = "default" }) {
+export default function CommunityNotificationsSidebar({ loggedIn, authChecked = true, appearance = "default" }) {
   const onDark = appearance === "onDark";
   const headingId = useId();
   const [items, setItems] = useState([]);
@@ -110,6 +110,15 @@ export default function CommunityNotificationsSidebar({ loggedIn, appearance = "
   const allLink = onDark
     ? "mt-3 shrink-0 px-1 text-[11px] font-medium text-amber-400 underline-offset-2 hover:underline"
     : "mt-3 shrink-0 px-1 text-[11px] font-medium text-amber-800 underline-offset-2 hover:underline dark:text-amber-400";
+
+  if (!authChecked) {
+    return (
+      <div className="flex shrink-0 flex-col gap-2 px-1">
+        <div className="h-4 w-3/4 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+        <div className="h-4 w-1/2 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+      </div>
+    );
+  }
 
   if (!loggedIn) {
     return (

@@ -29,6 +29,7 @@ export default function Sidebar({ notificationCount = 0 }) {
   const [canAccessContentEditor, setCanAccessContentEditor] = useState(false);
   const [subscriptionLabel, setSubscriptionLabel] = useState("Free Plan");
   const [isPremium, setIsPremium] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +61,7 @@ export default function Sidebar({ notificationCount = 0 }) {
           setCanAccessContentEditor(hasPermission);
           setIsPremium(Boolean(meUser?.isPremium));
           setSubscriptionLabel(meUser?.subscriptionLabel || "Free Plan");
+          setAuthChecked(true);
         }
         if (!userId || cancelled) return;
 
@@ -74,7 +76,7 @@ export default function Sidebar({ notificationCount = 0 }) {
           loadNotificationCount();
         });
       } catch {
-        // Ignore realtime setup failures and keep fallback polling behavior.
+        if (!cancelled) setAuthChecked(true);
       }
     }
 
@@ -119,7 +121,9 @@ export default function Sidebar({ notificationCount = 0 }) {
               OWE DUE
             </Link>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              {isPremium ? (
+              {!authChecked ? (
+                <span className="inline-flex h-5 w-12 animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-700" />
+              ) : isPremium ? (
                 <Link
                   href="/my-subscription"
                   className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
