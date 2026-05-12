@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Home, Menu, PenSquare, Settings2, X } from "lucide-react";
+import { Bell, Home, Menu, PenSquare, Search, Settings2, X } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import CommunityNotificationsSidebar from "@/components/community/CommunityNotificationsSidebar";
 import CommunitySidebarProfile from "@/components/community/CommunitySidebarProfile";
@@ -17,7 +17,7 @@ const navItem =
 const navActive =
   "border-zinc-200 bg-white text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50";
 
-function SidebarContent({ loggedIn, authChecked, homeActive, settingsActive, postHref, onNavigate }) {
+function SidebarContent({ loggedIn, authChecked, homeActive, searchActive, notificationsActive, settingsActive, postHref, onNavigate }) {
   return (
     <>
       <nav className="flex shrink-0 flex-col gap-0.5" aria-label="Community">
@@ -29,6 +29,24 @@ function SidebarContent({ loggedIn, authChecked, homeActive, settingsActive, pos
         >
           <Home className="h-5 w-5 shrink-0 text-zinc-500 dark:text-zinc-400" strokeWidth={2} />
           Home
+        </Link>
+        <Link
+          href="/community/search"
+          onClick={onNavigate}
+          className={`${navItem} ${searchActive ? navActive : ""}`}
+          aria-current={searchActive ? "page" : undefined}
+        >
+          <Search className="h-5 w-5 shrink-0 text-zinc-500 dark:text-zinc-400" strokeWidth={2} />
+          Search
+        </Link>
+        <Link
+          href="/community/notifications"
+          onClick={onNavigate}
+          className={`${navItem} ${notificationsActive ? navActive : ""}`}
+          aria-current={notificationsActive ? "page" : undefined}
+        >
+          <Bell className="h-5 w-5 shrink-0 text-zinc-500 dark:text-zinc-400" strokeWidth={2} />
+          Notifications
         </Link>
         <Link
           href="/community/settings"
@@ -74,6 +92,8 @@ export default function CommunityPublicShell({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const homeActive = pathname === "/community" || pathname.startsWith("/community/post/");
+  const searchActive = pathname.startsWith("/community/search");
+  const notificationsActive = pathname.startsWith("/community/notifications");
   const settingsActive = pathname.startsWith("/community/settings");
 
   useEffect(() => {
@@ -199,6 +219,8 @@ export default function CommunityPublicShell({ children }) {
               loggedIn={loggedIn}
               authChecked={authChecked}
               homeActive={homeActive}
+              searchActive={searchActive}
+              notificationsActive={notificationsActive}
               settingsActive={settingsActive}
               postHref={postHref}
               onNavigate={closeDrawer}
@@ -222,6 +244,8 @@ export default function CommunityPublicShell({ children }) {
             loggedIn={loggedIn}
             authChecked={authChecked}
             homeActive={homeActive}
+            searchActive={searchActive}
+            notificationsActive={notificationsActive}
             settingsActive={settingsActive}
             postHref={postHref}
           />
@@ -273,18 +297,18 @@ export default function CommunityPublicShell({ children }) {
           Home
         </Link>
         <Link
-          href="/community/settings"
-          className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition ${settingsActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
+          href="/community/search"
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition ${searchActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
         >
-          <Settings2 className="h-5 w-5" strokeWidth={settingsActive ? 2.5 : 2} />
-          Settings
+          <Search className="h-5 w-5" strokeWidth={searchActive ? 2.5 : 2} />
+          Search
         </Link>
         <Link
-          href={postHref}
-          className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-zinc-500 transition dark:text-zinc-400"
+          href="/community/notifications"
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition ${notificationsActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
         >
-          <PenSquare className="h-5 w-5" strokeWidth={2} />
-          Post
+          <Bell className="h-5 w-5" strokeWidth={notificationsActive ? 2.5 : 2} />
+          Alerts
         </Link>
         <button
           type="button"
