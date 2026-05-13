@@ -4,10 +4,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Bell, Home, Menu, PenSquare, Search, Settings2, X } from "lucide-react";
+import { Bell, Home, Menu, PenSquare, Search, Settings2, TrendingUp, X } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import CommunitySidebarProfile from "@/components/community/CommunitySidebarProfile";
-import TrendingSidebar from "@/components/community/TrendingSidebar";
+import SuggestedCreatorsRail from "@/components/community/SuggestedCreatorsRail";
+import TrendingTopicsFromApi from "@/components/community/TrendingTopicsFromApi";
 
 const navItem =
   "group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-[15px] font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/80";
@@ -15,7 +16,17 @@ const navItem =
 const navActive =
   "border-zinc-200 bg-white text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50";
 
-function SidebarContent({ loggedIn, authChecked, homeActive, searchActive, notificationsActive, settingsActive, postHref, onNavigate }) {
+function SidebarContent({
+  loggedIn,
+  authChecked,
+  homeActive,
+  searchActive,
+  trendingActive,
+  notificationsActive,
+  settingsActive,
+  postHref,
+  onNavigate,
+}) {
   return (
     <>
       <nav className="flex shrink-0 flex-col gap-0.5" aria-label="Community">
@@ -36,6 +47,15 @@ function SidebarContent({ loggedIn, authChecked, homeActive, searchActive, notif
         >
           <Search className="h-5 w-5 shrink-0 text-zinc-500 dark:text-zinc-400" strokeWidth={2} />
           Search
+        </Link>
+        <Link
+          href="/community/trending"
+          onClick={onNavigate}
+          className={`${navItem} ${trendingActive ? navActive : ""}`}
+          aria-current={trendingActive ? "page" : undefined}
+        >
+          <TrendingUp className="h-5 w-5 shrink-0 text-zinc-500 dark:text-zinc-400" strokeWidth={2} />
+          Trending
         </Link>
         <Link
           href="/community/notifications"
@@ -85,14 +105,16 @@ export default function CommunityPublicShell({ children }) {
 
   const homeActive = pathname === "/community" || pathname.startsWith("/community/post/");
   const searchActive = pathname.startsWith("/community/search");
+  const trendingActive = pathname.startsWith("/community/trending");
   const notificationsActive = pathname.startsWith("/community/notifications");
   const settingsActive = pathname.startsWith("/community/settings");
+  const hideRightRailTrending = trendingActive;
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const res = await fetch("/api/auth/me", { cache: "no-store", credentials: "include" });
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok && data?.user) setLoggedIn(true);
       } catch {
@@ -136,14 +158,6 @@ export default function CommunityPublicShell({ children }) {
       {/* Mobile top bar */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200/90 bg-white/95 px-3 py-2.5 backdrop-blur-md dark:border-zinc-700 dark:bg-zinc-950/95 md:hidden">
         <div className="flex min-w-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            aria-label="Open menu"
-          >
-            <Menu className="h-5 w-5" strokeWidth={2} />
-          </button>
           <Link href="/community" className="inline-flex shrink-0 items-center gap-1.5 font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
             <Image src="/owedue-logo.svg" alt="OWE DUE" width={28} height={28} className="h-7 w-7 rounded-md" />
             <span className="text-sm">Community</span>
@@ -212,6 +226,7 @@ export default function CommunityPublicShell({ children }) {
               authChecked={authChecked}
               homeActive={homeActive}
               searchActive={searchActive}
+              trendingActive={trendingActive}
               notificationsActive={notificationsActive}
               settingsActive={settingsActive}
               postHref={postHref}
@@ -223,7 +238,7 @@ export default function CommunityPublicShell({ children }) {
 
       <div className="relative mx-auto flex min-h-[calc(100dvh-53px)] max-w-[1200px] md:min-h-screen">
         {/* Desktop left sidebar */}
-        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-zinc-200/90 bg-white/80 py-4 pl-4 pr-3 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-950/90 md:flex">
+        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-zinc-200/90 bg-white/80 py-4 pl-4 pr-3 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-950/90 md:flex md:flex-col">
           <Link
             href="/"
             className="mb-5 inline-flex shrink-0 items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
@@ -237,6 +252,7 @@ export default function CommunityPublicShell({ children }) {
             authChecked={authChecked}
             homeActive={homeActive}
             searchActive={searchActive}
+            trendingActive={trendingActive}
             notificationsActive={notificationsActive}
             settingsActive={settingsActive}
             postHref={postHref}
@@ -248,9 +264,17 @@ export default function CommunityPublicShell({ children }) {
             {children}
           </main>
 
-          <aside className="order-1 flex w-full shrink-0 flex-col gap-4 border-b border-zinc-200 bg-zinc-50/90 px-4 py-4 dark:border-zinc-700 dark:bg-zinc-900/40 lg:sticky lg:top-0 lg:order-2 lg:h-dvh lg:max-h-screen lg:w-[280px] lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-l lg:border-zinc-200 lg:bg-transparent lg:py-6 lg:pl-4 lg:pr-6 dark:lg:border-zinc-700">
+          <aside className="order-1 hidden w-full shrink-0 flex-col gap-4 border-b border-zinc-200 bg-zinc-50/90 px-4 py-4 dark:border-zinc-700 dark:bg-zinc-900/40 lg:sticky lg:top-0 lg:order-2 lg:flex lg:flex-col lg:h-dvh lg:max-h-screen lg:w-[280px] lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-l lg:border-zinc-200 lg:bg-transparent lg:py-6 lg:pl-4 lg:pr-6 dark:lg:border-zinc-700">
             <div className="space-y-3 lg:shrink-0">
-              <TrendingSidebar limit={10} variant="shell" className="p-3" />
+              {hideRightRailTrending ? null : (
+                <TrendingTopicsFromApi
+                  limit={5}
+                  variant="shell"
+                  className="p-3"
+                  linkBasePath="/community"
+                />
+              )}
+              <SuggestedCreatorsRail loggedIn={loggedIn} authChecked={authChecked} className="p-3" />
             </div>
             <div className="hidden rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-zinc-600 dark:bg-zinc-900/90 lg:block">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Use the full app</h2>
@@ -283,21 +307,28 @@ export default function CommunityPublicShell({ children }) {
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-zinc-200/90 bg-white/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md dark:border-zinc-700 dark:bg-zinc-950/95 md:hidden" aria-label="Quick actions">
         <Link
           href="/community"
-          className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition ${homeActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${homeActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
         >
           <Home className="h-5 w-5" strokeWidth={homeActive ? 2.5 : 2} />
           Home
         </Link>
         <Link
           href="/community/search"
-          className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition ${searchActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${searchActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
         >
           <Search className="h-5 w-5" strokeWidth={searchActive ? 2.5 : 2} />
           Search
         </Link>
         <Link
+          href="/community/trending"
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${trendingActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
+        >
+          <TrendingUp className="h-5 w-5" strokeWidth={trendingActive ? 2.5 : 2} />
+          Trending
+        </Link>
+        <Link
           href="/community/notifications"
-          className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition ${notificationsActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${notificationsActive ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-500 dark:text-zinc-400"}`}
         >
           <Bell className="h-5 w-5" strokeWidth={notificationsActive ? 2.5 : 2} />
           Alerts
@@ -305,7 +336,7 @@ export default function CommunityPublicShell({ children }) {
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-zinc-500 transition dark:text-zinc-400"
+          className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium text-zinc-500 transition dark:text-zinc-400 sm:text-[11px]"
         >
           <Menu className="h-5 w-5" strokeWidth={2} />
           More

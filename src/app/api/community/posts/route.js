@@ -4,10 +4,12 @@ import { embedText, embeddingModelName, vectorToPgLiteral } from "@/lib/communit
 import { buildSignalsScoreMap, rerankWithPhase2 } from "@/lib/communityPhase2Ranking";
 import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
+import { normalizeCommunityTopicParam } from "@/lib/community-topic";
 import { rankPersonalizedPosts } from "@/lib/communityPersonalization";
 import { extractPostTopics } from "@/lib/post-topic-extraction";
 import {
   communityFeedCacheKey,
+  communityFeedTopicCacheKey,
   communityPersonalizedFeedCacheKey,
   clearCommunityCaches,
   getRedisJSON,
@@ -137,6 +139,62 @@ export async function GET(request) {
   const currentUserId = user ? String(user._id) : "";
   const viewerCacheId = currentUserId || "anon";
   const feedCacheKey = communityFeedCacheKey(filter, cursor || "", viewerCacheId);
+  const topicNormalized = filter === "all" ? normalizeCommunityTopicParam(searchParams.get("topic")) : "";
+
+  if (topicNormalized) {
+    const topicCacheKey = communityFeedTopicCacheKey(topicNormalized, cursor || "", viewerCacheId);
+    const cachedTopic = await getRedisJSON(topicCacheKey);
+    if (cachedTopic && typeof cachedTopic === "object" && Array.isArray(cachedTopic.posts)) {
+      return ok({ ...cachedTopic, viewer: user ? viewerPayload(user) : null });
+    }
+
+    let topicQuery = supabase
+      .from("community_posts")
+      .select("id, author_id, author_name, body, share_count, created_at, post_topics!inner(topic)")
+      .eq("post_topics.topic", topicNormalized)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE + 1);
+
+    if (cursor) {
+      topicQuery = topicQuery.lt("created_at", cursor);
+    }
+
+    const { data: topicPostsRaw, error: tqErr } = await topicQuery;
+    if (tqErr) {
+      const mapped = mapCommunitySupabaseError(tqErr.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(tqErr.message || "Failed to load topic feed", 500);
+    }
+
+    const slice = (topicPostsRaw || []).map((row) => {
+      const { post_topics: _pt, ...rest } = row;
+      return rest;
+    });
+    const hasMore = slice.length > PAGE_SIZE;
+    const page = hasMore ? slice.slice(0, PAGE_SIZE) : slice;
+
+    if (page.length === 0) {
+      return serveFeedCache(
+        topicCacheKey,
+        { posts: [], nextCursor: null, currentUserId, filter, topic: topicNormalized },
+        user
+      );
+    }
+
+    const enriched = await enrichAndVerifyPosts(supabase, page, currentUserId);
+    if (enriched.error) {
+      const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(enriched.error.message, 500);
+    }
+
+    const nextCursor = hasMore ? page[page.length - 1]?.created_at : null;
+    return serveFeedCache(
+      topicCacheKey,
+      { posts: enriched.posts, nextCursor, currentUserId, filter, topic: topicNormalized },
+      user
+    );
+  }
 
   if ((filter === "liked" || filter === "shared" || filter === "mine") && !user) {
     const payload = { posts: [], nextCursor: null, currentUserId: "", requiresAuth: true, filter };

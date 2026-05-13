@@ -2,6 +2,7 @@ import { fail, ok } from "@/lib/api";
 import { notifyCommunityActivity, formatUserDisplayName } from "@/lib/community-notifications";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { normalizeSavedUsernameHandle, tryNormalizeCommunityUsername } from "@/lib/community-usernames";
+import { communitySuggestedCreatorsCacheKey, delRedisKey } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 
@@ -87,6 +88,7 @@ export async function POST(request, { params }) {
       if (mapped) return fail(mapped, 503);
       return fail(delErr.message, 500);
     }
+    void delRedisKey(communitySuggestedCreatorsCacheKey());
     return ok({ following: false });
   }
 
@@ -114,5 +116,6 @@ export async function POST(request, { params }) {
     metaExtra: actorCommunityUsername ? { actorCommunityUsername } : {},
   });
 
+  void delRedisKey(communitySuggestedCreatorsCacheKey());
   return ok({ following: true });
 }

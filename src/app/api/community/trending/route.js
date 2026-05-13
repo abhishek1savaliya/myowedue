@@ -1,7 +1,7 @@
 import { fail, ok } from "@/lib/api";
 import { computeTrendingTopics } from "@/lib/community-trending";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
-import { communityTrendingCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
+import { COMMUNITY_TRENDING_AGGREGATE_CAP, communityTrendingCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 
 const WINDOW_HOURS = 24;
@@ -29,10 +29,13 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 10, 1), 50);
 
-  const cacheKey = communityTrendingCacheKey(limit);
+  const cacheKey = communityTrendingCacheKey();
   const cached = await getRedisJSON(cacheKey);
   if (cached && typeof cached === "object" && Array.isArray(cached.topics)) {
-    return ok(cached);
+    return ok({
+      ...cached,
+      topics: cached.topics.slice(0, limit),
+    });
   }
 
   const since = new Date(Date.now() - WINDOW_HOURS * 60 * 60 * 1000).toISOString();
@@ -86,11 +89,14 @@ export async function GET(request) {
     return fail(commentsRes.error.message, 500);
   }
 
-  const topics = computeTrendingTopics(postList, topicRes.data || [], likesRes.data || [], commentsRes.data || [], {
-    limit,
+  const topicsFull = computeTrendingTopics(postList, topicRes.data || [], likesRes.data || [], commentsRes.data || [], {
+    limit: COMMUNITY_TRENDING_AGGREGATE_CAP,
   });
 
-  const payload = { topics, windowHours: WINDOW_HOURS };
+  const payload = { topics: topicsFull, windowHours: WINDOW_HOURS };
   void setRedisJSON(cacheKey, payload, CACHE_TTL_SEC);
-  return ok(payload);
+  return ok({
+    ...payload,
+    topics: topicsFull.slice(0, limit),
+  });
 }

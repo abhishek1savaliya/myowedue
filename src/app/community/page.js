@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import CommunityFeedClient from "@/components/community/CommunityFeedClient";
 import {
   buildCommunityFeedJsonLd,
@@ -137,13 +138,21 @@ export default async function CommunityPublicPage() {
           )}
         </main>
       </noscript>
-      <CommunityFeedClient
-        variant="public"
-        skin="x"
-        shareBasePath="/community"
-        loginNextPath="/community"
-        initialFeedPosts={initialForClient}
-      />
+      <Suspense
+        fallback={
+          <div className="mx-auto flex min-h-[40vh] max-w-xl flex-col items-center justify-center gap-2 px-4 py-12 text-zinc-600 dark:text-zinc-400">
+            <span className="text-sm">Loading community…</span>
+          </div>
+        }
+      >
+        <CommunityFeedClient
+          variant="public"
+          skin="x"
+          shareBasePath="/community"
+          loginNextPath="/community"
+          initialFeedPosts={initialForClient}
+        />
+      </Suspense>
     </>
   );
 }

@@ -140,6 +140,11 @@ export function communityFeedCacheKey(filter, cursor, viewerId) {
   return `community:feed:v1:${encodeKeyPart(filter)}:${encodeKeyPart(cursor || "")}:${encodeKeyPart(viewerId || "anon")}`;
 }
 
+/** Topic-filtered feed pages (GET /api/community/posts?topic=). */
+export function communityFeedTopicCacheKey(topic, cursor, viewerId) {
+  return `community:feed:topic:v1:${encodeKeyPart(topic)}:${encodeKeyPart(cursor || "")}:${encodeKeyPart(viewerId || "anon")}`;
+}
+
 /** Personalized first-page cache for community feed. */
 export function communityPersonalizedFeedCacheKey(viewerId) {
   return `community:feed:personalized:v1:${encodeKeyPart(viewerId || "anon")}`;
@@ -150,9 +155,17 @@ export function communityCommentsCacheKey(postId, viewerId) {
   return `community:comments:v1:${encodeKeyPart(postId)}:${encodeKeyPart(viewerId || "anon")}`;
 }
 
-/** Aggregated trending topics (GET /api/community/trending). */
-export function communityTrendingCacheKey(limit = 10) {
-  return `community:trending:v2:${encodeKeyPart(String(limit))}`;
+/** Max topics stored in one aggregate cache entry (slice per `limit` query param). */
+export const COMMUNITY_TRENDING_AGGREGATE_CAP = 15;
+
+/** Single aggregate key — avoids duplicate Supabase work for limit=5 vs limit=10. */
+export function communityTrendingCacheKey() {
+  return "community:trending:v3:aggregate";
+}
+
+/** Top community profiles by recent engagement (GET /api/community/suggested-creators). */
+export function communitySuggestedCreatorsCacheKey() {
+  return "community:suggested_creators:v1";
 }
 
 /** Drop cached trending aggregates only (scan). */
@@ -191,7 +204,14 @@ export async function clearCommunityCaches() {
     const queued = await enqueueCacheInvalidation("clear-community-cache", {});
     if (queued) return true;
 
-    const patterns = ["community:feed:v1:*", "community:feed:personalized:v1:*", "community:comments:v1:*", "community:trending:*"];
+    const patterns = [
+      "community:feed:v1:*",
+      "community:feed:topic:v1:*",
+      "community:feed:personalized:v1:*",
+      "community:comments:v1:*",
+      "community:trending:*",
+      "community:suggested_creators:*",
+    ];
     const keysToDelete = new Set();
     for (const pattern of patterns) {
       let cursor = "0";

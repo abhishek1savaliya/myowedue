@@ -4,10 +4,15 @@ import TrendingTopicsCard from "@/components/community/TrendingTopicsCard";
 import { useCommunityTrending } from "@/components/community/useCommunityTrending";
 
 /**
- * Right-rail trending (portal `/posts` or standalone). Fetches once via shared hook.
+ * Self-contained trending list (fetches `/api/community/trending` once per mount).
  * @param {{ limit?: number; variant?: "shell" | "portal"; className?: string; linkBasePath?: string | null }} props
  */
-export default function TrendingSidebar({ limit = 10, variant = "shell", className = "", linkBasePath = "/community" }) {
+export default function TrendingTopicsFromApi({
+  limit = 10,
+  variant = "shell",
+  className = "",
+  linkBasePath = "/community",
+}) {
   const { topics, loading } = useCommunityTrending();
   return (
     <TrendingTopicsCard

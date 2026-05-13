@@ -57,9 +57,11 @@ async function handleClearCommunityCache() {
 
   const patterns = [
     "community:feed:v1:*",
+    "community:feed:topic:v1:*",
     "community:feed:personalized:v1:*",
     "community:comments:v1:*",
     "community:trending:*",
+    "community:suggested_creators:*",
   ];
 
   const deleted = await scanAndDelete(client, patterns);

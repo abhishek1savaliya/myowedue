@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import SharePostModal from "@/components/community/SharePostModal";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { BadgeCheck, ChevronRight, Heart, Loader2, MessageCircle, Pencil, Repeat2, Send, Trash2 } from "lucide-react";
 import { COMMUNITY_POST_EDIT_WINDOW_MS, isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window";
 import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
 import { normalizeSavedUsernameHandle } from "@/lib/community-usernames";
+import { normalizeCommunityTopicParam } from "@/lib/community-topic";
 
 const COMMUNITY_SETUP_MESSAGE =
   "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql through 007_community_username_max_21.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
@@ -992,11 +993,12 @@ const FEED_TABS_PORTAL = [
 ];
 
 /** Portal home tab lists only the signed-in user’s posts (`filter=mine`). Community lists everyone. */
-function buildPostsQuery(tab, cursor, portalMineHome) {
+function buildPostsQuery(tab, cursor, portalMineHome, topic) {
   const p = new URLSearchParams();
   if (portalMineHome && tab === "all") p.set("filter", "mine");
   else if (tab && tab !== "all") p.set("filter", tab);
   if (cursor) p.set("cursor", cursor);
+  if (topic && tab === "all" && !portalMineHome) p.set("topic", topic);
   const qs = p.toString();
   return qs ? `/api/community/posts?${qs}` : "/api/community/posts";
 }
@@ -1025,6 +1027,13 @@ export default function CommunityFeedClient({
   initialFeedPosts = null,
 }) {
   const isPortal = variant === "portal";
+  const searchParams = useSearchParams();
+  const topicFilterRaw = isPortal ? "" : String(searchParams.get("topic") || "");
+  const topicFilter = useMemo(
+    () => (isPortal ? "" : normalizeCommunityTopicParam(topicFilterRaw)),
+    [isPortal, topicFilterRaw]
+  );
+
   const seedList = useMemo(() => {
     if (isPortal || !Array.isArray(initialFeedPosts) || initialFeedPosts.length === 0) return [];
     return initialFeedPosts.map(normalizeInitialFeedPost).filter(Boolean);
@@ -1087,7 +1096,7 @@ export default function CommunityFeedClient({
         return;
       }
 
-      const hasSeed = !isPortal && feedTab === "all" && seedList.length > 0;
+      const hasSeed = !isPortal && feedTab === "all" && !topicFilter && seedList.length > 0;
       if (!hasSeed) {
         setLoading(true);
         setError("");
@@ -1098,7 +1107,10 @@ export default function CommunityFeedClient({
         setError("");
       }
       try {
-        const res = await fetch(buildPostsQuery(feedTab, null, portalMineHome), { credentials: "include", cache: "no-store" });
+        const res = await fetch(buildPostsQuery(feedTab, null, portalMineHome, topicFilter), {
+          credentials: "include",
+          cache: "no-store",
+        });
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (res.status === 503) {
@@ -1151,7 +1163,7 @@ export default function CommunityFeedClient({
     return () => {
       cancelled = true;
     };
-  }, [feedTab, tabAuthKey, portalMineHome, isPortal, seedList.length]);
+  }, [feedTab, tabAuthKey, portalMineHome, isPortal, seedList.length, topicFilter]);
 
   const loadMore = useCallback(async () => {
     const cursor = nextCursorRef.current;
@@ -1161,7 +1173,7 @@ export default function CommunityFeedClient({
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const res = await fetch(buildPostsQuery(feedTab, cursor, portalMineHome), {
+      const res = await fetch(buildPostsQuery(feedTab, cursor, portalMineHome, topicFilter), {
         credentials: "include",
         cache: "no-store",
       });
@@ -1176,7 +1188,7 @@ export default function CommunityFeedClient({
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [feedTab, currentUserId, reportActionError, portalMineHome]);
+  }, [feedTab, currentUserId, reportActionError, portalMineHome, topicFilter]);
 
   useEffect(() => {
     const el = loadMoreSentinelRef.current;
@@ -1200,7 +1212,7 @@ export default function CommunityFeedClient({
 
     ob.observe(el);
     return () => ob.disconnect();
-  }, [loadMore, posts.length, feedTab]);
+  }, [loadMore, posts.length, feedTab, topicFilter]);
 
   async function createPost(e) {
     e?.preventDefault?.();
@@ -1229,7 +1241,23 @@ export default function CommunityFeedClient({
       setConfigError(false);
       setComposer("");
       if (feedTab === "all") {
-        setPosts((prev) => [data.post, ...prev]);
+        if (topicFilter) {
+          try {
+            const refreshRes = await fetch(buildPostsQuery("all", null, portalMineHome, topicFilter), {
+              credentials: "include",
+              cache: "no-store",
+            });
+            const refreshData = await refreshRes.json().catch(() => ({}));
+            if (refreshRes.ok) {
+              setPosts(refreshData.posts || []);
+              setNextCursor(refreshData.nextCursor || null);
+            }
+          } catch {
+            /* ignore */
+          }
+        } else {
+          setPosts((prev) => [data.post, ...prev]);
+        }
       }
       dispatchCommunityMutate();
     } catch (err) {
@@ -1345,10 +1373,12 @@ export default function CommunityFeedClient({
     );
   }
 
-  const title = isPortal ? "Posts" : "Community";
+  const title = isPortal ? "Posts" : topicFilter ? `#${topicFilter}` : "Community";
   const subtitle = isPortal
     ? "This page shows only your posts. Open Community to read and join the full public feed."
-    : "Anyone can read and share posts. Sign in to publish, like, or comment.";
+    : topicFilter
+      ? "Posts that match this trending topic, newest first. Open the full feed anytime from the link below."
+      : "Anyone can read and share posts. Sign in to publish, like, or comment.";
 
   const showComposer = authResolved && (isPortal || canInteract);
 
@@ -1515,6 +1545,8 @@ export default function CommunityFeedClient({
               "You haven’t shared any posts yet. Use Repost on a post to add it here."
             ) : isPortal ? (
               "You haven’t posted yet."
+            ) : topicFilter ? (
+              "No posts for this topic yet."
             ) : (
               "No posts yet. Be the first to share!"
             )}
@@ -1531,13 +1563,33 @@ export default function CommunityFeedClient({
     <div className={rootShell}>
       {isX ? (
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">Community</h1>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h1>
+            {topicFilter ? (
+              <Link
+                href="/community"
+                className="text-sm font-semibold text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
+              >
+                All posts
+              </Link>
+            ) : null}
+          </div>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>
         </header>
       ) : (
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h1>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h1>
+              {!isPortal && topicFilter ? (
+                <Link
+                  href="/community"
+                  className="text-sm font-semibold text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
+                >
+                  All posts
+                </Link>
+              ) : null}
+            </div>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>
           </div>
           {isPortal ? (
