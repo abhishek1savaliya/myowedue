@@ -5,9 +5,10 @@ import { serializeStoredFile } from "@/lib/file-storage-utils";
 import { getSessionUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import Folder from "@/models/Folder";
+import "@/models/StoredFile";
 import FolderPassword from "@/models/FolderPassword";
 import FolderAccessEvent from "@/models/FolderAccessEvent";
-import { signFolderFileDownloadAuth } from "@/lib/folder-share-download-auth";
+import { signFolderFileDownloadAuth, signFolderBulkDownloadAuth } from "@/lib/folder-share-download-auth";
 
 function folderAccessCookieName(token) {
   return `folder_access_${token}`;
@@ -21,6 +22,7 @@ function serializeFolder(folder, origin, token, canViewFiles, isOwner = false) {
     name: folder.name,
     description: folder.description || "",
     permissionType,
+    bulkDownloadAuth: useDownloadAuth ? signFolderBulkDownloadAuth(token) : null,
     ownerName: folder.userId?.name || "OWE DUE user",
     fileCount: folder.fileIds?.length || 0,
     createdAt: folder.createdAt,

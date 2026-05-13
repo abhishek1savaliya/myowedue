@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { fail } from "@/lib/api";
 import { getSessionUser } from "@/lib/session";
 import Folder from "@/models/Folder";
+import "@/models/StoredFile";
 import { verifyFolderFileDownloadAuth } from "@/lib/folder-share-download-auth";
 import { storedFileCloudinaryStreamResponse } from "@/lib/cloudinary-stream-response";
 

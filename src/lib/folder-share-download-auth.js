@@ -31,3 +31,28 @@ export function verifyFolderFileDownloadAuth(shareToken, fileId, auth) {
     return false;
   }
 }
+
+/** One token for multi-file ZIP when per-file cookie auth is unreliable (password folders). */
+export function signFolderBulkDownloadAuth(shareToken, maxAgeSec = 60 * 60 * 24) {
+  const exp = Math.floor(Date.now() / 1000) + maxAgeSec;
+  const payload = `bulk:${shareToken}:${exp}`;
+  const mac = crypto.createHmac("sha256", secret()).update(payload).digest("hex");
+  return `${exp}.${mac}`;
+}
+
+export function verifyFolderBulkDownloadAuth(shareToken, auth) {
+  if (!auth || typeof auth !== "string") return false;
+  const dot = auth.indexOf(".");
+  if (dot <= 0) return false;
+  const exp = parseInt(auth.slice(0, dot), 10);
+  const mac = auth.slice(dot + 1);
+  if (!Number.isFinite(exp) || !mac || exp < Math.floor(Date.now() / 1000)) return false;
+  const payload = `bulk:${shareToken}:${exp}`;
+  const expected = crypto.createHmac("sha256", secret()).update(payload).digest("hex");
+  if (mac.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(mac, "utf8"), Buffer.from(expected, "utf8"));
+  } catch {
+    return false;
+  }
+}
