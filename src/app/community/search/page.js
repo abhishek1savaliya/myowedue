@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import CommunitySearchPageClient from "@/components/community/CommunitySearchPageClient";
 
 export const metadata = {
@@ -8,5 +9,9 @@ export const metadata = {
 };
 
 export default function CommunitySearchPage() {
-  return <CommunitySearchPageClient />;
+  return (
+    <Suspense fallback={null}>
+      <CommunitySearchPageClient />
+    </Suspense>
+  );
 }

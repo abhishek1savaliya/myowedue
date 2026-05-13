@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import { Bell, Home, Menu, PenSquare, Search, Settings2, X } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import CommunitySidebarProfile from "@/components/community/CommunitySidebarProfile";
-import CommunitySidebarSearch from "@/components/community/CommunitySidebarSearch";
 import TrendingSidebar from "@/components/community/TrendingSidebar";
 
 const navItem =
@@ -57,8 +56,6 @@ function SidebarContent({ loggedIn, authChecked, homeActive, searchActive, notif
           Settings
         </Link>
       </nav>
-
-      <CommunitySidebarSearch />
 
       <div className="mt-4 shrink-0 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
         <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Display</p>

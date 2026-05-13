@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2, Search, X } from "lucide-react";
 import { normalizeSavedUsernameHandle, tryNormalizeCommunityUsername } from "@/lib/community-usernames";
@@ -36,6 +36,7 @@ function suggestPrefix(raw) {
 
 export default function CommunitySearchPageClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const inputRef = useRef(null);
   const [q, setQ] = useState("");
   const [recent, setRecent] = useState([]);
@@ -44,8 +45,12 @@ export default function CommunitySearchPageClient() {
 
   useEffect(() => {
     setRecent(readRecent());
+    const initialQ = searchParams.get("q");
+    if (typeof initialQ === "string" && initialQ.trim()) {
+      setQ(initialQ.trim());
+    }
     inputRef.current?.focus();
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     const prefix = suggestPrefix(q);

@@ -295,8 +295,8 @@ export default function FolderShareClient({ token }) {
           <EmptyState text="No files are linked in this folder." />
         ) : (
           <>
-            <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+            <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+              <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2">
                 <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-800">
                   <input
                     type="checkbox"
@@ -313,13 +313,17 @@ export default function FolderShareClient({ token }) {
                   type="button"
                   disabled={selectedIds.length === 0 || zipLoading}
                   onClick={downloadSelectedZip}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  className="inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:px-4"
                 >
                   {zipLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
                   Download as ZIP
                 </button>
               </div>
-              <div className="grid grid-cols-4 gap-1 self-start rounded-xl border border-zinc-200 bg-zinc-50 p-1 sm:self-center">
+              <div
+                className="inline-flex w-fit shrink-0 gap-0.5 rounded-lg border border-zinc-200 bg-zinc-100 p-0.5 shadow-inner"
+                role="group"
+                aria-label="Folder layout"
+              >
                 {FILE_VIEW_OPTIONS.map((option) => {
                   const Icon = option.icon;
                   const active = fileView === option.key;
@@ -331,11 +335,11 @@ export default function FolderShareClient({ token }) {
                       title={`${option.label} view`}
                       aria-label={`${option.label} view`}
                       aria-pressed={active}
-                      className={`inline-flex h-9 min-w-10 items-center justify-center rounded-lg px-2 text-xs font-semibold ${
-                        active ? "bg-black text-white shadow-sm" : "text-zinc-600 hover:bg-white"
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors md:h-7 md:w-7 ${
+                        active ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200/80" : "text-zinc-500 hover:bg-white/80 hover:text-zinc-800"
                       }`}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon className="h-3.5 w-3.5 md:h-3 md:w-3" strokeWidth={2} />
                       <span className="sr-only">{option.label}</span>
                     </button>
                   );
