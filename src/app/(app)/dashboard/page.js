@@ -7,6 +7,7 @@ import StatCard from "@/components/StatCard";
 import MiniBarChart from "@/components/MiniBarChart";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
+import DashboardCurrencyConverter from "@/components/DashboardCurrencyConverter";
 
 export default function DashboardPage() {
   const [data, setData] = useState(null);
@@ -134,6 +135,8 @@ export default function DashboardPage() {
           {data?.ratesUpdatedAt ? ` • Updated ${new Date(data.ratesUpdatedAt).toLocaleString()}` : ""}
         </p>
       </header>
+
+      <DashboardCurrencyConverter />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
