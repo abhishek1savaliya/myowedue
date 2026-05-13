@@ -1203,7 +1203,7 @@ export default function CommunityFeedClient({
   }, [loadMore, posts.length, feedTab]);
 
   async function createPost(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
     const t = composer.trim();
     if (!t || posting) return;
     setPosting(true);
@@ -1397,6 +1397,12 @@ export default function CommunityFeedClient({
         id="community-compose"
         value={composer}
         onChange={(e) => setComposer(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || e.shiftKey) return;
+          e.preventDefault();
+          if (posting || !composer.trim()) return;
+          void createPost(e);
+        }}
         maxLength={280}
         rows={3}
         placeholder="What’s happening?"
