@@ -1027,6 +1027,7 @@ export default function CommunityFeedClient({
   initialFeedPosts = null,
 }) {
   const isPortal = variant === "portal";
+  const router = useRouter();
   const searchParams = useSearchParams();
   const topicFilterRaw = isPortal ? "" : String(searchParams.get("topic") || "");
   const topicFilter = useMemo(
@@ -1045,7 +1046,7 @@ export default function CommunityFeedClient({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
-  const [authResolved, setAuthResolved] = useState(false);
+  const [authResolved, setAuthResolved] = useState(() => !isPortal);
   const [composer, setComposer] = useState("");
   const [posting, setPosting] = useState(false);
   const [configError, setConfigError] = useState(false);
@@ -1082,33 +1083,6 @@ export default function CommunityFeedClient({
     () => (feedTab === "liked" || feedTab === "shared" ? currentUserId || "__guest__" : "__all__"),
     [feedTab, currentUserId]
   );
-
-  /** Public feed: resolve session before the slow posts API so the composer can render immediately. */
-  useEffect(() => {
-    if (isPortal) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (res.ok && data?.user?.id) {
-          setCurrentUserId(String(data.user.id));
-        } else {
-          setCurrentUserId("");
-        }
-        setAuthResolved(true);
-      } catch {
-        if (!cancelled) {
-          setCurrentUserId("");
-          setAuthResolved(true);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isPortal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1257,6 +1231,10 @@ export default function CommunityFeedClient({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const msg = data.message || "Failed to post";
+        if (res.status === 401) {
+          router.push(`/login?next=${encodeURIComponent(loginNextPath)}`);
+          return;
+        }
         if (res.status === 503) {
           setConfigError(true);
           setError(msg);
@@ -1407,7 +1385,7 @@ export default function CommunityFeedClient({
       ? "Posts that match this trending topic, newest first. Open the full feed anytime from the link below."
       : "Anyone can read and share posts. Sign in to publish, like, or comment.";
 
-  const showComposer = authResolved && (isPortal || canInteract);
+  const showComposer = isPortal ? authResolved : true;
 
   const tabBar = (
     <div
