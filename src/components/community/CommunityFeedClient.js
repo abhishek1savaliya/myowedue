@@ -1083,6 +1083,33 @@ export default function CommunityFeedClient({
     [feedTab, currentUserId]
   );
 
+  /** Public feed: resolve session before the slow posts API so the composer can render immediately. */
+  useEffect(() => {
+    if (isPortal) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && data?.user?.id) {
+          setCurrentUserId(String(data.user.id));
+        } else {
+          setCurrentUserId("");
+        }
+        setAuthResolved(true);
+      } catch {
+        if (!cancelled) {
+          setCurrentUserId("");
+          setAuthResolved(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isPortal]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -1329,7 +1356,7 @@ export default function CommunityFeedClient({
     );
   }
 
-  if (loading && !feedHydratedRef.current) {
+  if (loading && !feedHydratedRef.current && !(isX && !isPortal)) {
     if (isX) {
       return (
         <div className="flex min-h-[50vh] flex-1 flex-col items-center justify-center gap-3 text-zinc-500">
@@ -1479,6 +1506,11 @@ export default function CommunityFeedClient({
     loading && feedHydratedRef.current ? (
       <div className="flex justify-center py-10 text-zinc-500 dark:text-zinc-400">
         <Loader2 className="h-8 w-8 animate-spin" aria-label="Loading" />
+      </div>
+    ) : loading && !feedHydratedRef.current && isX && !isPortal ? (
+      <div className="flex min-h-[28vh] flex-1 flex-col items-center justify-center gap-3 py-12 text-zinc-500 dark:text-zinc-400">
+        <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
+        <span className="text-sm">Loading posts…</span>
       </div>
     ) : (
       <>

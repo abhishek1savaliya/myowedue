@@ -19,6 +19,7 @@ const navActive =
 function SidebarContent({
   loggedIn,
   authChecked,
+  sessionUser,
   homeActive,
   searchActive,
   trendingActive,
@@ -91,7 +92,7 @@ function SidebarContent({
       </div>
 
       <div className="mt-4 shrink-0 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-        <CommunitySidebarProfile loggedIn={loggedIn} authChecked={authChecked} />
+        <CommunitySidebarProfile loggedIn={loggedIn} authChecked={authChecked} sessionUser={sessionUser} />
       </div>
     </>
   );
@@ -100,6 +101,8 @@ function SidebarContent({
 export default function CommunityPublicShell({ children }) {
   const pathname = usePathname();
   const [loggedIn, setLoggedIn] = useState(false);
+  /** Reused for sidebar profile so opening the mobile drawer does not refetch `/api/auth/me`. */
+  const [sessionUser, setSessionUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -116,7 +119,13 @@ export default function CommunityPublicShell({ children }) {
       try {
         const res = await fetch("/api/auth/me", { cache: "no-store", credentials: "include" });
         const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && data?.user) setLoggedIn(true);
+        if (!cancelled && res.ok && data?.user) {
+          setLoggedIn(true);
+          setSessionUser(data.user);
+        } else if (!cancelled) {
+          setLoggedIn(false);
+          setSessionUser(null);
+        }
       } catch {
         /* ignore */
       } finally {
@@ -224,6 +233,7 @@ export default function CommunityPublicShell({ children }) {
             <SidebarContent
               loggedIn={loggedIn}
               authChecked={authChecked}
+              sessionUser={sessionUser}
               homeActive={homeActive}
               searchActive={searchActive}
               trendingActive={trendingActive}
@@ -250,6 +260,7 @@ export default function CommunityPublicShell({ children }) {
           <SidebarContent
             loggedIn={loggedIn}
             authChecked={authChecked}
+            sessionUser={sessionUser}
             homeActive={homeActive}
             searchActive={searchActive}
             trendingActive={trendingActive}

@@ -8,17 +8,27 @@ import { communityProfilePathByUsername } from "@/lib/community-usernames";
 const cardShell =
   "rounded-3xl border border-zinc-800/90 bg-zinc-900 p-5 text-white shadow-[0_4px_24px_rgba(0,0,0,0.12)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_4px_28px_rgba(0,0,0,0.35)]";
 
-export default function CommunitySidebarProfile({ loggedIn, authChecked = true }) {
-  const [me, setMe] = useState(null);
-  const [loaded, setLoaded] = useState(false);
+/**
+ * @param {{ loggedIn: boolean; authChecked?: boolean; sessionUser?: object | null }} props
+ * When `sessionUser` is passed from `CommunityPublicShell`, the mobile drawer can open without refetching `/api/auth/me`.
+ */
+export default function CommunitySidebarProfile({ loggedIn, authChecked = true, sessionUser: sessionUserProp = null }) {
+  const [me, setMe] = useState(() => sessionUserProp ?? null);
+  const [loaded, setLoaded] = useState(() => Boolean(sessionUserProp) || !loggedIn);
 
   useEffect(() => {
+    if (sessionUserProp && loggedIn) {
+      setMe(sessionUserProp);
+      setLoaded(true);
+      return;
+    }
     if (!loggedIn) {
       setMe(null);
       setLoaded(true);
       return;
     }
     let cancelled = false;
+    setLoaded(false);
     (async () => {
       try {
         const res = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
@@ -33,7 +43,7 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
     return () => {
       cancelled = true;
     };
-  }, [loggedIn]);
+  }, [loggedIn, sessionUserProp]);
 
   if (!authChecked || (!loggedIn && !loaded)) {
     return (
