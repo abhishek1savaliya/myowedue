@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import StatCard from "@/components/StatCard";
 import MiniBarChart from "@/components/MiniBarChart";
@@ -10,42 +11,67 @@ import Loader from "@/components/Loader";
 export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [revalidating, setRevalidating] = useState(false);
   const [error, setError] = useState("");
   const [selectedCurrency, setSelectedCurrency] = useState("AUD");
+  const hasLoadedOnceRef = useRef(false);
+
   const dashboardCurrency = data?.currency || "AUD";
   const usdToSelectedRate = Number(data?.usdToSelectedRate || 1);
 
-  async function load() {
-    setLoading(true);
-    setError("");
-    let timeoutId;
-    try {
-      const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(`/api/dashboard?currency=${selectedCurrency}`, {
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || "Failed to load dashboard");
-      }
-      setData(json);
-    } catch (caughtError) {
-      const message =
-        caughtError?.name === "AbortError"
-          ? "Dashboard request timed out. Please try again."
-          : caughtError?.message || "Failed to load dashboard";
-      setError(message);
-      setData(null);
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    load();
+    let cancelled = false;
+    const controller = new AbortController();
+    const soft = hasLoadedOnceRef.current;
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    if (soft) {
+      setRevalidating(true);
+    } else {
+      setLoading(true);
+    }
+    setError("");
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/dashboard?currency=${selectedCurrency}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json?.message || "Failed to load dashboard");
+        }
+        if (cancelled) return;
+        setData(json);
+        hasLoadedOnceRef.current = true;
+      } catch (caughtError) {
+        if (caughtError?.name === "AbortError") return;
+        const message =
+          caughtError?.message === "Failed to fetch" || caughtError?.name === "TypeError"
+            ? "Dashboard request failed. Check your connection."
+            : caughtError?.message || "Failed to load dashboard";
+        if (cancelled) return;
+        if (soft) {
+          setError(message);
+        } else {
+          setError(message);
+          setData(null);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        if (!cancelled) {
+          setLoading(false);
+          setRevalidating(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [selectedCurrency]);
 
   const dueSummary = useMemo(() => {
@@ -57,35 +83,52 @@ export default function DashboardPage() {
       count: data.pending.length,
       text: `${data.pending.length} pending dues • ${formatCurrency(receivableAmount, dashboardCurrency)} to receive`,
     };
-  }, [data]);
+  }, [data, dashboardCurrency]);
 
   const netBalance = (data?.totals?.totalReceivedBack || 0) - (data?.totals?.totalGiven || 0);
 
-  if (loading) return <Loader />;
-  if (error) {
+  if (loading && !data) return <Loader />;
+  if (!data && error) {
     return <EmptyState text={`Dashboard failed to load: ${error}`} />;
   }
+  if (!data) return <Loader />;
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${revalidating ? "opacity-[0.92]" : ""} transition-opacity`}>
       <header>
         <h1 className="text-3xl font-semibold tracking-tight text-black">Dashboard</h1>
         <p className="mt-1 text-sm text-zinc-600">Overview of receivables, payables, trends and dues.</p>
-        <div className="mt-3 flex items-center gap-2">
-          <label htmlFor="dashboard-currency" className="text-sm font-medium text-zinc-700">Dashboard Currency</label>
-          <select
-            id="dashboard-currency"
-            value={selectedCurrency}
-            onChange={(e) => setSelectedCurrency(e.target.value)}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm"
-          >
-            <option value="AUD">AUD</option>
-            <option value="USD">USD</option>
-            <option value="INR">INR</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-          </select>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label htmlFor="dashboard-currency" className="text-sm font-medium text-zinc-700">
+            Dashboard Currency
+          </label>
+          <div className="flex items-center gap-2">
+            <select
+              id="dashboard-currency"
+              value={selectedCurrency}
+              onChange={(e) => setSelectedCurrency(e.target.value)}
+              disabled={revalidating}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm disabled:cursor-wait disabled:opacity-70"
+            >
+              <option value="AUD">AUD</option>
+              <option value="USD">USD</option>
+              <option value="INR">INR</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+            {revalidating ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500" aria-live="polite">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Updating…
+              </span>
+            ) : null}
+          </div>
         </div>
+        {error && data ? (
+          <p className="mt-2 text-sm text-rose-600" role="alert">
+            {error}
+          </p>
+        ) : null}
         <p className="mt-2 text-xs text-zinc-600">
           Latest rate: 1 USD = {usdToSelectedRate.toFixed(4)} {dashboardCurrency}
           {data?.ratesUpdatedAt ? ` • Updated ${new Date(data.ratesUpdatedAt).toLocaleString()}` : ""}
@@ -160,7 +203,9 @@ export default function DashboardPage() {
                     <span className="font-medium text-black">{item.personId?.name || "Unknown"}</span>
                     <span className="text-zinc-600">{item.type.toUpperCase()}</span>
                   </div>
-                  <p className="mt-1 text-zinc-600">{formatCurrency(item.signedAmountInDashboardCurrency || 0, dashboardCurrency)} • {item.status}</p>
+                  <p className="mt-1 text-zinc-600">
+                    {formatCurrency(item.signedAmountInDashboardCurrency || 0, dashboardCurrency)} • {item.status}
+                  </p>
                 </div>
               ))
             ) : (
@@ -179,7 +224,9 @@ export default function DashboardPage() {
                     <span className="font-medium text-black">{item.personId?.name || "Unknown"}</span>
                     <span className="text-zinc-600">{formatCurrency(item.signedAmountInDashboardCurrency || 0, dashboardCurrency)}</span>
                   </div>
-                  <p className="mt-1 text-zinc-600">{item.type.toUpperCase()} • {new Date(item.date).toLocaleDateString()}</p>
+                  <p className="mt-1 text-zinc-600">
+                    {item.type.toUpperCase()} • {new Date(item.date).toLocaleDateString()}
+                  </p>
                 </div>
               ))
             ) : (
