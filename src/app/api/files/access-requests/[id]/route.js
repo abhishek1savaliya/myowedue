@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { fail, ok } from "@/lib/api";
-import { serializeFileAccessRequest } from "@/lib/file-storage";
+import { serializeFileAccessRequest } from "@/lib/file-storage-utils";
 import { clearUserApiCache } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import FileAccessRequest from "@/models/FileAccessRequest";

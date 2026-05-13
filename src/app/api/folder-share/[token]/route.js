@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/db";
 import { comparePassword } from "@/lib/auth";
 import { fail, ok } from "@/lib/api";
-import { serializeStoredFile } from "@/lib/file-storage";
+import { serializeStoredFile } from "@/lib/file-storage-utils";
 import { getSessionUser } from "@/lib/session";
 import { cookies } from "next/headers";
 import Folder from "@/models/Folder";

@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FolderOpen, Globe, Grid2x2, LayoutGrid, List, LoaderCircle, Lock, PlayCircle, Rows3 } from "lucide-react";
+import { FolderOpen, Globe, Grid2x2, LayoutGrid, List, LoaderCircle, Lock, PlayCircle, Rows3, X } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
+import ModalPortal from "@/components/ModalPortal";
+import PdfViewer from "@/components/PdfViewer";
+import { isPdfFile } from "@/lib/file-storage-utils";
 
 function formatBytes(bytes) {
   const value = Number(bytes || 0);
@@ -19,11 +22,23 @@ function formatBytes(bytes) {
 }
 
 function isImageFile(file) {
-  return file?.resourceType === "image" || String(file?.mimeType || "").startsWith("image/");
+  return !isPdfFile(file) && (file?.resourceType === "image" || String(file?.mimeType || "").startsWith("image/"));
 }
 
 function isVideoFile(file) {
   return file?.resourceType === "video" || String(file?.mimeType || "").startsWith("video/");
+}
+
+function canPreviewInModal(file) {
+  return Boolean(file?.folderOpenUrl) && (isPdfFile(file) || isImageFile(file) || isVideoFile(file));
+}
+
+/** Suggested filename for the HTML `download` attribute (mobile Safari). */
+function downloadAttributeName(file) {
+  const base = String(file?.originalName || file?.title || "download").trim() || "download";
+  const leaf = base.includes("/") ? base.split("/").pop() : base;
+  const safe = leaf.replace(/[^a-zA-Z0-9._\- ]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 120);
+  return safe || "download";
 }
 
 const FOLDER_SHARE_VIEW_STORAGE_KEY = "owedue:folder-share-file-view";
@@ -73,6 +88,7 @@ export default function FolderShareClient({ token }) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [fileView, setFileView] = useState("medium");
+  const [previewFile, setPreviewFile] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -123,6 +139,17 @@ export default function FolderShareClient({ token }) {
   useEffect(() => {
     window.localStorage.setItem(FOLDER_SHARE_VIEW_STORAGE_KEY, fileView);
   }, [fileView]);
+
+  useEffect(() => {
+    if (!previewFile) return undefined;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") setPreviewFile(null);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewFile]);
 
   if (loading) {
     return (
@@ -233,11 +260,45 @@ export default function FolderShareClient({ token }) {
           <div className={fileViewClasses.grid}>
             {folder.files.map((file) => (
               <article key={file.id} className={fileViewClasses.card}>
-                {file.previewUrl && isImageFile(file) ? (
+                {canPreviewInModal(file) ? (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewFile(file)}
+                    className={`group relative block w-full overflow-hidden bg-zinc-100 p-0 text-left ${fileViewClasses.preview} focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2`}
+                    aria-label={`View ${file.title}`}
+                  >
+                    {file.previewUrl && isImageFile(file) ? (
+                      <img
+                        src={file.previewUrl}
+                        alt={file.title}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                      />
+                    ) : isVideoFile(file) ? (
+                      <>
+                        <video
+                          src={file.folderOpenUrl}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="h-full w-full object-cover"
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition group-hover:bg-black/30">
+                          <PlayCircle className="h-14 w-14 text-white drop-shadow" />
+                        </span>
+                      </>
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-zinc-900 text-white">
+                        <p className="text-xs uppercase tracking-[0.22em] text-white/70">{isPdfFile(file) ? "PDF" : "View"}</p>
+                      </div>
+                    )}
+                  </button>
+                ) : file.previewUrl && isImageFile(file) ? (
                   <img src={file.previewUrl} alt={file.title} loading="lazy" decoding="async" className={`${fileViewClasses.preview} object-cover`} />
                 ) : isVideoFile(file) ? (
                   <div className={`relative bg-zinc-900 ${fileViewClasses.preview}`}>
-                    <video src={file.secureUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                    <video src={file.folderOpenUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                     <span className="absolute inset-0 flex items-center justify-center bg-black/20">
                       <PlayCircle className="h-14 w-14 text-white drop-shadow" />
                     </span>
@@ -254,15 +315,31 @@ export default function FolderShareClient({ token }) {
                   </div>
                   <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">{formatBytes(file.bytes)}</p>
                   <div className="flex flex-wrap gap-2">
+                    {canPreviewInModal(file) ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFile(file)}
+                        className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                      >
+                        View
+                      </button>
+                    ) : (
+                      <a
+                        href={file.folderOpenUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700"
+                      >
+                        Open
+                      </a>
+                    )}
                     <a
-                      href={file.folderOpenUrl}
+                      href={file.folderDownloadUrl}
+                      download={downloadAttributeName(file)}
                       target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700"
+                      rel="noopener noreferrer"
+                      className="rounded-full bg-black px-3 py-2 text-xs font-semibold text-white"
                     >
-                      Open File
-                    </a>
-                    <a href={file.folderDownloadUrl} className="rounded-full bg-black px-3 py-2 text-xs font-semibold text-white">
                       Download
                     </a>
                   </div>
@@ -273,6 +350,59 @@ export default function FolderShareClient({ token }) {
           </>
         )}
       </section>
+
+      {previewFile ? (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex min-h-dvh items-center justify-center overflow-y-auto bg-black/80 px-4 py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label={previewFile.title}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setPreviewFile(null);
+            }}
+          >
+            <div className="relative flex min-h-0 w-full max-w-6xl flex-col">
+              <button
+                type="button"
+                onClick={() => setPreviewFile(null)}
+                className="absolute right-0 top-0 z-10 inline-flex h-10 w-10 -translate-y-12 items-center justify-center rounded-full bg-white text-black shadow-lg"
+                aria-label="Close preview"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="flex h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-3rem))] max-h-[85vh] flex-col overflow-hidden rounded-2xl bg-black shadow-2xl">
+                {isPdfFile(previewFile) ? (
+                  <PdfViewer
+                    fileUrl={previewFile.folderOpenUrl}
+                    className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-zinc-900"
+                  />
+                ) : isVideoFile(previewFile) ? (
+                  <video
+                    key={previewFile.folderOpenUrl}
+                    src={previewFile.folderOpenUrl}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="max-h-[85vh] w-full bg-black object-contain"
+                  />
+                ) : (
+                  <img
+                    src={previewFile.folderOpenUrl}
+                    alt={previewFile.title}
+                    className="max-h-[85vh] w-full object-contain"
+                  />
+                )}
+              </div>
+              <div className="mt-3 text-white">
+                <p className="text-sm font-semibold">{previewFile.title}</p>
+                <p className="mt-1 text-xs text-white/70">{previewFile.originalName}</p>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      ) : null}
     </main>
   );
 }

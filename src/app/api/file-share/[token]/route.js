@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { fail, ok } from "@/lib/api";
-import { buildFileThumbnailUrl, isPdfFile } from "@/lib/file-storage";
+import { buildFileThumbnailUrl, isPdfFile } from "@/lib/file-storage-utils";
 import { getSessionUser } from "@/lib/session";
 import FileAccessRequest from "@/models/FileAccessRequest";
 import StoredFile from "@/models/StoredFile";
