@@ -4,12 +4,9 @@ import { fail } from "@/lib/api";
 import { getSessionUser } from "@/lib/session";
 import FileAccessRequest from "@/models/FileAccessRequest";
 import StoredFile from "@/models/StoredFile";
+import { storedFileCloudinaryStreamResponse } from "@/lib/cloudinary-stream-response";
 
-function withAttachment(url) {
-  const value = String(url || "");
-  if (!value.includes("/upload/")) return value;
-  return value.replace("/upload/", "/upload/fl_attachment/");
-}
+export const dynamic = "force-dynamic";
 
 export async function GET(request, { params }) {
   try {
@@ -20,17 +17,21 @@ export async function GET(request, { params }) {
     if (!file) return fail("File not found", 404);
 
     if (file.isPublic) {
-      return NextResponse.redirect(withAttachment(file.secureUrl));
+      const streamed = await storedFileCloudinaryStreamResponse(file, request, { disposition: "attachment" });
+      if (!streamed.ok) return fail(streamed.message, streamed.status);
+      return streamed.response;
     }
 
-    const user = await getSessionUser();
+    const user = await getSessionUser(request);
     if (!user) {
       const next = encodeURIComponent(`/share/files/${token}`);
       return NextResponse.redirect(new URL(`/login?next=${next}`, request.url));
     }
 
     if (String(file.userId) === String(user._id)) {
-      return NextResponse.redirect(withAttachment(file.secureUrl));
+      const streamed = await storedFileCloudinaryStreamResponse(file, request, { disposition: "attachment" });
+      if (!streamed.ok) return fail(streamed.message, streamed.status);
+      return streamed.response;
     }
 
     const accessRequest = await FileAccessRequest.findOne({
@@ -43,7 +44,9 @@ export async function GET(request, { params }) {
       return fail("You do not have access to this file yet.", 403);
     }
 
-    return NextResponse.redirect(withAttachment(file.secureUrl));
+    const streamed = await storedFileCloudinaryStreamResponse(file, request, { disposition: "attachment" });
+    if (!streamed.ok) return fail(streamed.message, streamed.status);
+    return streamed.response;
   } catch (caughtError) {
     return fail(caughtError?.message || "Failed to open file", 500);
   }

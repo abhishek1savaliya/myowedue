@@ -7,13 +7,15 @@ import { cookies } from "next/headers";
 import Folder from "@/models/Folder";
 import FolderPassword from "@/models/FolderPassword";
 import FolderAccessEvent from "@/models/FolderAccessEvent";
+import { signFolderFileDownloadAuth } from "@/lib/folder-share-download-auth";
 
 function folderAccessCookieName(token) {
   return `folder_access_${token}`;
 }
 
-function serializeFolder(folder, origin, token, canViewFiles) {
+function serializeFolder(folder, origin, token, canViewFiles, isOwner = false) {
   const permissionType = folder.permissionType || (folder.isPublic ? "public" : "private");
+  const useDownloadAuth = canViewFiles && permissionType === "password" && !isOwner;
   return {
     id: folder._id.toString(),
     name: folder.name,
@@ -25,10 +27,11 @@ function serializeFolder(folder, origin, token, canViewFiles) {
     files: canViewFiles
       ? (folder.fileIds || []).map((file) => {
           const storedFile = serializeStoredFile(file, origin);
+          const auth = useDownloadAuth ? `&auth=${encodeURIComponent(signFolderFileDownloadAuth(token, storedFile.id))}` : "";
           return {
             ...storedFile,
-            folderOpenUrl: `/api/folder-share/${token}/files/${storedFile.id}/download?disposition=inline`,
-            folderDownloadUrl: `/api/folder-share/${token}/files/${storedFile.id}/download?disposition=attachment`,
+            folderOpenUrl: `/api/folder-share/${token}/files/${storedFile.id}/download?disposition=inline${auth}`,
+            folderDownloadUrl: `/api/folder-share/${token}/files/${storedFile.id}/download?disposition=attachment${auth}`,
           };
         })
       : [],
@@ -65,7 +68,7 @@ export async function GET(request, { params }) {
     const canViewFiles = isOwner || permissionType === "public" || (permissionType === "password" && hasPasswordAccess);
 
     return ok({
-      folder: serializeFolder(folder, new URL(request.url).origin, token, canViewFiles),
+      folder: serializeFolder(folder, new URL(request.url).origin, token, canViewFiles, isOwner),
       access: {
         isOwner,
         canViewFiles,
@@ -95,7 +98,7 @@ export async function POST(request, { params }) {
 
     if (isOwner || permissionType === "public") {
       return ok({
-        folder: serializeFolder(folder, new URL(request.url).origin, token, true),
+        folder: serializeFolder(folder, new URL(request.url).origin, token, true, isOwner),
         access: { isOwner, canViewFiles: true, requiresPassword: false, isPrivate: false },
       });
     }
@@ -124,7 +127,7 @@ export async function POST(request, { params }) {
     if (!valid) return fail("Incorrect folder password.", 401);
 
     const response = ok({
-      folder: serializeFolder(folder, new URL(request.url).origin, token, true),
+      folder: serializeFolder(folder, new URL(request.url).origin, token, true, isOwner),
       access: { isOwner, canViewFiles: true, requiresPassword: false, isPrivate: false },
     });
     response.cookies.set(folderAccessCookieName(token), "1", {
