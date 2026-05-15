@@ -1,5 +1,6 @@
 import BackButton from "@/components/BackButton";
 import PublicFooter from "@/components/PublicFooter";
+import AmbientBackground from "@/components/shell/AmbientBackground";
 import { getCmsPageContent } from "@/lib/cmsPublic";
 
 export const metadata = {
@@ -12,8 +13,9 @@ export default async function PrivacyPolicyPage() {
   const sections = Array.isArray(content.sections) ? content.sections : [];
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <section className="mx-auto max-w-4xl px-6 py-12 md:py-16">
+    <main className="ui-v2-page relative min-h-screen bg-[#030712] text-zinc-100">
+      <AmbientBackground />
+      <section className="relative z-10 mx-auto max-w-4xl px-6 py-12 md:py-16">
         <BackButton href="/" label="Back to home" className="text-xs uppercase tracking-wide" />
         <h1 className="mt-4 text-4xl text-black">{content.heading || "Privacy Policy"}</h1>
         <p className="mt-3 text-sm text-zinc-600">Effective date: {content.effectiveDate || "April 13, 2026"}</p>

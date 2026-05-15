@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import StatCard from "@/components/StatCard";
@@ -8,72 +8,20 @@ import MiniBarChart from "@/components/MiniBarChart";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import DashboardCurrencyConverter from "@/components/DashboardCurrencyConverter";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 
 export default function DashboardPage() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [revalidating, setRevalidating] = useState(false);
-  const [error, setError] = useState("");
   const [selectedCurrency, setSelectedCurrency] = useState("AUD");
-  const hasLoadedOnceRef = useRef(false);
+  const cacheKey = `dashboard:${selectedCurrency}`;
 
-  const dashboardCurrency = data?.currency || "AUD";
+  const { data, loading, error, revalidating } = useCachedFetch(
+    cacheKey,
+    `/api/dashboard?currency=${selectedCurrency}`,
+    { deps: [selectedCurrency] }
+  );
+
+  const dashboardCurrency = data?.currency || selectedCurrency;
   const usdToSelectedRate = Number(data?.usdToSelectedRate || 1);
-
-  useEffect(() => {
-    let cancelled = false;
-    const controller = new AbortController();
-    const soft = hasLoadedOnceRef.current;
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    if (soft) {
-      setRevalidating(true);
-    } else {
-      setLoading(true);
-    }
-    setError("");
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/dashboard?currency=${selectedCurrency}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        const json = await res.json();
-        if (!res.ok) {
-          throw new Error(json?.message || "Failed to load dashboard");
-        }
-        if (cancelled) return;
-        setData(json);
-        hasLoadedOnceRef.current = true;
-      } catch (caughtError) {
-        if (caughtError?.name === "AbortError") return;
-        const message =
-          caughtError?.message === "Failed to fetch" || caughtError?.name === "TypeError"
-            ? "Dashboard request failed. Check your connection."
-            : caughtError?.message || "Failed to load dashboard";
-        if (cancelled) return;
-        if (soft) {
-          setError(message);
-        } else {
-          setError(message);
-          setData(null);
-        }
-      } finally {
-        clearTimeout(timeoutId);
-        if (!cancelled) {
-          setLoading(false);
-          setRevalidating(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, [selectedCurrency]);
 
   const dueSummary = useMemo(() => {
     if (!data?.pending?.length) return { count: 0, text: "No pending dues" };
@@ -97,8 +45,8 @@ export default function DashboardPage() {
   return (
     <div className={`space-y-6 ${revalidating ? "opacity-[0.92]" : ""} transition-opacity`}>
       <header>
-        <h1 className="text-3xl font-semibold tracking-tight text-black">Dashboard</h1>
-        <p className="mt-1 text-sm text-zinc-600">Overview of receivables, payables, trends and dues.</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Overview of receivables, payables, trends and dues.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <label htmlFor="dashboard-currency" className="text-sm font-medium text-zinc-700">
             Dashboard Currency

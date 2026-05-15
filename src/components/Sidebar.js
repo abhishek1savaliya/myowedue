@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useUserStore } from "@/stores/useUserStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
+import { useApiCacheStore } from "@/stores/useApiCacheStore";
 import { cn } from "@/lib/utils";
 
 const baseLinks = [
@@ -59,6 +60,7 @@ export default function Sidebar() {
     await fetch("/api/auth/logout", { method: "POST" });
     useUserStore.getState().clearUser();
     useNotificationStore.getState().disconnect();
+    useApiCacheStore.getState().invalidate();
     router.push("/login");
     router.refresh();
   }
@@ -72,7 +74,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sticky top-0 z-30 w-full border-b border-white/[0.08] bg-slate-950/80 px-4 py-3 backdrop-blur-xl md:h-screen md:w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
+    <aside className="sticky top-0 z-30 w-full border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/85 md:h-screen md:w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
       <div className="mb-4 flex items-start justify-between gap-3 md:mb-8">
         <div className="inline-flex min-w-0 items-start gap-2.5 p-1">
           <Link href="/dashboard" aria-label="Go to dashboard" className="rounded-xl">
@@ -88,11 +90,11 @@ export default function Sidebar() {
           <div className="min-w-0">
             <Link
               href="/dashboard"
-              className="truncate text-base font-semibold tracking-tight text-white sm:text-lg"
+              className="truncate text-base font-semibold tracking-tight text-foreground sm:text-lg"
             >
               OWE DUE
             </Link>
-            <motion.div className="mt-1 flex flex-wrap items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               {!authChecked ? (
                 <span className="inline-flex h-5 w-12 animate-pulse rounded-md bg-white/10" />
               ) : isPremium ? (
@@ -108,7 +110,7 @@ export default function Sidebar() {
                   Free
                 </span>
               )}
-            </motion.div>
+            </div>
           </div>
         </div>
         <Link
@@ -134,8 +136,8 @@ export default function Sidebar() {
               className={cn(
                 navLink,
                 active
-                  ? "border-amber-500/40 bg-amber-500/15 text-amber-100 shadow-[0_0_24px_rgba(245,158,11,0.12)]"
-                  : "border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:border-white/12 hover:bg-white/[0.06] hover:text-zinc-100"
+                  ? "border-amber-500/40 bg-amber-500/15 text-amber-900 shadow-[0_0_24px_rgba(245,158,11,0.12)] dark:text-amber-100"
+                  : "border-zinc-200/80 bg-white/60 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400 dark:hover:border-white/15 dark:hover:bg-white/8 dark:hover:text-zinc-100"
               )}
             >
               <Icon size={16} className={active ? "text-amber-300" : "text-zinc-500"} />

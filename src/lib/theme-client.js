@@ -59,3 +59,27 @@ export function resetAppearancePreference() {
     isPremium: false,
   });
 }
+
+/** Runs before paint — restores theme from localStorage (fixes flash + light mode). */
+export function getThemeBootstrapScript() {
+  return `
+(() => {
+  try {
+    const path = window.location.pathname || "/";
+    const isPublic =
+      path === "/" ||
+      path.startsWith("/contact-us") ||
+      path.startsWith("/privacy-policy") ||
+      path.startsWith("/login") ||
+      path.startsWith("/signup");
+    const key = isPublic ? "${THEME_KEYS.public}" : "${THEME_KEYS.auth}";
+    const scoped = window.localStorage.getItem(key);
+    const legacy = window.localStorage.getItem("${THEME_KEYS.legacy}");
+    const value = scoped || legacy;
+    if (value === "dark" || value === "light") {
+      document.documentElement.setAttribute("data-theme", value);
+    }
+  } catch {}
+})();
+  `.trim();
+}

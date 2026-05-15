@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
 import { useAppAlert } from "@/components/AppAlertProvider";
+import { useCachedParallel } from "@/hooks/useCachedParallel";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
 import { normalizeCurrency, convertFromUSD, formatCurrency, DEFAULT_FX } from "@/lib/currency";
 
 const initial = { name: "", email: "", phone: "" };
@@ -12,12 +15,20 @@ const initial = { name: "", email: "", phone: "" };
 export default function PeoplePage() {
   const { showAlert } = useAppAlert();
   const [form, setForm] = useState(initial);
-  const [people, setPeople] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: cached, loading, refresh, revalidating } = useCachedParallel(
+    [
+      { key: CACHE_KEYS.people, url: "/api/person" },
+      { key: CACHE_KEYS.exchangeRates, url: "/api/exchange-rates" },
+    ],
+    { deps: [] }
+  );
+
+  const people = useMemo(() => cached[CACHE_KEYS.people]?.people || [], [cached]);
+  const rates = useMemo(() => cached[CACHE_KEYS.exchangeRates]?.rates || DEFAULT_FX, [cached]);
+
   const [editingPersonId, setEditingPersonId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [invoiceCurrencies, setInvoiceCurrencies] = useState({});
-  const [rates, setRates] = useState(null);
   const [invoiceModal, setInvoiceModal] = useState(null); // { personId, personName, startDate, endDate }
   const invoiceOptions = ["AUD", "INR", "USD", "EUR", "GBP"];
   const hasOverlayOpen = Boolean(deleteTarget || invoiceModal);
@@ -27,7 +38,12 @@ export default function PeoplePage() {
   }
 
   function getRates() {
-    return rates || DEFAULT_FX;
+    return rates;
+  }
+
+  function invalidateAfterMutation() {
+    refreshAppCache(["people", "transactions", "dashboard", "bin"]);
+    refresh();
   }
 
   function convertAmount(amount, fromCurrency, toCurrency) {
@@ -54,26 +70,6 @@ export default function PeoplePage() {
     return { currency, pendingCredit, pendingDebit, dueAmount, dueDirection };
   }
 
-  async function load(forceFresh = false) {
-    setLoading(true);
-    const peopleUrl = forceFresh ? `/api/person?_r=${Date.now()}` : "/api/person";
-    const [peopleRes, ratesRes] = await Promise.all([
-      fetch(peopleUrl, { cache: "no-store" }),
-      fetch("/api/exchange-rates", { cache: "no-store" }),
-    ]);
-
-    const peopleData = await peopleRes.json().catch(() => ({}));
-    const ratesData = await ratesRes.json().catch(() => ({}));
-
-    if (peopleRes.ok) setPeople(peopleData.people || []);
-    if (ratesRes.ok) setRates(ratesData.rates || DEFAULT_FX);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load(true);
-  }, []);
-
   useEffect(() => {
     if (!hasOverlayOpen) return undefined;
 
@@ -97,7 +93,7 @@ export default function PeoplePage() {
     });
     if (res.ok) {
       setForm(initial);
-      load(true);
+      invalidateAfterMutation();
     }
   }
 
@@ -105,9 +101,8 @@ export default function PeoplePage() {
     const res = await fetch(`/api/person/${id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      setPeople((prev) => prev.filter((person) => person._id !== id));
       setDeleteTarget(null);
-      await load(true);
+      invalidateAfterMutation();
     } else {
       showAlert(data.message || "Failed to delete person", { severity: "error" });
     }
@@ -126,7 +121,7 @@ export default function PeoplePage() {
     if (res.ok) {
       setEditingPersonId("");
       setForm(initial);
-      load(true);
+      invalidateAfterMutation();
     }
   }
 

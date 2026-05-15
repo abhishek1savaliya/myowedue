@@ -1,50 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { toJpeg } from "html-to-image";
 import { useAppAlert } from "@/components/AppAlertProvider";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatCurrency } from "@/lib/currency";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { useUserStore } from "@/stores/useUserStore";
 
 export default function ReportsPage() {
   const { showAlert } = useAppAlert();
   const cardRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [snapshot, setSnapshot] = useState(null);
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadSnapshot() {
-      setLoading(true);
-      try {
-        const [dashboardRes, meRes] = await Promise.all([
-          fetch("/api/dashboard?currency=AUD", { cache: "no-store" }),
-          fetch("/api/auth/me", { cache: "no-store" }),
-        ]);
-        const [dashboardData, meData] = await Promise.all([
-          dashboardRes.json().catch(() => ({})),
-          meRes.json().catch(() => ({})),
-        ]);
-        if (!ignore && dashboardRes.ok) {
-          setSnapshot(dashboardData);
-        }
-        if (!ignore && meRes.ok) {
-          setUser(meData.user || null);
-        }
-      } catch (error) {
-        console.error("Failed to load report snapshot:", error);
-      } finally {
-        if (!ignore) setLoading(false);
-      }
-    }
-
-    loadSnapshot();
-    return () => {
-      ignore = true;
-    };
-  }, []);
+  const user = useUserStore((s) => s.user);
+  const { data: snapshot, loading } = useCachedFetch(
+    CACHE_KEYS.reportsSnapshot("AUD"),
+    "/api/dashboard?currency=AUD"
+  );
 
   async function downloadJpg() {
     if (!cardRef.current) return;

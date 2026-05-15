@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { CreditCard, Gem, ReceiptText, ShieldCheck, Ticket, X } from "lucide-react";
 import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
+import { useCachedParallel } from "@/hooks/useCachedParallel";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
 import { applyAppearancePreference } from "@/lib/theme-client";
+import { useUserStore } from "@/stores/useUserStore";
 
 const PRO_BENEFITS = [
   { feature: "Records", free: "500 people + 700 transactions", pro: "Unlimited people and transactions" },
@@ -22,16 +26,26 @@ function formatDateTime(value) {
 }
 
 export default function MySubscriptionPage() {
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState(null);
+  const fetchUser = useUserStore((s) => s.fetchUser);
+  const { data: cached, loading, refresh } = useCachedParallel(
+    [
+      { key: CACHE_KEYS.subscriptionStatus, url: "/api/subscription/status" },
+      { key: CACHE_KEYS.subscriptionHistory, url: "/api/subscription/history" },
+    ],
+    { deps: [] }
+  );
+  const status = cached[CACHE_KEYS.subscriptionStatus] || null;
+  const paymentHistory = useMemo(
+    () => (Array.isArray(cached[CACHE_KEYS.subscriptionHistory]?.history) ? cached[CACHE_KEYS.subscriptionHistory].history : []),
+    [cached]
+  );
+  const paymentLoading = loading;
   const [voucherCode, setVoucherCode] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successPayload, setSuccessPayload] = useState(null);
-  const [paymentHistory, setPaymentHistory] = useState([]);
-  const [paymentLoading, setPaymentLoading] = useState(true);
   const [paymentMessage, setPaymentMessage] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("pro_monthly");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -51,28 +65,11 @@ export default function MySubscriptionPage() {
     return end.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
   }, [selectedPlan, status]);
 
-  async function loadStatus() {
-    setLoading(true);
-    const res = await fetch("/api/subscription/status", { cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) setStatus(data);
-    setLoading(false);
+  function invalidateAfterMutation() {
+    refreshAppCache(["subscription", "user", "dashboard"]);
+    refresh();
+    void fetchUser({ force: true });
   }
-
-  async function loadPaymentHistory() {
-    setPaymentLoading(true);
-    const res = await fetch("/api/subscription/history", { cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      setPaymentHistory(Array.isArray(data.history) ? data.history : []);
-    }
-    setPaymentLoading(false);
-  }
-
-  useEffect(() => {
-    loadStatus();
-    loadPaymentHistory();
-  }, []);
 
   async function handlePayNow() {
     setSaving(true);
@@ -106,8 +103,7 @@ export default function MySubscriptionPage() {
     setShowSuccessModal(true);
     setVoucherCode("");
     setSelectedPlan("pro_monthly");
-    await loadStatus();
-    await loadPaymentHistory();
+    invalidateAfterMutation();
   }
 
   async function cancelSubscription() {
@@ -118,8 +114,7 @@ export default function MySubscriptionPage() {
     if (res.ok) {
       setPaymentMessage(data.message || "Subscription cancelled.");
       applyAppearancePreference({ fontPreset: "manrope", fontSizePreset: "size-4", isPremium: false });
-      await loadStatus();
-      await loadPaymentHistory();
+      invalidateAfterMutation();
       return;
     }
 

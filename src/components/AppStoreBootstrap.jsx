@@ -10,7 +10,7 @@ export default function AppStoreBootstrap() {
     let cancelled = false;
 
     (async () => {
-      const user = await useUserStore.getState().fetchUser();
+      const user = await useUserStore.getState().fetchUser({ force: false });
       if (cancelled) return;
       if (user?.id) {
         useNotificationStore.getState().connect(user.id);

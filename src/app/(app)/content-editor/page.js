@@ -5,6 +5,9 @@ import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import CmsEditor from "@/components/CmsEditor";
 import { useAppAlert } from "@/components/AppAlertProvider";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
 
 const PAGE_LABELS = {
   home: "Home Page",
@@ -29,7 +32,6 @@ export default function ContentEditorPage() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [content, setContent] = useState({});
   const [detail, setDetail] = useState("");
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -37,66 +39,54 @@ export default function ContentEditorPage() {
   const canReview = role === "super_admin" || role === "manager";
   const canManagePermissions = role === "super_admin" || role === "manager";
 
-  async function loadEditor(pageKey = selectedPage) {
-    setLoading(true);
+  const editorUrl = `/api/content/editor?page=${encodeURIComponent(selectedPage)}`;
+  const {
+    data: editorData,
+    loading,
+    error: editorFetchError,
+    refresh: refreshEditor,
+  } = useCachedFetch(CACHE_KEYS.contentEditor(selectedPage), editorUrl, { deps: [selectedPage] });
+
+  const { data: permData, refresh: refreshPerms } = useCachedFetch(
+    CACHE_KEYS.contentPermissions,
+    "/api/content/permissions",
+    { enabled: canManagePermissions, deps: [canManagePermissions] }
+  );
+
+  const { data: auditData, refresh: refreshAudit } = useCachedFetch(
+    CACHE_KEYS.contentAudit,
+    "/api/content/audit?limit=50",
+    { enabled: role === "super_admin", deps: [role] }
+  );
+
+  function invalidateAfterMutation() {
+    refreshAppCache(["content"]);
+    refreshEditor();
+    if (canManagePermissions) refreshPerms();
+    if (role === "super_admin") refreshAudit();
+  }
+
+  useEffect(() => {
+    if (!editorData) return;
+    setRole(editorData.role || "");
+    setPages(editorData.pages || []);
+    setCurrentPage(editorData.currentPage || null);
+    setPendingSubmissions(editorData.pendingSubmissions || []);
+    setContent(editorData.currentPage?.content || {});
     setError("");
-
-    try {
-      const res = await fetch(`/api/content/editor?page=${encodeURIComponent(pageKey)}`, {
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(data?.message || "Failed to load content editor");
-        return;
-      }
-
-      setRole(data.role || "");
-      setPages(data.pages || []);
-      setCurrentPage(data.currentPage || null);
-      setPendingSubmissions(data.pendingSubmissions || []);
-      setContent(data.currentPage?.content || {});
-    } catch (caughtError) {
-      setError(caughtError?.message || "Failed to load content editor");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadPermissions() {
-    try {
-      const res = await fetch("/api/content/permissions", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setPermissionUsers(data.users || data.teamMembers || []);
-      }
-    } catch {
-      // ignore non-critical load failures
-    }
-  }
-
-  async function loadAudit() {
-    try {
-      const res = await fetch("/api/content/audit?limit=50", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setAuditLogs(data.logs || []);
-      }
-    } catch {
-      // ignore non-critical load failures
-    }
-  }
+  }, [editorData]);
 
   useEffect(() => {
-    loadEditor("home");
-  }, []);
+    if (permData) setPermissionUsers(permData.users || permData.teamMembers || []);
+  }, [permData]);
 
   useEffect(() => {
-    if (!role) return;
-    if (canManagePermissions) loadPermissions();
-    if (role === "super_admin") loadAudit();
-  }, [role]);
+    if (auditData) setAuditLogs(auditData.logs || []);
+  }, [auditData]);
+
+  useEffect(() => {
+    if (editorFetchError) setError(editorFetchError);
+  }, [editorFetchError]);
 
   const pageStats = useMemo(() => {
     return pages.reduce((acc, item) => {
@@ -129,9 +119,7 @@ export default function ContentEditorPage() {
         setNotice("Changes submitted for manager approval.");
       }
 
-      await loadEditor(selectedPage);
-      if (canManagePermissions) await loadPermissions();
-      if (role === "super_admin") await loadAudit();
+      invalidateAfterMutation();
     } catch (caughtError) {
       setError(caughtError?.message || "Failed to save content");
     } finally {
@@ -139,9 +127,8 @@ export default function ContentEditorPage() {
     }
   }
 
-  async function switchPage(pageKey) {
+  function switchPage(pageKey) {
     setSelectedPage(pageKey);
-    await loadEditor(pageKey);
   }
 
   async function reviewSubmission(submissionId, decision) {
@@ -168,8 +155,7 @@ export default function ContentEditorPage() {
         showAlert(data?.message || "Failed to review submission", { severity: "error" });
         return;
       }
-      await loadEditor(selectedPage);
-      if (role === "super_admin") await loadAudit();
+      invalidateAfterMutation();
     } catch {
       showAlert("Failed to review submission", { severity: "error" });
     }
@@ -202,7 +188,8 @@ export default function ContentEditorPage() {
       );
 
       if (role === "super_admin") {
-        await loadAudit();
+        refreshAppCache(["content"]);
+        refreshAudit();
       }
     } catch {
       showAlert("Failed to update permission", { severity: "error" });

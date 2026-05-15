@@ -28,6 +28,9 @@ import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
 import PdfViewer from "@/components/PdfViewer";
 import ProgressBar from "@/components/ProgressBar";
+import { useCachedParallel } from "@/hooks/useCachedParallel";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
 
 function formatBytes(bytes) {
   const value = Number(bytes || 0);
@@ -195,12 +198,20 @@ function uploadToCloudinary(uploadUrl, formData, onProgress) {
 }
 
 export default function FilesPageClient() {
+  const filesCacheKey = CACHE_KEYS.filesList(FILE_PAGE_SIZE);
+  const { data: cached, loading, refresh } = useCachedParallel(
+    [
+      { key: filesCacheKey, url: `/api/files?limit=${FILE_PAGE_SIZE}` },
+      { key: CACHE_KEYS.folders, url: "/api/folders" },
+    ],
+    { deps: [] }
+  );
+
   // File states
   const [files, setFiles] = useState([]);
   const [usageBytes, setUsageBytes] = useState(0);
   const [quotaBytes, setQuotaBytes] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [loadingMoreFiles, setLoadingMoreFiles] = useState(false);
   const [filesNextCursor, setFilesNextCursor] = useState("");
   const [filesHasMore, setFilesHasMore] = useState(false);
@@ -208,7 +219,7 @@ export default function FilesPageClient() {
   // Folder states
   const [folders, setFolders] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState("all");
-  const [loadingFolders, setLoadingFolders] = useState(false);
+  const loadingFolders = loading;
   const [folderMenuOpenId, setFolderMenuOpenId] = useState("");
   const [editFolderModal, setEditFolderModal] = useState({ open: false, folder: null });
   const [newFolderModal, setNewFolderModal] = useState(false);
@@ -366,37 +377,37 @@ export default function FilesPageClient() {
     });
   }
 
-  // Load functions
-  async function loadFiles() {
-    setLoading(true);
-    const response = await fetch(`/api/files?limit=${FILE_PAGE_SIZE}`, { cache: "no-store" });
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      setMessage(data.message || "Failed to load files.");
-      setLoading(false);
-      return;
-    }
-
-    setFiles(data.files || []);
-    setFilesNextCursor(data.filesNextCursor || "");
-    setFilesHasMore(Boolean(data.filesHasMore));
-    setUsageBytes(Number(data.usageBytes || 0));
-    setQuotaBytes(Number(data.quotaBytes || 0));
-    setIsPremium(Boolean(data.isPremium));
-    setLoading(false);
+  function applyFilesPayload(payload) {
+    if (!payload) return;
+    setFiles(payload.files || []);
+    setFilesNextCursor(payload.filesNextCursor || "");
+    setFilesHasMore(Boolean(payload.filesHasMore));
+    setUsageBytes(Number(payload.usageBytes || 0));
+    setQuotaBytes(Number(payload.quotaBytes || 0));
+    setIsPremium(Boolean(payload.isPremium));
   }
 
-  async function loadFolders() {
-    setLoadingFolders(true);
-    const response = await fetch("/api/folders", { cache: "no-store" });
-    const data = await response.json().catch(() => ({}));
-
-    if (response.ok) {
-      setFolders(data.folders || []);
-    }
-    setLoadingFolders(false);
+  function invalidateFilesCache() {
+    refreshAppCache(["files"]);
+    refresh();
   }
+
+  function loadFiles() {
+    invalidateFilesCache();
+  }
+
+  function loadFolders() {
+    invalidateFilesCache();
+  }
+
+  useEffect(() => {
+    applyFilesPayload(cached[filesCacheKey]);
+  }, [cached, filesCacheKey]);
+
+  useEffect(() => {
+    const payload = cached[CACHE_KEYS.folders];
+    if (payload) setFolders(payload.folders || []);
+  }, [cached]);
 
   const loadMoreFiles = useCallback(async () => {
     if (loadingMoreFiles || !filesHasMore || !filesNextCursor) return;
@@ -424,12 +435,6 @@ export default function FilesPageClient() {
     setFilesNextCursor(data.filesNextCursor || "");
     setFilesHasMore(Boolean(data.filesHasMore));
   }, [filesHasMore, filesNextCursor, loadingMoreFiles]);
-
-  // Lifecycle
-  useEffect(() => {
-    loadFiles();
-    loadFolders();
-  }, []);
 
   useEffect(() => {
     const savedView = window.localStorage.getItem(FILE_VIEW_STORAGE_KEY);

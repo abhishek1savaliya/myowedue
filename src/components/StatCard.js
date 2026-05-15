@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { uiCard } from "@/lib/ui-classes";
+import { cn } from "@/lib/utils";
 
 function useAnimatedNumber(target, duration = 900) {
   const [value, setValue] = useState(0);
@@ -48,10 +50,12 @@ export default function StatCard({
   const displayValue = hasAnimatedValue && typeof formatValue === "function" ? formatValue(animatedValue) : value;
 
   return (
-    <div className={`rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition duration-500 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_45px_rgba(0,0,0,0.08)] ${className}`}>
-      <p className={`text-xs uppercase tracking-[0.2em] text-zinc-500 ${titleClassName}`}>{title}</p>
-      <h3 className={`mt-3 text-3xl font-semibold text-black transition-colors duration-500 ${valueClassName}`}>{displayValue}</h3>
-      {subtitle ? <p className={`mt-2 text-sm text-zinc-600 ${subtitleClassName}`}>{subtitle}</p> : null}
+    <div className={cn(uiCard, "hover:-translate-y-0.5", className)}>
+      <p className={cn("text-xs uppercase tracking-[0.2em] text-zinc-500", titleClassName)}>{title}</p>
+      <h3 className={cn("mt-3 text-3xl font-semibold tabular-nums text-foreground transition-colors duration-500", valueClassName)}>
+        {displayValue}
+      </h3>
+      {subtitle ? <p className={cn("mt-2 text-sm text-zinc-400", subtitleClassName)}>{subtitle}</p> : null}
     </div>
   );
 }

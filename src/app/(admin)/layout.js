@@ -103,19 +103,19 @@ export default function AdminLayout({ children }) {
   return (
     <div className="flex min-h-screen bg-slate-950">
       {/* Sidebar */}
-      <aside className="relative flex w-72 flex-col border-r border-amber-100 bg-white/95 shadow-[0_8px_32px_rgba(120,53,15,0.08)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(251,191,36,0.12),transparent_32%),radial-gradient(circle_at_90%_96%,rgba(16,185,129,0.1),transparent_38%)]" />
+      <aside className="relative flex w-72 flex-col border-r border-white/[0.08] bg-slate-950/90 shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(251,191,36,0.1),transparent_32%),radial-gradient(circle_at_90%_96%,rgba(16,185,129,0.08),transparent_38%)]" />
         {/* Logo */}
-        <div className="relative flex h-16 items-center gap-2 border-b border-amber-100 px-5">
-          <span className="text-xl font-bold text-amber-600">✦</span>
-          <span className="font-semibold tracking-wide text-zinc-900">MyOweDue Admin</span>
+        <div className="relative flex h-16 items-center gap-2 border-b border-white/[0.08] px-5">
+          <span className="text-xl font-bold text-amber-400">✦</span>
+          <span className="font-semibold tracking-wide text-white">MyOweDue Admin</span>
         </div>
 
         {/* User info card */}
         {admin && (
-          <div className="relative mx-3 mt-4 space-y-1 rounded-2xl border border-amber-100/90 bg-[linear-gradient(180deg,#fffdf8_0%,#ffffff_100%)] p-3 shadow-sm shadow-amber-900/5 backdrop-blur-sm">
+          <div className="relative mx-3 mt-4 space-y-1 rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3 backdrop-blur-sm">
             <div className="flex items-center justify-between">
-              <p className="truncate text-sm font-semibold text-zinc-900">{admin.name}</p>
+              <p className="truncate text-sm font-semibold text-white">{admin.name}</p>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
                 {badge.label}
               </span>
@@ -136,7 +136,7 @@ export default function AdminLayout({ children }) {
               className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
                 pathname.startsWith(item.href)
                   ? badge.active
-                  : "border-transparent text-zinc-600 hover:border-amber-200 hover:bg-amber-50/70 hover:text-zinc-900"
+                  : "border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/5 hover:text-zinc-100"
               }`}
             >
               <span>{item.icon}</span>
@@ -146,11 +146,11 @@ export default function AdminLayout({ children }) {
         </nav>
 
         {/* Logout */}
-        <div className="relative border-t border-amber-100 p-3">
+        <div className="relative border-t border-white/[0.08] p-3">
           <button
             onClick={handleLogout}
             disabled={loggingOut}
-            className="flex w-full items-center gap-2 rounded-xl border border-amber-200/90 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:border-rose-400/50 hover:bg-rose-50 hover:text-rose-700"
+            className="flex w-full items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-left text-sm font-medium text-zinc-300 transition-colors hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-200"
           >
             <span>x</span>
             {loggingOut ? "Logging out..." : "Sign out"}

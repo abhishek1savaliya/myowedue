@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { BellRing, Gem, Link2, Lock, Pencil, Repeat, Trash2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import ModalPortal from "@/components/ModalPortal";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
+import { useUserStore } from "@/stores/useUserStore";
 import { formatDateOnly } from "@/lib/datetime";
 import { recurringLabel } from "@/lib/recurring";
 
@@ -21,56 +25,47 @@ const txInitial = {
 };
 
 export default function TransactionsPage() {
-  const [people, setPeople] = useState([]);
-  const [transactions, setTransactions] = useState([]);
   const [form, setForm] = useState(txInitial);
   const [query, setQuery] = useState({ q: "", view: "", start: "", end: "" });
   const [editingId, setEditingId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [exportModal, setExportModal] = useState(null);
-  const [user, setUser] = useState(null);
   const [feedback, setFeedback] = useState("");
   const [paymentLinks, setPaymentLinks] = useState({});
   const [linkVisibility, setLinkVisibility] = useState({});
   const [origin, setOrigin] = useState("");
 
-  async function loadPeople() {
-    const res = await fetch("/api/person", { cache: "no-store" });
-    const data = await res.json();
-    if (res.ok) setPeople(data.people || []);
-  }
+  const user = useUserStore((s) => s.user);
 
-  async function loadUser() {
-    const res = await fetch("/api/auth/me", { cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) setUser(data.user || null);
-  }
-
-  async function loadTransactions(forceFresh = false, overrideQuery) {
-    const q = overrideQuery ?? query;
+  const txCacheKey = useMemo(() => CACHE_KEYS.transactions(query), [query]);
+  const txUrl = useMemo(() => {
     const params = new URLSearchParams();
-    Object.entries(q).forEach(([k, v]) => {
+    Object.entries(query).forEach(([k, v]) => {
       if (v) params.set(k, v);
     });
-    if (forceFresh) {
-      params.set("_r", String(Date.now()));
-    }
-    const res = await fetch(`/api/transaction?${params.toString()}`, { cache: "no-store" });
-    const data = await res.json();
-    if (res.ok) setTransactions(data.transactions || []);
-  }
+    return `/api/transaction?${params.toString()}`;
+  }, [query]);
+
+  const { data: peoplePayload } = useCachedFetch(CACHE_KEYS.people, "/api/person");
+  const {
+    data: txPayload,
+    loading: txLoading,
+    refresh: refreshTransactions,
+  } = useCachedFetch(txCacheKey, txUrl, { deps: [txCacheKey, txUrl] });
+
+  const people = peoplePayload?.people || [];
+  const transactions = txPayload?.transactions || [];
 
   useEffect(() => {
-    loadPeople();
-    loadUser();
     if (typeof window !== "undefined") {
       setOrigin(window.location.origin);
     }
   }, []);
 
-  useEffect(() => {
-    loadTransactions(true, query);
-  }, [query]);
+  function invalidateAfterMutation() {
+    refreshAppCache(["transactions", "people", "dashboard", "bin"]);
+    refreshTransactions();
+  }
 
   async function saveTransaction(e) {
     e.preventDefault();
@@ -93,7 +88,7 @@ export default function TransactionsPage() {
         setForm(txInitial);
         setEditingId("");
         setFeedback(editingId ? "Transaction updated." : "Transaction created.");
-        await loadTransactions(true);
+        invalidateAfterMutation();
       } else {
         setFeedback(data.message || "Failed to save transaction.");
       }
@@ -104,7 +99,7 @@ export default function TransactionsPage() {
 
   async function removeTx(id) {
     const res = await fetch(`/api/transaction/${id}`, { method: "DELETE" });
-    if (res.ok) loadTransactions(true);
+    if (res.ok) invalidateAfterMutation();
   }
 
   function openExportModal() {
@@ -336,7 +331,7 @@ export default function TransactionsPage() {
         </select>
         <input type="date" value={query.start} onChange={(e) => setQuery((v) => ({ ...v, start: e.target.value }))} className="rounded-xl border border-zinc-300 px-3 py-2" />
         <input type="date" value={query.end} onChange={(e) => setQuery((v) => ({ ...v, end: e.target.value }))} className="rounded-xl border border-zinc-300 px-3 py-2" />
-        <button type="button" onClick={() => loadTransactions(true)} className="rounded-xl border border-black px-3 py-2 text-sm md:col-span-2 xl:col-span-1">Apply</button>
+        <button type="button" onClick={() => refreshTransactions()} className="rounded-xl border border-black px-3 py-2 text-sm md:col-span-2 xl:col-span-1">Apply</button>
       </section>
 
       <div className="flex items-center justify-between gap-3">

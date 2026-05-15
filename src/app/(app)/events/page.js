@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, FileDown, Loader2, Plus, Upload, Trash2, MapPin, Clock, X } from "lucide-react";
 import moment from "moment-timezone";
 import EmptyState from "@/components/EmptyState";
 import ModalPortal from "@/components/ModalPortal";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { buildEventsPdf, downloadPdfBytes } from "@/lib/events-pdf";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
 
 const DEFAULT_TIMEZONE = "Australia/Melbourne";
 const TIMEZONE_OPTIONS = [
@@ -47,8 +50,8 @@ const emptyForm = {
 };
 
 export default function EventsPage() {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, refresh } = useCachedFetch(CACHE_KEYS.events, "/api/events");
+  const events = useMemo(() => data?.events || [], [data]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -60,21 +63,10 @@ export default function EventsPage() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const fileRef = useRef(null);
 
-  async function loadEvents() {
-    try {
-      const res = await fetch("/api/events", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) setEvents(data.events || []);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
+  function invalidateAfterMutation() {
+    refreshAppCache(["events", "bin", "dashboard"]);
+    refresh();
   }
-
-  useEffect(() => {
-    loadEvents();
-  }, []);
 
   useEffect(() => {
     const valid = new Set(events.map((e) => String(e._id)));
@@ -157,7 +149,7 @@ export default function EventsPage() {
     setConfirmDelete(null);
     try {
       await fetch(`/api/events/${eventId}`, { method: "DELETE" });
-      setEvents((prev) => prev.filter((e) => e._id !== eventId));
+      invalidateAfterMutation();
     } catch {
       /* ignore */
     }
@@ -177,7 +169,7 @@ export default function EventsPage() {
         setError(data.message || "Import failed");
         return;
       }
-      await loadEvents();
+      invalidateAfterMutation();
     } catch {
       setError("Import failed");
     } finally {

@@ -1,6 +1,9 @@
-export default function EmptyState({ text }) {
+import { uiCardMuted } from "@/lib/ui-classes";
+import { cn } from "@/lib/utils";
+
+export default function EmptyState({ text, className = "" }) {
   return (
-    <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-600">
+    <div className={cn(uiCardMuted, "border-dashed p-8 text-center text-sm text-zinc-400", className)}>
       {text}
     </div>
   );

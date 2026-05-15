@@ -15,6 +15,7 @@ import AppStoreBootstrap from "@/components/AppStoreBootstrap";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { AppAlertProvider } from "@/components/AppAlertProvider";
 import { getUiPreferenceBootstrapScript } from "@/lib/cookie-preferences";
+import { getThemeBootstrapScript } from "@/lib/theme-client";
 import { DEFAULT_FONT_PRESET, DEFAULT_FONT_SIZE_PRESET, getFontPreset, getFontSizePreset } from "@/lib/appearance";
 
 const display = Cormorant_Garamond({
@@ -136,6 +137,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   const uiPreferenceBootstrapScript = getUiPreferenceBootstrapScript();
+  const themeBootstrapScript = getThemeBootstrapScript();
   const defaultFont = getFontPreset(DEFAULT_FONT_PRESET);
   const defaultSize = getFontSizePreset(DEFAULT_FONT_SIZE_PRESET);
   const defaultMobileScale =
@@ -146,7 +148,7 @@ export default function RootLayout({ children }) {
       lang="en"
       suppressHydrationWarning
       className={`${display.variable} ${body.variable} ${landing.variable} ${googleInter.variable} ${googleRoboto.variable} ${googlePoppins.variable} ${googleMontserrat.variable} ${googlePlayfair.variable} h-full antialiased`}
-      data-theme="dark"
+      data-theme="light"
       data-ui-v2="true"
       data-premium-ui="true"
       data-font-preset={DEFAULT_FONT_PRESET}
@@ -162,6 +164,10 @@ export default function RootLayout({ children }) {
       }}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
+        <script
+          id="myowedue-theme-boot"
+          dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+        />
         <script
           id="myowedue-ui-pref-boot"
           dangerouslySetInnerHTML={{ __html: uiPreferenceBootstrapScript }}

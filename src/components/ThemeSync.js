@@ -13,38 +13,58 @@ import {
   persistThemePreference,
 } from "@/lib/cookie-preferences";
 import { useUserStore } from "@/stores/useUserStore";
+import { useThemeStore } from "@/stores/useThemeStore";
+
+function isPublicPath(pathname) {
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/contact-us") ||
+    pathname.startsWith("/privacy-policy") ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup")
+  );
+}
 
 export default function ThemeSync() {
   const pathname = usePathname();
   const user = useUserStore((s) => s.user);
   const fetchUser = useUserStore((s) => s.fetchUser);
+  const applyThemeForPath = useThemeStore((s) => s.applyThemeForPath);
+  const getTheme = useThemeStore((s) => s.getTheme);
 
   useEffect(() => {
     let cancelled = false;
-    const isPublicPath =
-      pathname === "/" ||
-      pathname.startsWith("/contact-us") ||
-      pathname.startsWith("/privacy-policy") ||
-      pathname.startsWith("/login") ||
-      pathname.startsWith("/signup");
+    const publicPath = isPublicPath(pathname);
+    const scope = publicPath ? "public" : "auth";
 
     async function syncFromProfile() {
       const storedPublic = getStoredThemePreference("public");
+      const storedAuth = getStoredThemePreference("auth");
+      const cachedTheme = getTheme(scope);
 
-      if (storedPublic !== null && isPublicPath) {
-        applyThemePreference(storedPublic, "public");
+      if (publicPath && storedPublic !== null) {
+        applyThemeForPath(pathname, storedPublic);
         resetAppearancePreference();
+        return;
+      }
+
+      if (!publicPath && storedAuth !== null) {
+        applyThemeForPath(pathname, storedAuth);
+      } else if (cachedTheme) {
+        applyThemePreference(cachedTheme === "dark", scope);
       }
 
       try {
-        const profileUser = user ?? (await fetchUser());
-        if (!cancelled && profileUser) {
+        const profileUser = user ?? (await fetchUser({ force: false }));
+        if (cancelled) return;
+
+        if (profileUser && !publicPath) {
           const isDarkMode = Boolean(profileUser.darkMode);
           const isPremium = Boolean(profileUser.isPremium);
           const fontPreset = profileUser.fontPreset;
           const fontSizePreset = profileUser.fontSizePreset;
 
-          applyThemePreference(isDarkMode, "auth");
+          applyThemeForPath(pathname, isDarkMode);
           applyAppearancePreference({
             fontPreset,
             fontSizePreset,
@@ -55,16 +75,16 @@ export default function ThemeSync() {
           return;
         }
       } catch {
-        // Ignore and keep fallback preference.
+        /* keep stored theme */
       }
 
-      if (!cancelled && storedPublic !== null && isPublicPath) {
-        applyThemePreference(storedPublic, "public");
+      if (!cancelled && publicPath && storedPublic !== null) {
+        applyThemeForPath(pathname, storedPublic);
         resetAppearancePreference();
         return;
       }
 
-      if (!cancelled) {
+      if (!cancelled && publicPath) {
         resetAppearancePreference();
       }
     }
@@ -74,7 +94,7 @@ export default function ThemeSync() {
     return () => {
       cancelled = true;
     };
-  }, [pathname, user, fetchUser]);
+  }, [pathname, user, fetchUser, applyThemeForPath, getTheme]);
 
   return null;
 }

@@ -1,50 +1,48 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
+import { useCachedParallel } from "@/hooks/useCachedParallel";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
+import { useUserStore } from "@/stores/useUserStore";
 
 export default function BinPage() {
-  const [personBin, setPersonBin] = useState([]);
-  const [transactionBin, setTransactionBin] = useState([]);
-  const [eventBin, setEventBin] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isPremium, setIsPremium] = useState(false);
+  const user = useUserStore((s) => s.user);
+  const isPremium = Boolean(user?.isPremium);
 
-  async function load() {
-    setLoading(true);
-    const [pRes, tRes, eRes, meRes] = await Promise.all([
-      fetch("/api/bin/person", { cache: "no-store" }),
-      fetch("/api/bin/transaction", { cache: "no-store" }),
-      fetch("/api/bin/event", { cache: "no-store" }),
-      fetch("/api/auth/me", { cache: "no-store" }),
-    ]);
+  const { data: cached, loading, refresh } = useCachedParallel(
+    [
+      { key: CACHE_KEYS.binPerson, url: "/api/bin/person" },
+      { key: CACHE_KEYS.binTransaction, url: "/api/bin/transaction" },
+      { key: CACHE_KEYS.binEvent, url: "/api/bin/event" },
+    ],
+    { deps: [] }
+  );
 
-    const [pData, tData, eData, meData] = await Promise.all([pRes.json(), tRes.json(), eRes.json(), meRes.json()]);
-    if (pRes.ok) setPersonBin(pData.people || []);
-    if (tRes.ok) setTransactionBin(tData.transactions || []);
-    if (eRes.ok) setEventBin(eData.events || []);
-    if (meRes.ok) setIsPremium(Boolean(meData?.user?.isPremium));
-    setLoading(false);
+  const personBin = useMemo(() => cached[CACHE_KEYS.binPerson]?.people || [], [cached]);
+  const transactionBin = useMemo(() => cached[CACHE_KEYS.binTransaction]?.transactions || [], [cached]);
+  const eventBin = useMemo(() => cached[CACHE_KEYS.binEvent]?.events || [], [cached]);
+
+  function invalidateAfterRestore() {
+    refreshAppCache(["people", "transactions", "events", "bin", "dashboard"]);
+    refresh();
   }
-
-  useEffect(() => {
-    load();
-  }, []);
 
   async function restorePerson(id) {
     const res = await fetch(`/api/bin/person/${id}/restore`, { method: "POST" });
-    if (res.ok) load();
+    if (res.ok) invalidateAfterRestore();
   }
 
   async function restoreTransaction(id) {
     const res = await fetch(`/api/bin/transaction/${id}/restore`, { method: "POST" });
-    if (res.ok) load();
+    if (res.ok) invalidateAfterRestore();
   }
 
   async function restoreEvent(id) {
     const res = await fetch(`/api/bin/event/${id}/restore`, { method: "POST" });
-    if (res.ok) load();
+    if (res.ok) invalidateAfterRestore();
   }
 
   return (

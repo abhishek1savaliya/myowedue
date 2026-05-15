@@ -1,70 +1,60 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { io } from "socket.io-client";
 import Loader from "@/components/Loader";
 import EmptyState from "@/components/EmptyState";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
+import { useUserStore } from "@/stores/useUserStore";
 
 export default function NotificationsPage() {
-  const [loading, setLoading] = useState(true);
-  const [notifications, setNotifications] = useState([]);
-  const [enabled, setEnabled] = useState(true);
-
-  async function loadNotifications() {
-    setLoading(true);
-    const res = await fetch("/api/notifications", { cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
-
-    if (res.ok) {
-      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
-      setEnabled(data.notificationsEnabled !== false);
-    }
-
-    setLoading(false);
-  }
+  const userId = useUserStore((s) => s.user?.id);
+  const { data, loading, refresh } = useCachedFetch(CACHE_KEYS.notifications, "/api/notifications");
+  const notifications = useMemo(
+    () => (Array.isArray(data?.notifications) ? data.notifications : []),
+    [data]
+  );
+  const enabled = data?.notificationsEnabled !== false;
+  const [optimisticNotifications, setOptimisticNotifications] = useState(null);
+  const displayNotifications = optimisticNotifications ?? notifications;
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    setOptimisticNotifications(null);
+  }, [notifications]);
 
   useEffect(() => {
-    let isCancelled = false;
-    let socket = null;
+    if (!userId) return undefined;
 
-    async function setupSocket() {
-      const meRes = await fetch("/api/auth/me", { cache: "no-store" });
-      const meData = await meRes.json().catch(() => ({}));
-      const userId = meData?.user?.id;
-      if (!userId || isCancelled) return;
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4001";
+    const socket = io(socketUrl, { transports: ["websocket", "polling"] });
 
-      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4001";
-      socket = io(socketUrl, { transports: ["websocket", "polling"] });
+    socket.on("connect", () => {
+      socket.emit("join", { userId });
+    });
 
-      socket.on("connect", () => {
-        socket.emit("join", { userId });
-      });
-
-      socket.on("notification:update", () => {
-        loadNotifications();
-      });
-    }
-
-    setupSocket();
+    socket.on("notification:update", () => {
+      refreshAppCache(["notifications"]);
+      refresh();
+    });
 
     return () => {
-      isCancelled = true;
-      if (socket) socket.disconnect();
+      socket.disconnect();
     };
-  }, []);
+  }, [userId, refresh]);
 
   async function deleteNotification(id) {
-    const previous = notifications;
-    setNotifications((items) => items.filter((item) => item._id !== id));
+    const previous = displayNotifications;
+    setOptimisticNotifications(previous.filter((item) => item._id !== id));
 
     const res = await fetch(`/api/notifications?id=${id}`, { method: "DELETE" });
     if (!res.ok) {
-      setNotifications(previous);
+      setOptimisticNotifications(null);
+    } else {
+      refreshAppCache(["notifications"]);
+      refresh();
     }
   }
 
@@ -75,7 +65,7 @@ export default function NotificationsPage() {
           <h1 className="text-3xl font-semibold tracking-tight">Notifications</h1>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs text-zinc-700">
-          <Bell size={14} /> {notifications.length}
+          <Bell size={14} /> {displayNotifications.length}
         </span>
       </header>
 
@@ -83,11 +73,11 @@ export default function NotificationsPage() {
         <EmptyState text="Notifications are turned off in Profile settings." />
       ) : loading ? (
         <Loader />
-      ) : notifications.length === 0 ? (
+      ) : displayNotifications.length === 0 ? (
         <EmptyState text="No notifications right now." />
       ) : (
         <section className="space-y-3">
-          {notifications.map((item) => (
+          {displayNotifications.map((item) => (
             <article key={item._id} className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/80">
               <div className="flex items-start justify-between gap-2">
                 <h2 className="min-w-0 text-sm font-semibold text-black dark:text-zinc-50">{item.title}</h2>

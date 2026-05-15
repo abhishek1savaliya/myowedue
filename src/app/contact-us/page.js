@@ -3,6 +3,7 @@
 import Link from "next/link";
 import BackButton from "@/components/BackButton";
 import PublicFooter from "@/components/PublicFooter";
+import AmbientBackground from "@/components/shell/AmbientBackground";
 import { useEffect, useState } from "react";
 
 const DEFAULT_CONTENT = {
@@ -75,8 +76,9 @@ export default function ContactUsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <section className="mx-auto max-w-5xl px-6 py-12 md:py-16">
+    <main className="ui-v2-page relative min-h-screen bg-[#030712] text-zinc-100">
+      <AmbientBackground />
+      <section className="relative z-10 mx-auto max-w-5xl px-6 py-12 md:py-16">
         <BackButton href="/" label="Back to home" className="text-xs uppercase tracking-wide" />
 
         <div className="mt-5 grid gap-6 md:grid-cols-[1.1fr_0.9fr]">

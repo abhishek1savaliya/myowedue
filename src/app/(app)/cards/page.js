@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
 import VirtualCreditCard from "@/components/VirtualCreditCard";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { refreshAppCache } from "@/lib/refresh-app-cache";
 
 const initialForm = {
   cardNumber: "",
@@ -99,10 +102,10 @@ function buildDetectedDetails(source) {
 }
 
 export default function CardsPage() {
-  const [cards, setCards] = useState([]);
+  const { data, loading, refresh } = useCachedFetch(CACHE_KEYS.cards, "/api/cards");
+  const cards = useMemo(() => data?.cards || [], [data]);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState("");
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -124,24 +127,12 @@ export default function CardsPage() {
   });
   const lastLookupBinRef = useRef("");
 
-  async function load() {
-    setLoading(true);
-    const cardsRes = await fetch("/api/cards", { cache: "no-store" });
-    const cardsData = await cardsRes.json().catch(() => ({}));
-
-    if (cardsRes.ok) {
-      setCards(cardsData.cards || []);
-    } else {
-      setMessage(cardsData.message || "Failed to load cards.");
-    }
-
-    setLoading(false);
+  function invalidateAfterMutation() {
+    refreshAppCache(["cards"]);
+    refresh();
   }
 
   useEffect(() => {
-    load();
-    
-    // Cleanup timers on unmount
     return () => {
       Object.values(revealTimers).forEach((timerId) => {
         if (timerId) clearTimeout(timerId);
@@ -274,7 +265,7 @@ export default function CardsPage() {
     });
     lastLookupBinRef.current = "";
     setMessage(data.message || (editingId ? "Card updated successfully." : "Card added successfully."));
-    load();
+    invalidateAfterMutation();
   }
 
   function startEdit(card) {
@@ -399,7 +390,7 @@ export default function CardsPage() {
         setMessage("");
       }, 3000);
       
-      load();
+      invalidateAfterMutation();
     } catch (error) {
       setMessage("Failed to delete card. Please try again.");
       setDeleteConfirm({ open: false, cardId: "", deleting: false });
@@ -448,7 +439,7 @@ export default function CardsPage() {
       return next;
     });
     setMessage(data.message || "Card deleted successfully.");
-    load();
+    invalidateAfterMutation();
   }
 
   async function copyCardNumber(card) {

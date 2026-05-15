@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AlertCircle, Check, Lock, Loader2, Moon, PenSquare, Sun, X } from "lucide-react";
 import Loader from "@/components/Loader";
 import { useCommunityUsernameCheck } from "@/hooks/useCommunityUsernameCheck";
@@ -19,9 +19,12 @@ import {
 } from "@/lib/cookie-preferences";
 import { useUserStore } from "@/stores/useUserStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
+import { useThemeStore } from "@/stores/useThemeStore";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const applyThemeForPath = useThemeStore((s) => s.applyThemeForPath);
   const [profile, setProfile] = useState({
     firstName: "",
     lastName: "",
@@ -238,7 +241,7 @@ export default function SettingsPage() {
           ...(isPremium ? { fontPreset, fontSizePreset } : {}),
         });
       }
-      applyThemePreference(darkMode);
+      applyThemeForPath(pathname, darkMode);
       applyAppearancePreference({ fontPreset, fontSizePreset, isPremium });
       persistThemePreference({ scope: "auth", isDarkMode: darkMode });
       persistAppearancePreference({ fontPreset, fontSizePreset, isPremium });
@@ -502,7 +505,8 @@ export default function SettingsPage() {
             onClick={() => {
               const next = !darkMode;
               setDarkMode(next);
-              applyThemePreference(next);
+              applyThemeForPath(pathname, next);
+              persistThemePreference({ scope: "auth", isDarkMode: next });
             }}
             className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-black hover:bg-zinc-50"
           >
