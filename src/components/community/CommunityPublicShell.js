@@ -9,6 +9,8 @@ import PublicModeToggle from "@/components/PublicModeToggle";
 import CommunitySidebarProfile from "@/components/community/CommunitySidebarProfile";
 import SuggestedCreatorsRail from "@/components/community/SuggestedCreatorsRail";
 import TrendingTopicsFromApi from "@/components/community/TrendingTopicsFromApi";
+import CommunityStoreBootstrap from "@/components/community/CommunityStoreBootstrap";
+import { useUserStore } from "@/stores/useUserStore";
 
 const navItem =
   "group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-[15px] font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/80";
@@ -19,7 +21,6 @@ const navActive =
 function SidebarContent({
   loggedIn,
   authChecked,
-  sessionUser,
   homeActive,
   searchActive,
   trendingActive,
@@ -92,7 +93,7 @@ function SidebarContent({
       </div>
 
       <div className="mt-4 shrink-0 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-        <CommunitySidebarProfile loggedIn={loggedIn} authChecked={authChecked} sessionUser={sessionUser} />
+        <CommunitySidebarProfile loggedIn={loggedIn} authChecked={authChecked} />
       </div>
     </>
   );
@@ -100,11 +101,12 @@ function SidebarContent({
 
 export default function CommunityPublicShell({ children }) {
   const pathname = usePathname();
-  const [loggedIn, setLoggedIn] = useState(false);
-  /** Reused for sidebar profile so opening the mobile drawer does not refetch `/api/auth/me`. */
-  const [sessionUser, setSessionUser] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const user = useUserStore((s) => s.user);
+  const status = useUserStore((s) => s.status);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const loggedIn = Boolean(user);
+  const authChecked = status === "ready" || status === "error";
 
   const homeActive = pathname === "/community" || pathname.startsWith("/community/post/");
   const searchActive = pathname.startsWith("/community/search");
@@ -112,30 +114,6 @@ export default function CommunityPublicShell({ children }) {
   const notificationsActive = pathname.startsWith("/community/notifications");
   const settingsActive = pathname.startsWith("/community/settings");
   const hideRightRailTrending = trendingActive;
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store", credentials: "include" });
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && data?.user) {
-          setLoggedIn(true);
-          setSessionUser(data.user);
-        } else if (!cancelled) {
-          setLoggedIn(false);
-          setSessionUser(null);
-        }
-      } catch {
-        /* ignore */
-      } finally {
-        if (!cancelled) setAuthChecked(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -162,6 +140,7 @@ export default function CommunityPublicShell({ children }) {
 
   return (
     <div className="relative min-h-screen bg-background text-foreground">
+      <CommunityStoreBootstrap />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.08),transparent_36%),radial-gradient(circle_at_90%_100%,rgba(16,185,129,0.08),transparent_38%)]" />
 
       {/* Mobile top bar */}
@@ -233,7 +212,6 @@ export default function CommunityPublicShell({ children }) {
             <SidebarContent
               loggedIn={loggedIn}
               authChecked={authChecked}
-              sessionUser={sessionUser}
               homeActive={homeActive}
               searchActive={searchActive}
               trendingActive={trendingActive}
@@ -260,7 +238,6 @@ export default function CommunityPublicShell({ children }) {
           <SidebarContent
             loggedIn={loggedIn}
             authChecked={authChecked}
-            sessionUser={sessionUser}
             homeActive={homeActive}
             searchActive={searchActive}
             trendingActive={trendingActive}

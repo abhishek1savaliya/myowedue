@@ -3,9 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
 import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays, Gem, LifeBuoy, CreditCard, FolderOpen, PenLine, LogOut } from "lucide-react";
+import { useUserStore } from "@/stores/useUserStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 
 const baseLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -22,74 +22,23 @@ const baseLinks = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export default function Sidebar({ notificationCount = 0 }) {
+export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [liveNotificationCount, setLiveNotificationCount] = useState(notificationCount);
-  const [canAccessContentEditor, setCanAccessContentEditor] = useState(false);
-  const [subscriptionLabel, setSubscriptionLabel] = useState("Free Plan");
-  const [isPremium, setIsPremium] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
+  const user = useUserStore((s) => s.user);
+  const status = useUserStore((s) => s.status);
+  const notificationCount = useNotificationStore((s) => s.count);
 
-  useEffect(() => {
-    let cancelled = false;
-    let socket = null;
-
-    async function loadNotificationCount() {
-      try {
-        const res = await fetch("/api/notifications", { cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok) {
-          setLiveNotificationCount(Number(data.notificationCount || 0));
-        }
-      } catch {
-        // Keep existing count if request fails.
-      }
-    }
-
-    async function setupSocket() {
-      try {
-        const meRes = await fetch("/api/auth/me", { cache: "no-store" });
-        const meData = await meRes.json().catch(() => ({}));
-        const meUser = meData?.user || {};
-        const userId = meUser?.id;
-        const role = String(meUser?.cmsRole || "");
-        const hasPermission =
-          role === "super_admin" ||
-          (role === "manager" && Boolean(meUser?.contentEditPermission));
-        if (!cancelled) {
-          setCanAccessContentEditor(hasPermission);
-          setIsPremium(Boolean(meUser?.isPremium));
-          setSubscriptionLabel(meUser?.subscriptionLabel || "Free Plan");
-          setAuthChecked(true);
-        }
-        if (!userId || cancelled) return;
-
-        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4001";
-        socket = io(socketUrl, { transports: ["websocket", "polling"] });
-
-        socket.on("connect", () => {
-          socket.emit("join", { userId });
-        });
-
-        socket.on("notification:update", () => {
-          loadNotificationCount();
-        });
-      } catch {
-        if (!cancelled) setAuthChecked(true);
-      }
-    }
-
-    loadNotificationCount();
-    setupSocket();
-    return () => {
-      cancelled = true;
-      if (socket) socket.disconnect();
-    };
-  }, [pathname]);
+  const authChecked = status === "ready" || status === "error";
+  const isPremium = Boolean(user?.isPremium);
+  const role = String(user?.cmsRole || "");
+  const canAccessContentEditor =
+    role === "super_admin" || (role === "manager" && Boolean(user?.contentEditPermission));
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
+    useUserStore.getState().clearUser();
+    useNotificationStore.getState().disconnect();
     router.push("/login");
     router.refresh();
   }
@@ -146,7 +95,7 @@ export default function Sidebar({ notificationCount = 0 }) {
         >
           <Bell size={16} />
           <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-zinc-900 px-1 text-[10px] font-semibold leading-none text-white dark:bg-zinc-100 dark:text-zinc-950">
-            {liveNotificationCount > 99 ? "99+" : liveNotificationCount}
+            {notificationCount > 99 ? "99+" : notificationCount}
           </span>
         </Link>
       </div>

@@ -1,49 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { communityProfilePathByUsername } from "@/lib/community-usernames";
+import { useUserStore } from "@/stores/useUserStore";
 
 const cardShell =
   "rounded-3xl border border-zinc-800/90 bg-zinc-900 p-5 text-white shadow-[0_4px_24px_rgba(0,0,0,0.12)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_4px_28px_rgba(0,0,0,0.35)]";
 
 /**
- * @param {{ loggedIn: boolean; authChecked?: boolean; sessionUser?: object | null }} props
- * When `sessionUser` is passed from `CommunityPublicShell`, the mobile drawer can open without refetching `/api/auth/me`.
+ * @param {{ loggedIn: boolean; authChecked?: boolean }} props
  */
-export default function CommunitySidebarProfile({ loggedIn, authChecked = true, sessionUser: sessionUserProp = null }) {
-  const [me, setMe] = useState(() => sessionUserProp ?? null);
-  const [loaded, setLoaded] = useState(() => Boolean(sessionUserProp) || !loggedIn);
-
-  useEffect(() => {
-    if (sessionUserProp && loggedIn) {
-      setMe(sessionUserProp);
-      setLoaded(true);
-      return;
-    }
-    if (!loggedIn) {
-      setMe(null);
-      setLoaded(true);
-      return;
-    }
-    let cancelled = false;
-    setLoaded(false);
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && data?.user) setMe(data.user);
-      } catch {
-        /* ignore */
-      } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loggedIn, sessionUserProp]);
+export default function CommunitySidebarProfile({ loggedIn, authChecked = true }) {
+  const me = useUserStore((s) => s.user);
+  const status = useUserStore((s) => s.status);
+  const loaded = authChecked && (status === "ready" || status === "error" || !loggedIn);
 
   if (!authChecked || (!loggedIn && !loaded)) {
     return (
@@ -65,7 +36,7 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true, 
     );
   }
 
-  if (!loaded) {
+  if (!loaded || !me) {
     return (
       <div className="h-38 animate-pulse rounded-3xl border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800" aria-hidden />
     );

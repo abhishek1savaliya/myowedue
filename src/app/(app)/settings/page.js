@@ -17,6 +17,8 @@ import {
   persistAppearancePreference,
   persistThemePreference,
 } from "@/lib/cookie-preferences";
+import { useUserStore } from "@/stores/useUserStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -161,6 +163,7 @@ export default function SettingsPage() {
 
     const data = await res.json().catch(() => ({}));
     if (res.ok && data?.user) {
+      useUserStore.getState().setUser(data.user);
       setProfile((prev) => ({
         ...prev,
         firstName: data.user.firstName || prev.firstName,
@@ -203,6 +206,10 @@ export default function SettingsPage() {
         setCommunityUsername(data.username);
         setSavedCommunityUsername(data.username);
         setCommunityUsernameEditMode(false);
+        const cached = useUserStore.getState().user;
+        if (cached) {
+          useUserStore.getState().setUser({ ...cached, communityUsername: data.username });
+        }
       }
       setUsernameMessage(res.ok ? "Username saved." : data.message || "Failed to save username.");
     } catch (err) {
@@ -223,6 +230,14 @@ export default function SettingsPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
+      const cached = useUserStore.getState().user;
+      if (cached) {
+        useUserStore.getState().setUser({
+          ...cached,
+          darkMode,
+          ...(isPremium ? { fontPreset, fontSizePreset } : {}),
+        });
+      }
       applyThemePreference(darkMode);
       applyAppearancePreference({ fontPreset, fontSizePreset, isPremium });
       persistThemePreference({ scope: "auth", isDarkMode: darkMode });
@@ -240,6 +255,8 @@ export default function SettingsPage() {
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
+    useUserStore.getState().clearUser();
+    useNotificationStore.getState().disconnect();
     router.push("/login");
     router.refresh();
   }

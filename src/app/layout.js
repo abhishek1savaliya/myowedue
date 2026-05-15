@@ -10,6 +10,7 @@ import {
 import "./globals.css";
 import "@vidstack/react/player/styles/base.css";
 import ThemeSync from "@/components/ThemeSync";
+import AppStoreBootstrap from "@/components/AppStoreBootstrap";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { AppAlertProvider } from "@/components/AppAlertProvider";
 import { getUiPreferenceBootstrapScript } from "@/lib/cookie-preferences";
@@ -155,6 +156,7 @@ export default function RootLayout({ children }) {
           id="myowedue-ui-pref-boot"
           dangerouslySetInnerHTML={{ __html: uiPreferenceBootstrapScript }}
         />
+        <AppStoreBootstrap />
         <ThemeSync />
         <AppAlertProvider>
           {children}

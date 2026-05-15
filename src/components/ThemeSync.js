@@ -12,9 +12,12 @@ import {
   persistAppearancePreference,
   persistThemePreference,
 } from "@/lib/cookie-preferences";
+import { useUserStore } from "@/stores/useUserStore";
 
 export default function ThemeSync() {
   const pathname = usePathname();
+  const user = useUserStore((s) => s.user);
+  const fetchUser = useUserStore((s) => s.fetchUser);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,20 +31,18 @@ export default function ThemeSync() {
     async function syncFromProfile() {
       const storedPublic = getStoredThemePreference("public");
 
-      // Public pages should immediately respect the visitor preference.
       if (storedPublic !== null && isPublicPath) {
         applyThemePreference(storedPublic, "public");
         resetAppearancePreference();
       }
 
       try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && data?.user) {
-          const isDarkMode = Boolean(data.user.darkMode);
-          const isPremium = Boolean(data.user.isPremium);
-          const fontPreset = data.user.fontPreset;
-          const fontSizePreset = data.user.fontSizePreset;
+        const profileUser = user ?? (await fetchUser());
+        if (!cancelled && profileUser) {
+          const isDarkMode = Boolean(profileUser.darkMode);
+          const isPremium = Boolean(profileUser.isPremium);
+          const fontPreset = profileUser.fontPreset;
+          const fontSizePreset = profileUser.fontSizePreset;
 
           applyThemePreference(isDarkMode, "auth");
           applyAppearancePreference({
@@ -68,12 +69,12 @@ export default function ThemeSync() {
       }
     }
 
-    syncFromProfile();
+    void syncFromProfile();
 
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [pathname, user, fetchUser]);
 
   return null;
 }
