@@ -4,6 +4,7 @@ import {
   Manrope,
   Montserrat,
   Playfair_Display,
+  Plus_Jakarta_Sans,
   Poppins,
   Roboto,
 } from "next/font/google";
@@ -25,6 +26,14 @@ const display = Cormorant_Garamond({
 const body = Manrope({
   variable: "--font-body",
   subsets: ["latin"],
+});
+
+/** Marketing / landing — crisp SaaS typography (Stripe-adjacent). */
+const landing = Plus_Jakarta_Sans({
+  variable: "--font-landing",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
 const googleInter = Inter({
@@ -136,9 +145,10 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${display.variable} ${body.variable} ${googleInter.variable} ${googleRoboto.variable} ${googlePoppins.variable} ${googleMontserrat.variable} ${googlePlayfair.variable} h-full antialiased`}
-      data-theme="light"
-      data-premium-ui="false"
+      className={`${display.variable} ${body.variable} ${landing.variable} ${googleInter.variable} ${googleRoboto.variable} ${googlePoppins.variable} ${googleMontserrat.variable} ${googlePlayfair.variable} h-full antialiased`}
+      data-theme="dark"
+      data-ui-v2="true"
+      data-premium-ui="true"
       data-font-preset={DEFAULT_FONT_PRESET}
       data-font-size-preset={DEFAULT_FONT_SIZE_PRESET}
       style={{

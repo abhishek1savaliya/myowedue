@@ -13,7 +13,8 @@ function formatTopicLabel(raw) {
 /**
  * Public landing: top trending community topics and sign-up CTA.
  */
-export default function HomeTrendingSection() {
+export default function HomeTrendingSection({ variant = "default" }) {
+  const isLanding = variant === "landing";
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
@@ -48,18 +49,35 @@ export default function HomeTrendingSection() {
 
   return (
     <section
-      className="frontpage-reveal frontpage-delay-2 relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 md:p-8"
+      className={
+        isLanding
+          ? "relative overflow-hidden rounded-xl border-0 bg-transparent p-0 shadow-none"
+          : "frontpage-reveal frontpage-delay-2 relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 md:p-8"
+      }
       aria-labelledby="home-trending-heading"
     >
       <div className="flex flex-col gap-8 lg:flex-row lg:items-stretch lg:justify-between lg:gap-12">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">
             <TrendingUp className="h-4 w-4 text-zinc-500 dark:text-zinc-400" aria-hidden />
-            <h2 id="home-trending-heading" className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 md:text-xl">
+            <h2
+              id="home-trending-heading"
+              className={
+                isLanding
+                  ? "text-lg font-semibold tracking-tight text-white md:text-xl"
+                  : "text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 md:text-xl"
+              }
+            >
               Community activity
             </h2>
           </div>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <p
+            className={
+              isLanding
+                ? "mt-2 max-w-xl text-sm leading-relaxed text-zinc-400"
+                : "mt-2 max-w-xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400"
+            }
+          >
             Popular discussion themes from the last 24 hours. Sign in to read full threads and participate.
           </p>
 

@@ -3,9 +3,26 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, ArrowLeftRight, FileText, Settings, Bell, Trash2, FilePenLine, CalendarDays, Gem, LifeBuoy, CreditCard, FolderOpen, PenLine, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  ArrowLeftRight,
+  FileText,
+  Settings,
+  Bell,
+  Trash2,
+  FilePenLine,
+  CalendarDays,
+  Gem,
+  LifeBuoy,
+  CreditCard,
+  FolderOpen,
+  PenLine,
+  LogOut,
+} from "lucide-react";
 import { useUserStore } from "@/stores/useUserStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
+import { cn } from "@/lib/utils";
 
 const baseLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -21,6 +38,9 @@ const baseLinks = [
   { href: "/my-subscription", label: "My Subscription", icon: Gem },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
+
+const navLink =
+  "group flex min-w-33 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition md:min-w-0 md:justify-start md:gap-3 md:py-3 md:text-sm";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -52,9 +72,9 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sticky top-0 z-30 w-full border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-700 dark:bg-zinc-950/95 md:h-screen md:w-72 md:border-b-0 md:border-r md:px-6 md:py-8">
+    <aside className="sticky top-0 z-30 w-full border-b border-white/[0.08] bg-slate-950/80 px-4 py-3 backdrop-blur-xl md:h-screen md:w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
       <div className="mb-4 flex items-start justify-between gap-3 md:mb-8">
-        <div className="inline-flex min-w-0 items-start gap-2 p-1">
+        <div className="inline-flex min-w-0 items-start gap-2.5 p-1">
           <Link href="/dashboard" aria-label="Go to dashboard" className="rounded-xl">
             <Image
               src="/owedue-logo.svg"
@@ -62,39 +82,42 @@ export default function Sidebar() {
               width={40}
               height={40}
               priority
-              className="h-8 w-8 rounded-lg sm:h-9 sm:w-9 md:h-10 md:w-10"
+              className="h-9 w-9 rounded-lg sm:h-10 sm:w-10"
             />
           </Link>
           <div className="min-w-0">
-            <Link href="/dashboard" className="truncate text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-lg md:text-xl">
+            <Link
+              href="/dashboard"
+              className="truncate text-base font-semibold tracking-tight text-white sm:text-lg"
+            >
               OWE DUE
             </Link>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
+            <motion.div className="mt-1 flex flex-wrap items-center gap-2">
               {!authChecked ? (
-                <span className="inline-flex h-5 w-12 animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-700" />
+                <span className="inline-flex h-5 w-12 animate-pulse rounded-md bg-white/10" />
               ) : isPremium ? (
                 <Link
                   href="/my-subscription"
-                  className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                  className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200"
                 >
                   <Gem size={10} />
                   Pro
                 </Link>
               ) : (
-                <span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-300">
+                <span className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
                   Free
                 </span>
               )}
-            </div>
+            </motion.div>
           </div>
         </div>
         <Link
           href="/notifications"
           aria-label="Open notifications"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 md:h-10 md:w-10"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 transition hover:border-white/20 hover:bg-white/10 md:h-10 md:w-10"
         >
           <Bell size={16} />
-          <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-zinc-900 px-1 text-[10px] font-semibold leading-none text-white dark:bg-zinc-100 dark:text-zinc-950">
+          <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-1 text-[10px] font-semibold leading-none text-slate-950">
             {notificationCount > 99 ? "99+" : notificationCount}
           </span>
         </Link>
@@ -108,13 +131,14 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`group flex min-w-33 shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium transition md:min-w-0 md:justify-start md:gap-3 md:py-3 md:text-sm ${
+              className={cn(
+                navLink,
                 active
-                  ? "border-zinc-900 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
-                  : "border-zinc-200 bg-white text-zinc-700 shadow-sm hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/80"
-              }`}
+                  ? "border-amber-500/40 bg-amber-500/15 text-amber-100 shadow-[0_0_24px_rgba(245,158,11,0.12)]"
+                  : "border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:border-white/12 hover:bg-white/[0.06] hover:text-zinc-100"
+              )}
             >
-              <Icon size={16} />
+              <Icon size={16} className={active ? "text-amber-300" : "text-zinc-500"} />
               <span className="min-w-0 wrap-break-word">{item.label}</span>
             </Link>
           );
@@ -124,7 +148,10 @@ export default function Sidebar() {
       <button
         type="button"
         onClick={logout}
-        className="group mt-2 flex w-full min-w-33 shrink-0 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/80 md:mt-2 md:min-w-0 md:justify-start md:gap-3 md:py-3 md:text-sm"
+        className={cn(
+          navLink,
+          "mt-2 w-full border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:border-white/12 hover:bg-white/[0.06] hover:text-zinc-100 md:mt-4"
+        )}
       >
         <LogOut size={16} className="shrink-0" aria-hidden />
         <span className="min-w-0 wrap-break-word">Logout</span>
