@@ -24,11 +24,11 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
 
   if (!loggedIn) {
     return (
-      <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:border-zinc-700 dark:bg-zinc-900/90">
-        <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">Sign in to see your profile here.</p>
+      <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-5 shadow-[0_8px_32px_rgba(0,0,0,0.28)] backdrop-blur-md">
+        <p className="text-xs leading-relaxed text-zinc-400">Sign in to see your profile here.</p>
         <Link
           href="/login?next=/community"
-          className="mt-3 inline-block text-xs font-semibold text-amber-700 underline underline-offset-2 dark:text-amber-400"
+          className="mt-3 inline-block text-xs font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
         >
           Log in
         </Link>

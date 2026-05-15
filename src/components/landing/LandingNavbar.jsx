@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import PublicModeToggle from "@/components/PublicModeToggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +65,7 @@ export default function LandingNavbar() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <PublicModeToggle tone="onDark" />
           <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
             <Link href="/login">Sign in</Link>
           </Button>

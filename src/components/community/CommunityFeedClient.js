@@ -6,11 +6,18 @@ import Link from "next/link";
 import SharePostModal from "@/components/community/SharePostModal";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { BadgeCheck, ChevronRight, Heart, Loader2, MessageCircle, Pencil, Repeat2, Send, Trash2 } from "lucide-react";
+import { BadgeCheck, ChevronRight, Heart, Loader2, MessageCircle, Pencil, RefreshCw, Repeat2, Send, Trash2 } from "lucide-react";
 import { COMMUNITY_POST_EDIT_WINDOW_MS, isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window";
 import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
 import { normalizeSavedUsernameHandle } from "@/lib/community-usernames";
 import { normalizeCommunityTopicParam } from "@/lib/community-topic";
+import { cn } from "@/lib/utils";
+import {
+  COMMUNITY_BTN_SECONDARY,
+  COMMUNITY_FEED_HEADER_SUB,
+  COMMUNITY_FEED_HEADER_TITLE,
+  COMMUNITY_GLASS_CARD,
+} from "@/lib/community-ui";
 
 const COMMUNITY_SETUP_MESSAGE =
   "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql through 007_community_username_max_21.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
@@ -46,18 +53,18 @@ function communityUserProfileHref(username) {
 
 function CommunityAuthorAttribution({ displayName, username, isSelf, verified, isX, className }) {
   const href = communityUserProfileHref(username);
-  /** Explicit colors: "x" skin cards are still `bg-white` in light mode — use dark ink there, pale text only in `dark:`. */
+  /** Public community feed uses dark glass cards — pale text on "x" skin. */
   const nameLink = isX
-    ? "font-semibold text-zinc-950 underline-offset-2 hover:text-zinc-800 hover:underline dark:text-zinc-100 dark:hover:text-white dark:hover:underline"
+    ? "font-semibold text-zinc-100 underline-offset-2 hover:text-white hover:underline"
     : "font-semibold text-zinc-950 underline-offset-2 hover:text-zinc-800 hover:underline dark:text-zinc-50 dark:hover:text-zinc-200";
   const nameText = isX
-    ? "font-semibold text-zinc-950 dark:text-zinc-100"
+    ? "font-semibold text-zinc-100"
     : "font-semibold text-zinc-950 dark:text-zinc-50";
   const handleLink = isX
-    ? "font-normal text-zinc-700 underline-offset-2 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-300 dark:hover:underline"
+    ? "font-normal text-zinc-400 underline-offset-2 hover:text-zinc-300 hover:underline"
     : "font-normal text-zinc-700 underline-offset-2 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-300";
   const handleText = isX
-    ? "font-normal text-zinc-700 dark:text-zinc-400"
+    ? "font-normal text-zinc-400"
     : "font-normal text-zinc-700 dark:text-zinc-400";
   const youMuted = isX ? "text-sky-400" : "text-zinc-600 dark:text-zinc-400";
 
@@ -586,7 +593,7 @@ export function PostCard({
             isX={isX}
             className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm"
           />
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className={`text-xs ${isX ? "text-zinc-500" : "text-zinc-500 dark:text-zinc-400"}`}>
             {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
           </p>
         </div>
@@ -596,10 +603,11 @@ export function PostCard({
 
   function renderReadonlyPostBlock(forX) {
     const linkClass = forX
-      ? "-m-1 block rounded-xl p-1 outline-offset-2 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50"
+      ? "-m-1 block rounded-xl p-1 outline-offset-2 hover:bg-white/5"
       : "-m-1 block rounded-xl p-1 outline-offset-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50";
-    const bodyClass =
-      "mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-800 dark:text-zinc-200";
+    const bodyClass = forX
+      ? "mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-200"
+      : "mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-800 dark:text-zinc-200";
     if (postDetailHref) {
       return (
         <>
@@ -741,11 +749,11 @@ export function PostCard({
 
   if (isX) {
     return (
-      <article className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80">
-        <div className="h-1 w-full bg-linear-to-r from-zinc-300 via-zinc-400 to-zinc-300 dark:from-zinc-600 dark:via-zinc-500 dark:to-zinc-600" aria-hidden />
+      <article className={`overflow-hidden ${COMMUNITY_GLASS_CARD}`}>
+        <div className="h-1 w-full bg-linear-to-r from-amber-500/40 via-emerald-400/30 to-amber-500/40" aria-hidden />
         <div className="p-4 md:p-5">
           {editing ? renderEditingBlock(true) : renderReadonlyPostBlock(true)}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-y-2 border-t border-white/[0.08] pt-3">
             <div className="flex min-w-0 flex-wrap items-center gap-1">
               <button
                 type="button"
@@ -758,8 +766,8 @@ export function PostCard({
                 }}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                   post.liked
-                    ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
-                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    ? "bg-rose-500/20 text-rose-300"
+                    : "text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
                 }`}
               >
                 <Heart className={`h-4 w-4 ${post.liked ? "fill-current" : ""}`} strokeWidth={2} />
@@ -775,7 +783,7 @@ export function PostCard({
                     return next;
                   });
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
               >
                 <MessageCircle className="h-4 w-4" strokeWidth={2} />
                 {post.commentCount || 0}
@@ -783,7 +791,7 @@ export function PostCard({
               <button
                 type="button"
                 onClick={() => onRequestShare(post)}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
               >
                 <Repeat2 className="h-4 w-4" strokeWidth={2} />
                 {post.share_count ?? 0}
@@ -792,7 +800,7 @@ export function PostCard({
             {renderOwnerControls(true)}
           </div>
           {commentsOpen || isDetail ? (
-            <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div className="mt-4 border-t border-white/[0.08] pt-4">
               {canInteract ? (
                 <form onSubmit={submitTopComment} className="mb-4 flex flex-col gap-2 sm:flex-row">
                   <input
@@ -1052,6 +1060,7 @@ export default function CommunityFeedClient({
   const [configError, setConfigError] = useState(false);
   const [feedTab, setFeedTab] = useState("all");
   const [shareTarget, setShareTarget] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isX = !isPortal && skin === "x";
   const portalMineHome = isPortal;
@@ -1084,10 +1093,8 @@ export default function CommunityFeedClient({
     [feedTab, currentUserId]
   );
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function run() {
+  const loadFeed = useCallback(
+    async ({ force = false, isCancelled = () => false } = {}) => {
       if ((feedTab === "liked" || feedTab === "shared") && !currentUserId) {
         setPosts([]);
         setNextCursor(null);
@@ -1097,7 +1104,7 @@ export default function CommunityFeedClient({
         return;
       }
 
-      const hasSeed = !isPortal && feedTab === "all" && !topicFilter && seedList.length > 0;
+      const hasSeed = !force && !isPortal && feedTab === "all" && !topicFilter && seedList.length > 0;
       if (!hasSeed) {
         setLoading(true);
         setError("");
@@ -1113,7 +1120,7 @@ export default function CommunityFeedClient({
           cache: "no-store",
         });
         const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
+        if (isCancelled()) return;
         if (res.status === 503) {
           setConfigError(true);
           setError(data.message || "Community is not configured.");
@@ -1144,7 +1151,7 @@ export default function CommunityFeedClient({
         setAuthResolved(true);
         feedHydratedRef.current = true;
       } catch (e) {
-        if (cancelled) return;
+        if (isCancelled()) return;
         const msg = e.message || "Failed to load";
         if (isMissingCommunityTables(msg)) {
           setConfigError(true);
@@ -1153,18 +1160,33 @@ export default function CommunityFeedClient({
           setError(msg);
         }
       } finally {
-        if (!cancelled) {
+        if (!isCancelled()) {
           setLoading(false);
           setAuthResolved(true);
         }
       }
-    }
+    },
+    [feedTab, currentUserId, isPortal, portalMineHome, seedList.length, topicFilter]
+  );
 
-    void run();
+  useEffect(() => {
+    let cancelled = false;
+    void loadFeed({ force: false, isCancelled: () => cancelled });
     return () => {
       cancelled = true;
     };
-  }, [feedTab, tabAuthKey, portalMineHome, isPortal, seedList.length, topicFilter]);
+  }, [loadFeed, tabAuthKey]);
+
+  const refreshFeed = useCallback(async () => {
+    if (refreshing || loading) return;
+    setRefreshing(true);
+    setError("");
+    try {
+      await loadFeed({ force: true, isCancelled: () => false });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadFeed, loading, refreshing]);
 
   const loadMore = useCallback(async () => {
     const cursor = nextCursorRef.current;
@@ -1419,11 +1441,7 @@ export default function CommunityFeedClient({
   const composeForm = showComposer ? (
     <form
       onSubmit={createPost}
-      className={
-        isX
-          ? "rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/80"
-          : "rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/80"
-      }
+      className={isX ? `${COMMUNITY_GLASS_CARD} p-4` : "rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/80"}
     >
       <label className="sr-only" htmlFor="community-compose">
         What&apos;s happening?
@@ -1441,14 +1459,22 @@ export default function CommunityFeedClient({
         maxLength={280}
         rows={3}
         placeholder="What’s happening?"
-        className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500"
+        className={
+          isX
+            ? "w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-amber-500/40 focus:outline-none"
+            : "w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500"
+        }
       />
       <div className="mt-2 flex items-center justify-between gap-3">
         <span className="text-xs text-zinc-500">{composer.length}/280</span>
         <button
           type="submit"
           disabled={posting || !composer.trim()}
-          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+          className={
+            isX
+              ? "inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 hover:bg-amber-400"
+              : "inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+          }
         >
           {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Post
@@ -1462,7 +1488,7 @@ export default function CommunityFeedClient({
       <div
         className={
           isX
-            ? "rounded-xl border border-zinc-200 bg-zinc-50/90 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200"
+            ? "rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300"
             : "rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-200"
         }
       >
@@ -1573,18 +1599,35 @@ export default function CommunityFeedClient({
     <div className={rootShell}>
       {isX ? (
         <header className="space-y-1">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h1>
-            {topicFilter ? (
-              <Link
-                href="/community"
-                className="text-sm font-semibold text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h1 className={COMMUNITY_FEED_HEADER_TITLE}>{title}</h1>
+                {topicFilter ? (
+                  <Link
+                    href="/community"
+                    className="text-sm font-semibold text-sky-400 underline-offset-2 hover:underline"
+                  >
+                    All posts
+                  </Link>
+                ) : null}
+              </div>
+              <p className={`mt-1 ${COMMUNITY_FEED_HEADER_SUB}`}>{subtitle}</p>
+            </div>
+            {!isPortal ? (
+              <button
+                type="button"
+                onClick={() => void refreshFeed()}
+                disabled={refreshing || loading}
+                aria-label="Refresh feed"
+                title="Refresh feed"
+                className={COMMUNITY_BTN_SECONDARY}
               >
-                All posts
-              </Link>
+                <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} aria-hidden />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
             ) : null}
           </div>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>
         </header>
       ) : (
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">

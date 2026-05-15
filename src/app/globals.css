@@ -1168,6 +1168,16 @@ main > * {
   color: #d9e8ff !important;
 }
 
+/* —— Community public shell —— */
+.community-shell main {
+  background: transparent;
+  color: #e4e4e7;
+}
+
+.community-shell [data-community-rail] {
+  background: transparent;
+}
+
 /* —— Premium landing page —— */
 .landing-page {
   --landing-amber: #f59e0b;

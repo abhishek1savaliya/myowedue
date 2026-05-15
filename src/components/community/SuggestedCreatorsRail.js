@@ -82,34 +82,34 @@ export default function SuggestedCreatorsRail({ loggedIn, authChecked, className
   }
 
   const cardClass =
-    "rounded-xl border border-zinc-200 bg-white/95 p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90";
+    "rounded-xl border border-white/10 bg-slate-950/55 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.28)] backdrop-blur-md";
 
   return (
     <section className={`${cardClass} ${className}`.trim()} aria-labelledby="suggested-creators-heading">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-        <h2 id="suggested-creators-heading" className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+        <Sparkles className="h-5 w-5 shrink-0 text-amber-400/90" aria-hidden />
+        <h2 id="suggested-creators-heading" className="text-base font-semibold text-zinc-50">
           Popular to follow
         </h2>
       </div>
 
       {loading ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+        <div className="mt-4 flex items-center gap-2 text-sm text-zinc-500">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading…
         </div>
       ) : creators.length === 0 ? (
-        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">No suggestions yet — post and follow others to grow the network.</p>
+        <p className="mt-4 text-sm text-zinc-400">No suggestions yet — post and follow others to grow the network.</p>
       ) : (
         <ul className="mt-4 space-y-3">
           {creators.map((c) => {
             const href = `/community/user/${encodeURIComponent(c.username)}`;
             const initial = String(c.display_name || c.username || "?").trim().slice(0, 1).toUpperCase();
             return (
-              <li key={c.user_id} className="rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-700/80 dark:bg-zinc-950/50">
+              <li key={c.user_id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
                 <div className="flex gap-3">
                   <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-sm font-bold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-bold text-zinc-200"
                     aria-hidden
                   >
                     {initial ? (
@@ -119,10 +119,10 @@ export default function SuggestedCreatorsRail({ loggedIn, authChecked, className
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <Link href={href} className="block font-semibold text-zinc-900 hover:underline dark:text-zinc-100">
+                    <Link href={href} className="block font-semibold text-zinc-100 hover:underline">
                       {c.display_name}
                     </Link>
-                    <Link href={href} className="mt-0.5 block text-xs text-zinc-600 hover:underline dark:text-zinc-400">
+                    <Link href={href} className="mt-0.5 block text-xs text-zinc-400 hover:underline">
                       @{c.username}
                     </Link>
                   </div>
@@ -137,8 +137,8 @@ export default function SuggestedCreatorsRail({ loggedIn, authChecked, className
                       disabled={Boolean(busyId)}
                       className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${
                         c.viewer_follows
-                          ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                          : "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                          ? "border border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10"
+                          : "bg-amber-500 text-slate-950 hover:bg-amber-400"
                       }`}
                     >
                       {busyId === c.user_id ? (
@@ -152,7 +152,7 @@ export default function SuggestedCreatorsRail({ loggedIn, authChecked, className
                   ) : (
                     <Link
                       href={`/login?next=${encodeURIComponent(href)}`}
-                      className="inline-flex w-full items-center justify-center rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-amber-500 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400"
                     >
                       Sign in to follow
                     </Link>
