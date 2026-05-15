@@ -25,76 +25,53 @@ function isPublicPath(pathname) {
   );
 }
 
+/** Applies theme + appearance from store/cookies. Auth fetch runs once in AppStoreBootstrap. */
 export default function ThemeSync() {
   const pathname = usePathname();
   const user = useUserStore((s) => s.user);
-  const fetchUser = useUserStore((s) => s.fetchUser);
   const applyThemeForPath = useThemeStore((s) => s.applyThemeForPath);
   const getTheme = useThemeStore((s) => s.getTheme);
 
   useEffect(() => {
-    let cancelled = false;
     const publicPath = isPublicPath(pathname);
     const scope = publicPath ? "public" : "auth";
+    const stored = getStoredThemePreference(scope);
+    const cachedTheme = getTheme(scope);
 
-    async function syncFromProfile() {
-      const storedPublic = getStoredThemePreference("public");
-      const storedAuth = getStoredThemePreference("auth");
-      const cachedTheme = getTheme(scope);
-
-      if (publicPath && storedPublic !== null) {
-        applyThemeForPath(pathname, storedPublic);
-        resetAppearancePreference();
-        return;
-      }
-
-      if (!publicPath && storedAuth !== null) {
-        applyThemeForPath(pathname, storedAuth);
-      } else if (cachedTheme) {
-        applyThemePreference(cachedTheme === "dark", scope);
-      }
-
-      try {
-        const profileUser = user ?? (await fetchUser({ force: false }));
-        if (cancelled) return;
-
-        if (profileUser && !publicPath) {
-          const isDarkMode = Boolean(profileUser.darkMode);
-          const isPremium = Boolean(profileUser.isPremium);
-          const fontPreset = profileUser.fontPreset;
-          const fontSizePreset = profileUser.fontSizePreset;
-
-          applyThemeForPath(pathname, isDarkMode);
-          applyAppearancePreference({
-            fontPreset,
-            fontSizePreset,
-            isPremium,
-          });
-          persistThemePreference({ scope: "auth", isDarkMode });
-          persistAppearancePreference({ fontPreset, fontSizePreset, isPremium });
-          return;
-        }
-      } catch {
-        /* keep stored theme */
-      }
-
-      if (!cancelled && publicPath && storedPublic !== null) {
-        applyThemeForPath(pathname, storedPublic);
-        resetAppearancePreference();
-        return;
-      }
-
-      if (!cancelled && publicPath) {
-        resetAppearancePreference();
-      }
+    if (publicPath && stored !== null) {
+      applyThemeForPath(pathname, stored);
+      resetAppearancePreference();
+      return;
     }
 
-    void syncFromProfile();
+    if (!publicPath && stored !== null) {
+      applyThemeForPath(pathname, stored);
+    } else if (cachedTheme) {
+      applyThemePreference(cachedTheme === "dark", scope);
+    }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname, user, fetchUser, applyThemeForPath, getTheme]);
+    if (publicPath) {
+      resetAppearancePreference();
+    }
+  }, [pathname, applyThemeForPath, getTheme]);
+
+  useEffect(() => {
+    if (!user || isPublicPath(pathname)) return;
+
+    const isDarkMode = Boolean(user.darkMode);
+    applyThemeForPath(pathname, isDarkMode);
+    applyAppearancePreference({
+      fontPreset: user.fontPreset,
+      fontSizePreset: user.fontSizePreset,
+      isPremium: Boolean(user.isPremium),
+    });
+    persistThemePreference({ scope: "auth", isDarkMode });
+    persistAppearancePreference({
+      fontPreset: user.fontPreset,
+      fontSizePreset: user.fontSizePreset,
+      isPremium: Boolean(user.isPremium),
+    });
+  }, [user, pathname, applyThemeForPath]);
 
   return null;
 }

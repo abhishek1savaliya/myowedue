@@ -1441,7 +1441,11 @@ export default function CommunityFeedClient({
   const composeForm = showComposer ? (
     <form
       onSubmit={createPost}
-      className={isX ? `${COMMUNITY_GLASS_CARD} p-4` : "rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/80"}
+      className={
+        isX
+          ? "rounded-xl border border-white/10 bg-slate-950/80 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.22)]"
+          : "rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/80"
+      }
     >
       <label className="sr-only" htmlFor="community-compose">
         What&apos;s happening?

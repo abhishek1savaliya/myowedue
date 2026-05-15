@@ -1227,6 +1227,25 @@ main > * {
   animation: landingBlobDrift 18s ease-in-out infinite;
 }
 
+/* App + community: static ambient (animated blur blobs tank scroll FPS). */
+.ui-v2-page .landing-blob,
+.community-shell .landing-blob {
+  animation: none;
+  filter: blur(56px);
+  will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-blob {
+    animation: none;
+  }
+}
+
+.community-feed-post {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}
+
 .landing-blob-a {
   background: radial-gradient(circle, rgba(245, 158, 11, 0.35) 0%, transparent 70%);
 }

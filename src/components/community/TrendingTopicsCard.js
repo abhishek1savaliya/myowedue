@@ -25,7 +25,7 @@ export default function TrendingTopicsCard({
   const headingId = useId();
   const shell = variant === "shell";
   const cardClass = shell
-    ? "rounded-xl border border-white/10 bg-slate-950/55 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.28)] backdrop-blur-md"
+    ? "rounded-xl border border-white/10 bg-slate-950/80 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.22)]"
     : "rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90";
 
   const rows = (Array.isArray(topics) ? topics : []).slice(0, limit);

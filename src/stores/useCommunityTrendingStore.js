@@ -3,6 +3,9 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { COMMUNITY_MUTATE_EVENT } from "@/lib/community-mutate-event";
+import { createDebouncedSessionStorage } from "@/lib/debounced-storage";
+
+const debouncedSessionStorage = createDebouncedSessionStorage(450);
 
 const FETCH_LIMIT = 10;
 const DEBOUNCE_MS = 450;
@@ -87,7 +90,7 @@ export const useCommunityTrendingStore = create(
     }),
     {
       name: "owedue-trending-v1",
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => debouncedSessionStorage),
       partialize: (state) => ({
         topics: state.topics,
         fetchedAt: state.fetchedAt,

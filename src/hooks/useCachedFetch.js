@@ -1,31 +1,47 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DEFAULT_CACHE_STALE_MS } from "@/lib/cache-stale";
 import { useApiCacheStore } from "@/stores/useApiCacheStore";
 
 /**
  * Cached GET with sessionStorage persistence (survives refresh).
+ * Skips network + revalidate UI when cache is still fresh.
  * @param {string} cacheKey
  * @param {string} url
  * @param {{ staleMs?: number; enabled?: boolean; deps?: unknown[] }} [options]
  */
 export function useCachedFetch(cacheKey, url, options = {}) {
-  const { staleMs, enabled = true, deps = [] } = options;
+  const { staleMs = DEFAULT_CACHE_STALE_MS, enabled = true, deps = [] } = options;
   const fetchCached = useApiCacheStore((s) => s.fetch);
   const getCached = useApiCacheStore((s) => s.getCached);
+  const getEntry = useApiCacheStore((s) => s.getEntry);
 
   const [data, setData] = useState(() => (enabled ? getCached(cacheKey) : null));
-  const [loading, setLoading] = useState(enabled && !getCached(cacheKey));
+  const [loading, setLoading] = useState(() => enabled && getCached(cacheKey) == null);
   const [error, setError] = useState("");
-  const [fromCache, setFromCache] = useState(Boolean(getCached(cacheKey)));
+  const [fromCache, setFromCache] = useState(() => getCached(cacheKey) != null);
   const [revalidating, setRevalidating] = useState(false);
-  const hasLoadedRef = useRef(Boolean(getCached(cacheKey)));
+  const hasLoadedRef = useRef(getCached(cacheKey) != null);
 
   const load = useCallback(
     async ({ force = false } = {}) => {
       if (!enabled || !cacheKey || !url) return;
 
-      const soft = hasLoadedRef.current;
+      const entry = getEntry(cacheKey);
+      const cachedData = entry?.data;
+      const isFresh = entry && Date.now() - entry.fetchedAt < staleMs;
+
+      if (!force && isFresh && cachedData != null) {
+        setData(cachedData);
+        setFromCache(true);
+        hasLoadedRef.current = true;
+        setLoading(false);
+        setRevalidating(false);
+        return;
+      }
+
+      const soft = hasLoadedRef.current || cachedData != null;
       if (!soft) setLoading(true);
       else setRevalidating(true);
       setError("");
@@ -58,21 +74,27 @@ export function useCachedFetch(cacheKey, url, options = {}) {
         setRevalidating(false);
       }
     },
-    [cacheKey, url, enabled, staleMs, fetchCached]
+    [cacheKey, url, enabled, staleMs, fetchCached, getEntry]
   );
 
   useEffect(() => {
     if (!enabled) return;
-    const cached = getCached(cacheKey);
-    if (cached) {
+
+    const entry = getEntry(cacheKey);
+    const cached = entry?.data;
+    if (cached != null) {
       setData(cached);
       setFromCache(true);
       hasLoadedRef.current = true;
       setLoading(false);
     }
-    void load();
+
+    const isFresh = entry && Date.now() - entry.fetchedAt < staleMs;
+    if (!isFresh || cached == null) {
+      void load({ force: false });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey, url, enabled, ...deps]);
+  }, [cacheKey, url, enabled, staleMs, load, ...deps]);
 
   return {
     data,

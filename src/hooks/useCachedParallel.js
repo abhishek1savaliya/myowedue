@@ -1,17 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DEFAULT_CACHE_STALE_MS } from "@/lib/cache-stale";
 import { useApiCacheStore } from "@/stores/useApiCacheStore";
 
 /**
  * Parallel cached GETs (sessionStorage-backed).
+ * Skips network when all keys are still fresh.
  * @param {Array<{ key: string; url: string }>} specs
  * @param {{ deps?: unknown[]; enabled?: boolean; staleMs?: number }} [options]
  */
 export function useCachedParallel(specs, options = {}) {
-  const { deps = [], enabled = true, staleMs } = options;
+  const { deps = [], enabled = true, staleMs = DEFAULT_CACHE_STALE_MS } = options;
   const fetchCached = useApiCacheStore((s) => s.fetch);
   const getCached = useApiCacheStore((s) => s.getCached);
+  const getEntry = useApiCacheStore((s) => s.getEntry);
+
+  const specsRef = useRef(specs);
+  specsRef.current = specs;
 
   const specsKey = specs.map((s) => `${s.key}:${s.url}`).join("|");
 
@@ -34,19 +40,42 @@ export function useCachedParallel(specs, options = {}) {
     enabled && specs.length > 0 && specs.every(({ key }) => getCached(key) != null)
   );
 
+  const checkAllFresh = useCallback(() => {
+    const current = specsRef.current;
+    if (!current.length) return true;
+    return current.every(({ key }) => {
+      const entry = getEntry(key);
+      return entry?.data != null && Date.now() - entry.fetchedAt < staleMs;
+    });
+  }, [getEntry, staleMs]);
+
   const load = useCallback(
     async ({ force = false } = {}) => {
-      if (!enabled || !specs.length) return;
+      const currentSpecs = specsRef.current;
+      if (!enabled || !currentSpecs.length) return;
+
+      if (!force && checkAllFresh()) {
+        const snapshot = {};
+        currentSpecs.forEach(({ key }) => {
+          const entry = getEntry(key);
+          if (entry?.data != null) snapshot[key] = entry.data;
+        });
+        setData(snapshot);
+        hasLoadedRef.current = true;
+        setLoading(false);
+        setRevalidating(false);
+        return;
+      }
 
       const soft = hasLoadedRef.current;
       if (!soft) setLoading(true);
       else setRevalidating(true);
 
       const nextErrors = {};
-      const nextData = { ...data };
+      const nextData = {};
 
       await Promise.all(
-        specs.map(async ({ key, url }) => {
+        currentSpecs.map(async ({ key, url }) => {
           try {
             const result = await fetchCached(key, url, { force, staleMs });
             if (result.ok) {
@@ -60,21 +89,22 @@ export function useCachedParallel(specs, options = {}) {
         })
       );
 
-      setData(nextData);
+      setData((prev) => ({ ...prev, ...nextData }));
       setErrors(nextErrors);
       hasLoadedRef.current = true;
       setLoading(false);
       setRevalidating(false);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [specsKey, enabled, staleMs, fetchCached]
+    [enabled, staleMs, fetchCached, getEntry, checkAllFresh]
   );
 
   useEffect(() => {
     if (!enabled) return;
+
+    const currentSpecs = specsRef.current;
     const hydrated = {};
     let hasAny = false;
-    specs.forEach(({ key }) => {
+    currentSpecs.forEach(({ key }) => {
       const cached = getCached(key);
       if (cached != null) {
         hydrated[key] = cached;
@@ -83,12 +113,15 @@ export function useCachedParallel(specs, options = {}) {
     });
     if (hasAny) {
       setData((prev) => ({ ...prev, ...hydrated }));
-      hasLoadedRef.current = specs.every(({ key }) => getCached(key) != null);
+      hasLoadedRef.current = currentSpecs.every(({ key }) => getCached(key) != null);
       setLoading(false);
     }
-    void load();
+
+    if (!checkAllFresh()) {
+      void load({ force: false });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specsKey, enabled, ...deps]);
+  }, [specsKey, enabled, staleMs, load, checkAllFresh, ...deps]);
 
   return {
     data,

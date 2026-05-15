@@ -1,7 +1,7 @@
 /** Shared surfaces for the public community shell (dark glass, matches sidebar). */
 
 export const COMMUNITY_GLASS_CARD =
-  "rounded-xl border border-white/10 bg-slate-950/55 shadow-[0_8px_32px_rgba(0,0,0,0.28)] backdrop-blur-md";
+  "community-feed-post rounded-xl border border-white/10 bg-slate-950/80 shadow-[0_8px_32px_rgba(0,0,0,0.22)]";
 
 export const COMMUNITY_GLASS_CARD_INNER =
   "rounded-lg border border-white/[0.08] bg-white/[0.03]";

@@ -74,7 +74,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sticky top-0 z-30 w-full border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/85 md:h-screen md:w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
+    <aside className="sticky top-0 z-30 w-full border-b border-zinc-200/80 bg-white/95 px-4 py-3 dark:border-white/10 dark:bg-slate-950/95 md:h-screen md:w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
       <div className="mb-4 flex items-start justify-between gap-3 md:mb-8">
         <div className="inline-flex min-w-0 items-start gap-2.5 p-1">
           <Link href="/dashboard" aria-label="Go to dashboard" className="rounded-xl">

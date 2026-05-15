@@ -2,6 +2,9 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { createDebouncedSessionStorage } from "@/lib/debounced-storage";
+
+const debouncedSessionStorage = createDebouncedSessionStorage(450);
 
 const STALE_MS = 5 * 60 * 1000;
 
@@ -86,7 +89,7 @@ export const useUserStore = create(
     }),
     {
       name: "owedue-user-v1",
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => debouncedSessionStorage),
       partialize: (state) => ({
         user: state.user,
         fetchedAt: state.fetchedAt,

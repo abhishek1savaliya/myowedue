@@ -144,7 +144,7 @@ export default function CommunityPublicShell({ children }) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.08),transparent_36%),radial-gradient(circle_at_90%_100%,rgba(16,185,129,0.08),transparent_38%)]" />
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-white/[0.08] bg-slate-950/90 px-3 py-2.5 backdrop-blur-xl md:hidden">
+      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-white/[0.08] bg-slate-950/95 px-3 py-2.5 md:hidden">
         <div className="flex min-w-0 items-center gap-1.5">
           <Link href="/community" className="inline-flex shrink-0 items-center gap-1.5 font-semibold tracking-tight text-zinc-50">
             <Image src="/owedue-logo.svg" alt="OWE DUE" width={28} height={28} className="h-7 w-7 rounded-md" />
@@ -185,11 +185,11 @@ export default function CommunityPublicShell({ children }) {
       {drawerOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
           <div
-            className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-zinc-950/60"
             onClick={closeDrawer}
             aria-hidden
           />
-          <aside className="absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto border-r border-white/[0.08] bg-slate-950/95 py-4 pl-4 pr-3 shadow-2xl backdrop-blur-xl">
+          <aside className="absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto border-r border-white/[0.08] bg-slate-950 py-4 pl-4 pr-3 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <Link
                 href="/"
@@ -226,7 +226,7 @@ export default function CommunityPublicShell({ children }) {
 
       <div className="relative mx-auto flex min-h-[calc(100dvh-53px)] max-w-[1200px] md:min-h-screen">
         {/* Desktop left sidebar */}
-        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-white/[0.08] bg-slate-950/80 py-4 pl-4 pr-3 backdrop-blur-xl md:flex md:flex-col">
+        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-white/[0.08] bg-slate-950/95 py-4 pl-4 pr-3 md:flex md:flex-col">
           <Link
             href="/"
             className="mb-5 inline-flex shrink-0 items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-50"
@@ -267,7 +267,7 @@ export default function CommunityPublicShell({ children }) {
               )}
               <SuggestedCreatorsRail loggedIn={loggedIn} authChecked={authChecked} className="p-3" />
             </div>
-            <div className="hidden rounded-xl border border-white/10 bg-slate-950/55 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.28)] backdrop-blur-md lg:block">
+            <div className="hidden rounded-xl border border-white/10 bg-slate-950/80 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.22)] lg:block">
               <h2 className="text-base font-semibold text-zinc-50">Use the full app</h2>
               <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                 Track dues, files, and reminders alongside this community feed.
@@ -295,7 +295,7 @@ export default function CommunityPublicShell({ children }) {
       </div>
 
       {/* Mobile bottom bar — quick access to key actions */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-white/[0.08] bg-slate-950/90 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl md:hidden" aria-label="Quick actions">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-white/[0.08] bg-slate-950/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:hidden" aria-label="Quick actions">
         <Link
           href="/community"
           className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${homeActive ? "text-amber-300" : "text-zinc-500"}`}

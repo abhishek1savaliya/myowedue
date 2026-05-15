@@ -82,7 +82,7 @@ export default function SuggestedCreatorsRail({ loggedIn, authChecked, className
   }
 
   const cardClass =
-    "rounded-xl border border-white/10 bg-slate-950/55 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.28)] backdrop-blur-md";
+    "rounded-xl border border-white/10 bg-slate-950/80 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.22)]";
 
   return (
     <section className={`${cardClass} ${className}`.trim()} aria-labelledby="suggested-creators-heading">

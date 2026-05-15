@@ -2,8 +2,11 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { DEFAULT_CACHE_STALE_MS } from "@/lib/cache-stale";
+import { createDebouncedSessionStorage } from "@/lib/debounced-storage";
 
-const DEFAULT_STALE_MS = 5 * 60 * 1000;
+const DEFAULT_STALE_MS = DEFAULT_CACHE_STALE_MS;
+const debouncedSessionStorage = createDebouncedSessionStorage(450);
 
 export const useApiCacheStore = create(
   persist(
@@ -100,7 +103,7 @@ export const useApiCacheStore = create(
     }),
     {
       name: "owedue-api-cache-v1",
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => debouncedSessionStorage),
       partialize: (state) => ({ entries: state.entries }),
     }
   )
