@@ -97,7 +97,7 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
   }
 
   return (
-    <div className={`space-y-4 ${isX ? "px-3 py-4 text-[15px] md:px-4 md:py-6" : "py-6"}`}>
+    <div className={`mx-auto w-full min-w-0 max-w-xl space-y-4 ${isX ? "px-3 py-4 text-[15px] md:px-4 md:py-6" : "px-4 py-6 sm:px-5"}`}>
       <div className="flex items-center gap-3">
         <BackButton href={backHref} />
         <h1 className={`text-lg font-bold ${isX ? "text-zinc-900 dark:text-white" : "text-zinc-900 dark:text-white"}`}>Post</h1>

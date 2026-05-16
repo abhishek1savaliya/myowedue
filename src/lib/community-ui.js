@@ -17,3 +17,7 @@ export const COMMUNITY_BTN_SECONDARY =
 /** Primary CTA on dark community chrome — avoids theme-variant clashes (e.g. white-on-white). */
 export const COMMUNITY_BTN_PRIMARY =
   "inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-sm font-semibold text-slate-950 shadow-[0_4px_20px_rgba(245,158,11,0.28)] transition hover:bg-amber-400 active:bg-amber-300";
+
+/** Centered feed column — full width on mobile with safe horizontal padding. */
+export const COMMUNITY_FEED_SHELL =
+  "mx-auto w-full min-w-0 max-w-xl space-y-6 px-4 py-4 sm:px-5 md:py-6";

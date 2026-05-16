@@ -140,7 +140,7 @@ export default async function CommunityPublicPage() {
       </noscript>
       <Suspense
         fallback={
-          <div className="mx-auto flex min-h-[40vh] max-w-xl flex-col items-center justify-center gap-2 px-4 py-12 text-zinc-600 dark:text-zinc-400">
+          <div className="mx-auto flex min-h-[40vh] w-full max-w-xl flex-col items-center justify-center gap-2 px-4 py-12 text-zinc-600 dark:text-zinc-400">
             <span className="text-sm">Loading community…</span>
           </div>
         }

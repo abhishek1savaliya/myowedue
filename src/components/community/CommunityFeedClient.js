@@ -17,6 +17,7 @@ import {
   COMMUNITY_FEED_HEADER_SUB,
   COMMUNITY_FEED_HEADER_TITLE,
   COMMUNITY_GLASS_CARD,
+  COMMUNITY_FEED_SHELL,
 } from "@/lib/community-ui";
 
 const COMMUNITY_SETUP_MESSAGE =
@@ -1618,9 +1619,11 @@ export default function CommunityFeedClient({
       </>
     );
 
-  const rootShell = isX
-    ? `mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col space-y-5 px-3 py-4 text-[15px] md:px-4 md:py-6 ${containerClassName}`.trim()
-    : `mx-auto max-w-xl space-y-6 ${containerClassName}`.trim();
+  const rootShell = cn(
+    COMMUNITY_FEED_SHELL,
+    isX && "flex min-h-0 flex-1 flex-col space-y-5 text-[15px]",
+    containerClassName
+  );
 
   return (
     <div className={rootShell}>

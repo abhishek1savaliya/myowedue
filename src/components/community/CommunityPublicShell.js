@@ -138,7 +138,7 @@ export default function CommunityPublicShell({ children }) {
   const appHref = loggedIn ? "/dashboard" : "/login?next=/dashboard";
 
   return (
-    <div className="community-shell ui-v2-page relative min-h-screen bg-background text-foreground">
+    <div className="community-shell ui-v2-page relative min-h-screen w-full max-w-full overflow-x-clip bg-background text-foreground">
       <CommunityStoreBootstrap />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.08),transparent_36%),radial-gradient(circle_at_90%_100%,rgba(16,185,129,0.08),transparent_38%)]" />
 
@@ -223,7 +223,7 @@ export default function CommunityPublicShell({ children }) {
         </div>
       ) : null}
 
-      <div className="relative mx-auto flex min-h-[calc(100dvh-53px)] max-w-[1200px] md:min-h-screen">
+      <div className="relative mx-auto flex w-full min-w-0 min-h-[calc(100dvh-53px)] max-w-full md:min-h-screen lg:max-w-[1200px]">
         {/* Desktop left sidebar */}
         <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col overflow-x-clip border-r border-zinc-200/80 bg-background px-4 py-4 md:flex dark:border-white/8 dark:bg-slate-950/95">
           <Link
@@ -246,8 +246,8 @@ export default function CommunityPublicShell({ children }) {
           />
         </aside>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
-          <main className="relative order-2 min-h-0 min-w-0 flex-1 border-zinc-200/60 bg-transparent pb-20 md:border-x md:pb-0 lg:order-1 dark:border-white/[0.06]">
+        <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col lg:flex-row">
+          <main className="relative order-2 min-h-0 min-w-0 w-full flex-1 overflow-x-clip border-zinc-200/60 bg-transparent pb-20 md:border-x md:pb-0 lg:order-1 dark:border-white/[0.06]">
             {children}
           </main>
 
