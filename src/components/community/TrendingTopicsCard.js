@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useId } from "react";
-import { Loader2, TrendingUp } from "lucide-react";
+import { Loader2, Lock, TrendingUp } from "lucide-react";
+import { getTrendingDisplayForUser } from "@/lib/community-trending-preview";
 
 /**
  * @param {{
@@ -12,6 +13,7 @@ import { Loader2, TrendingUp } from "lucide-react";
  *   variant?: "shell" | "portal";
  *   className?: string;
  *   linkBasePath?: string | null;
+ *   isPremium?: boolean;
  * }} props
  */
 export default function TrendingTopicsCard({
@@ -21,6 +23,7 @@ export default function TrendingTopicsCard({
   variant = "shell",
   className = "",
   linkBasePath = null,
+  isPremium = false,
 }) {
   const headingId = useId();
   const shell = variant === "shell";
@@ -28,7 +31,9 @@ export default function TrendingTopicsCard({
     ? "community-glass-card rounded-xl border p-4 shadow-sm"
     : "rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90";
 
-  const rows = (Array.isArray(topics) ? topics : []).slice(0, limit);
+  const { rows, rankOffset, totalCount, isPreview, hiddenCount } = getTrendingDisplayForUser(topics, limit, {
+    isPremium,
+  });
 
   function topicHref(topic) {
     if (!linkBasePath) return null;
@@ -61,7 +66,9 @@ export default function TrendingTopicsCard({
             const href = topicHref(row.topic);
             const inner = (
               <>
-                <span className={`w-5 shrink-0 pt-0.5 text-right text-xs font-bold ${shell ? "text-zinc-500" : "text-zinc-400 dark:text-zinc-500"}`}>{i + 1}</span>
+                <span className={`w-5 shrink-0 pt-0.5 text-right text-xs font-bold ${shell ? "text-zinc-500" : "text-zinc-400 dark:text-zinc-500"}`}>
+                  {rankOffset + i + 1}
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className={`font-semibold ${shell ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-900 dark:text-zinc-100"}`}>{row.topic}</p>
                   <p className={`mt-0.5 text-xs ${shell ? "text-zinc-500" : "text-zinc-500 dark:text-zinc-400"}`}>
@@ -91,6 +98,31 @@ export default function TrendingTopicsCard({
           })}
         </ol>
       )}
+
+      {!loading && isPreview && totalCount > 2 ? (
+        <div
+          className={`mt-4 flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${
+            shell
+              ? "border-amber-500/30 bg-amber-500/10"
+              : "border-amber-200 bg-amber-50 dark:border-amber-500/35 dark:bg-amber-950/40"
+          }`}
+        >
+          <Lock
+            className={`mt-0.5 h-4 w-4 shrink-0 ${shell ? "text-amber-400" : "text-amber-600 dark:text-amber-400"}`}
+            aria-hidden
+          />
+          <p className={`text-sm leading-snug ${shell ? "text-zinc-300" : "text-zinc-700 dark:text-zinc-300"}`}>
+            <span className="font-semibold text-amber-600 dark:text-amber-300">Pro:</span> see all {totalCount} trending
+            topics ({hiddenCount} hidden on Free).{" "}
+            <Link
+              href="/my-subscription?purchase=1"
+              className="font-semibold text-amber-700 underline underline-offset-2 dark:text-amber-300"
+            >
+              Upgrade to Pro
+            </Link>
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }

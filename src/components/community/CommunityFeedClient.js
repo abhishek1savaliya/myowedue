@@ -815,11 +815,6 @@ export function PostCard({
             </div>
             {renderOwnerControls(true)}
           </div>
-          {viewerIsPremium ? (
-            <CommunityLikesPrivateBanner className="mt-3" />
-          ) : canInteract ? (
-            <CommunityLikesPrivateBanner className="mt-3" showUpgradeHint />
-          ) : null}
           {commentsOpen || isDetail ? (
             <div className="mt-4 border-t border-white/[0.08] pt-4">
               {canInteract ? (
@@ -942,11 +937,6 @@ export function PostCard({
         </div>
         {renderOwnerControls(false)}
       </div>
-      {viewerIsPremium ? (
-        <CommunityLikesPrivateBanner className="mt-3 border-zinc-200/80 bg-zinc-50 dark:border-white/10 dark:bg-zinc-950/40 [&_p]:text-zinc-700 dark:[&_p]:text-zinc-200" />
-      ) : canInteract ? (
-        <CommunityLikesPrivateBanner className="mt-3" showUpgradeHint />
-      ) : null}
       {commentsOpen || isDetail ? (
         <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
           {canInteract ? (
@@ -1105,6 +1095,7 @@ export default function CommunityFeedClient({
   const isX = !isPortal && skin === "x";
   const portalMineHome = isPortal;
   const canInteract = Boolean(currentUserId);
+  const viewerIsPremium = Boolean(useUserStore((s) => s.user?.isPremium));
   const feedPosts = useMemo(() => dedupePostsById(posts), [posts]);
 
   const nextCursorRef = useRef(null);
@@ -1559,6 +1550,15 @@ export default function CommunityFeedClient({
       </div>
     ) : null;
 
+  const likesPrivacyTile =
+    authResolved && canInteract ? (
+      viewerIsPremium ? (
+        <CommunityLikesPrivateBanner />
+      ) : (
+        <CommunityLikesPrivateBanner showUpgradeHint />
+      )
+    ) : null;
+
   const feedBody =
     loading && feedHydratedRef.current ? (
       <div className="flex justify-center py-10 text-zinc-500 dark:text-zinc-400">
@@ -1714,6 +1714,7 @@ export default function CommunityFeedClient({
 
       {composeForm}
       {guestPromo}
+      {likesPrivacyTile}
       {isPortal ? tabBar : null}
 
       {error && !configError ? (

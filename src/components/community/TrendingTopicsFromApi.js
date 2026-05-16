@@ -2,6 +2,7 @@
 
 import TrendingTopicsCard from "@/components/community/TrendingTopicsCard";
 import { useCommunityTrending } from "@/components/community/useCommunityTrending";
+import { useUserStore } from "@/stores/useUserStore";
 
 /**
  * Self-contained trending list (fetches `/api/community/trending` once per mount).
@@ -14,6 +15,7 @@ export default function TrendingTopicsFromApi({
   linkBasePath = "/community",
 }) {
   const { topics, loading } = useCommunityTrending();
+  const isPremium = Boolean(useUserStore((s) => s.user?.isPremium));
   return (
     <TrendingTopicsCard
       topics={topics}
@@ -22,6 +24,7 @@ export default function TrendingTopicsFromApi({
       variant={variant}
       className={className}
       linkBasePath={linkBasePath}
+      isPremium={isPremium}
     />
   );
 }

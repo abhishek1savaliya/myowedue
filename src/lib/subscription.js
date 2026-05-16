@@ -33,6 +33,7 @@ export const PLAN_DEFINITIONS = {
       "Advanced dashboard insights (efficiency, exposure, concentration)",
       "Private likes on community posts (hidden from others)",
       "Edit community posts within 5 minutes of posting",
+      "Full trending topics list (Free shows preview only)",
       "Recurring dues",
       "Export to PDF and Excel",
       "Payment links workspace",
