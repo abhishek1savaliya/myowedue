@@ -10,6 +10,7 @@ import {
   persistAppearancePreference,
   persistThemePreference,
 } from "@/lib/cookie-preferences";
+import { useUserStore } from "@/stores/useUserStore";
 
 const cardShadow =
   "shadow-[0_2px_8px_rgba(0,0,0,0.04),0_24px_48px_-12px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2),0_24px_48px_-12px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.06)]";
@@ -40,6 +41,10 @@ export default function LoginPage() {
     if (!res.ok) {
       setError(data.message || "Login failed");
       return;
+    }
+
+    if (data?.user) {
+      useUserStore.getState().setUser(data.user);
     }
 
     if (data?.user && typeof data.user.darkMode === "boolean") {

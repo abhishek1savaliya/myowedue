@@ -20,6 +20,8 @@ import {
   PenLine,
   LogOut,
 } from "lucide-react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { CACHE_KEYS } from "@/lib/cache-keys";
 import { useUserStore } from "@/stores/useUserStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useApiCacheStore } from "@/stores/useApiCacheStore";
@@ -51,7 +53,10 @@ export default function Sidebar() {
   const notificationCount = useNotificationStore((s) => s.count);
 
   const authChecked = status === "ready" || status === "error";
-  const isPremium = Boolean(user?.isPremium);
+  const { data: subscription } = useCachedFetch(CACHE_KEYS.subscriptionStatus, "/api/subscription/status", {
+    enabled: authChecked,
+  });
+  const isPremium = Boolean(user?.isPremium) || Boolean(subscription?.isPremium);
   const role = String(user?.cmsRole || "");
   const canAccessContentEditor =
     role === "super_admin" || (role === "manager" && Boolean(user?.contentEditPermission));

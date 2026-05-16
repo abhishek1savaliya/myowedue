@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { whenApiCacheHydrated } from "@/lib/api-cache-hydration";
 import { DEFAULT_CACHE_STALE_MS } from "@/lib/cache-stale";
 import { useApiCacheStore } from "@/stores/useApiCacheStore";
 
@@ -14,15 +15,28 @@ import { useApiCacheStore } from "@/stores/useApiCacheStore";
 export function useCachedFetch(cacheKey, url, options = {}) {
   const { staleMs = DEFAULT_CACHE_STALE_MS, enabled = true, deps = [] } = options;
   const fetchCached = useApiCacheStore((s) => s.fetch);
-  const getCached = useApiCacheStore((s) => s.getCached);
   const getEntry = useApiCacheStore((s) => s.getEntry);
 
-  const [data, setData] = useState(() => (enabled ? getCached(cacheKey) : null));
-  const [loading, setLoading] = useState(() => enabled && getCached(cacheKey) == null);
+  // Do not read sessionStorage-backed cache in useState — server and client must match.
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(() => Boolean(enabled));
   const [error, setError] = useState("");
-  const [fromCache, setFromCache] = useState(() => getCached(cacheKey) != null);
+  const [fromCache, setFromCache] = useState(false);
   const [revalidating, setRevalidating] = useState(false);
-  const hasLoadedRef = useRef(getCached(cacheKey) != null);
+  const hasLoadedRef = useRef(false);
+
+  const syncFromStore = useCallback(() => {
+    if (!enabled || !cacheKey) return null;
+    const entry = getEntry(cacheKey);
+    const cached = entry?.data;
+    if (cached != null) {
+      setData(cached);
+      setFromCache(true);
+      hasLoadedRef.current = true;
+      setLoading(false);
+    }
+    return entry;
+  }, [enabled, cacheKey, getEntry]);
 
   const load = useCallback(
     async ({ force = false } = {}) => {
@@ -77,24 +91,25 @@ export function useCachedFetch(cacheKey, url, options = {}) {
     [cacheKey, url, enabled, staleMs, fetchCached, getEntry]
   );
 
+  useLayoutEffect(() => {
+    syncFromStore();
+  }, [syncFromStore]);
+
   useEffect(() => {
     if (!enabled) return;
 
-    const entry = getEntry(cacheKey);
-    const cached = entry?.data;
-    if (cached != null) {
-      setData(cached);
-      setFromCache(true);
-      hasLoadedRef.current = true;
-      setLoading(false);
-    }
+    const start = () => {
+      const entry = syncFromStore();
+      const cached = entry?.data;
+      const isFresh = entry && Date.now() - entry.fetchedAt < staleMs;
+      if (!isFresh || cached == null) {
+        void load({ force: false });
+      }
+    };
 
-    const isFresh = entry && Date.now() - entry.fetchedAt < staleMs;
-    if (!isFresh || cached == null) {
-      void load({ force: false });
-    }
+    return whenApiCacheHydrated(start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey, url, enabled, staleMs, load, ...deps]);
+  }, [cacheKey, url, enabled, staleMs, load, syncFromStore, ...deps]);
 
   return {
     data,

@@ -95,6 +95,12 @@ export const useUserStore = create(
         fetchedAt: state.fetchedAt,
         status: state.user ? "ready" : state.status,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (!state?.user) return;
+        // Subscription fields (isPremium, etc.) go stale in sessionStorage — refetch on load.
+        state.fetchedAt = 0;
+        state.status = "loading";
+      },
     }
   )
 );

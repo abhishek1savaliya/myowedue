@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { whenApiCacheHydrated } from "@/lib/api-cache-hydration";
 import { DEFAULT_CACHE_STALE_MS } from "@/lib/cache-stale";
 import { useApiCacheStore } from "@/stores/useApiCacheStore";
 
@@ -21,24 +22,30 @@ export function useCachedParallel(specs, options = {}) {
 
   const specsKey = specs.map((s) => `${s.key}:${s.url}`).join("|");
 
-  const [data, setData] = useState(() => {
-    if (!enabled) return {};
-    const initial = {};
-    specs.forEach(({ key }) => {
-      const cached = getCached(key);
-      if (cached !== null && cached !== undefined) initial[key] = cached;
-    });
-    return initial;
-  });
-  const [loading, setLoading] = useState(() => {
-    if (!enabled) return false;
-    return specs.some(({ key }) => getCached(key) == null);
-  });
+  const [data, setData] = useState({});
+  const [loading, setLoading] = useState(() => Boolean(enabled));
   const [revalidating, setRevalidating] = useState(false);
   const [errors, setErrors] = useState({});
-  const hasLoadedRef = useRef(
-    enabled && specs.length > 0 && specs.every(({ key }) => getCached(key) != null)
-  );
+  const hasLoadedRef = useRef(false);
+
+  const syncFromStore = useCallback(() => {
+    if (!enabled) return;
+    const currentSpecs = specsRef.current;
+    const hydrated = {};
+    let hasAny = false;
+    currentSpecs.forEach(({ key }) => {
+      const cached = getCached(key);
+      if (cached != null) {
+        hydrated[key] = cached;
+        hasAny = true;
+      }
+    });
+    if (hasAny) {
+      setData((prev) => ({ ...prev, ...hydrated }));
+      hasLoadedRef.current = currentSpecs.every(({ key }) => getCached(key) != null);
+      setLoading(false);
+    }
+  }, [enabled, getCached]);
 
   const checkAllFresh = useCallback(() => {
     const current = specsRef.current;
@@ -98,30 +105,23 @@ export function useCachedParallel(specs, options = {}) {
     [enabled, staleMs, fetchCached, getEntry, checkAllFresh]
   );
 
+  useLayoutEffect(() => {
+    syncFromStore();
+  }, [syncFromStore, specsKey]);
+
   useEffect(() => {
     if (!enabled) return;
 
-    const currentSpecs = specsRef.current;
-    const hydrated = {};
-    let hasAny = false;
-    currentSpecs.forEach(({ key }) => {
-      const cached = getCached(key);
-      if (cached != null) {
-        hydrated[key] = cached;
-        hasAny = true;
+    const start = () => {
+      syncFromStore();
+      if (!checkAllFresh()) {
+        void load({ force: false });
       }
-    });
-    if (hasAny) {
-      setData((prev) => ({ ...prev, ...hydrated }));
-      hasLoadedRef.current = currentSpecs.every(({ key }) => getCached(key) != null);
-      setLoading(false);
-    }
+    };
 
-    if (!checkAllFresh()) {
-      void load({ force: false });
-    }
+    return whenApiCacheHydrated(start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specsKey, enabled, staleMs, load, checkAllFresh, ...deps]);
+  }, [specsKey, enabled, staleMs, load, syncFromStore, checkAllFresh, ...deps]);
 
   return {
     data,

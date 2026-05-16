@@ -12,6 +12,7 @@ import {
   persistAppearancePreference,
   persistThemePreference,
 } from "@/lib/cookie-preferences";
+import { useUserStore } from "@/stores/useUserStore";
 import { usePublicCommunityUsernameCheck } from "@/hooks/usePublicCommunityUsernameCheck";
 import {
   COMMUNITY_USERNAME_MAX,
@@ -90,6 +91,8 @@ export default function SignupPage() {
     }
 
     if (data?.user) {
+      useUserStore.getState().setUser(data.user);
+
       const isDarkMode = Boolean(data.user.darkMode);
       const isPremium = Boolean(data.user.isPremium);
       const fontPreset = data.user.fontPreset;
