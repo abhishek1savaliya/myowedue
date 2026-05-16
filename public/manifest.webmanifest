@@ -1,0 +1,10 @@
+{
+  "name": "OweDue",
+  "short_name": "OweDue",
+  "description": "Track who owes you and who you owe — works offline with sync when online.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#f59e0b",
+  "icons": []
+}

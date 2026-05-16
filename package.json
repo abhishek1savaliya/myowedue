@@ -34,6 +34,7 @@
     "clsx": "^2.1.1",
     "compromise": "^14.15.0",
     "date-fns": "^4.1.0",
+    "dexie": "^4.4.2",
     "dotenv": "^17.4.2",
     "framer-motion": "^12.38.0",
     "html-to-image": "^1.11.13",
