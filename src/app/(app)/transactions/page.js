@@ -87,7 +87,13 @@ export default function TransactionsPage() {
       if (res.ok) {
         setForm(txInitial);
         setEditingId("");
-        setFeedback(editingId ? "Transaction updated." : "Transaction created.");
+        setFeedback(
+          data.queued
+            ? data.message || "Saved offline. Will sync when you're back online."
+            : editingId
+              ? "Transaction updated."
+              : "Transaction created."
+        );
         invalidateAfterMutation();
       } else {
         setFeedback(data.message || "Failed to save transaction.");

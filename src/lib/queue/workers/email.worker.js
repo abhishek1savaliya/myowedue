@@ -11,3 +11,4 @@ export async function emailProcessor(job) {
   if (!result.ok) throw new Error(result.message || "Email send failed");
   return { sent: true, to };
 }
+import "server-only";

@@ -29,7 +29,7 @@ export function invalidateCachesForUrl(url) {
     return;
   }
   if (path.includes("/api/community")) {
-    refreshAppCache(["notifications"]);
+    refreshAppCache(["community", "notifications"]);
     return;
   }
   if (path.includes("/api/auth/me") || path.includes("/api/user")) {

@@ -67,3 +67,4 @@ async function handleClearCommunityCache() {
   const deleted = await scanAndDelete(client, patterns);
   return { deleted };
 }
+import "server-only";

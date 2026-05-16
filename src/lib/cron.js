@@ -1,3 +1,4 @@
+import "server-only";
 import cron from "node-cron";
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";

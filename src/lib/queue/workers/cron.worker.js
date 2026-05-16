@@ -1,3 +1,4 @@
+import "server-only";
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import Person from "@/models/Person";

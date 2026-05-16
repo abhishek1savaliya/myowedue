@@ -62,6 +62,10 @@ export function invalidateAppData(store, groups = []) {
     store.invalidatePrefix("reports:");
   }
   if (hit("notifications")) store.invalidate(CACHE_KEYS.notifications);
+  if (hit("community")) {
+    store.invalidatePrefix("community:posts:");
+    store.invalidate(CACHE_KEYS.suggestedCreators);
+  }
   if (hit("subscription")) {
     store.invalidate(CACHE_KEYS.subscriptionStatus);
     store.invalidate(CACHE_KEYS.subscriptionHistory);

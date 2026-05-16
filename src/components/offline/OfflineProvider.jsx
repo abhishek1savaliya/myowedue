@@ -1,8 +1,8 @@
 "use client";
 
+import "@/lib/offline/install-fetch-patch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { hydrateApiCacheFromIndexedDB, persistApiCacheEntries } from "@/lib/offline/api-cache-persist";
-import { installOfflineFetchPatch } from "@/lib/offline/client-fetch";
 import { onNetworkStatusChange, isOnline } from "@/lib/offline/network";
 import { pendingMutationCount } from "@/lib/offline/mutation-queue";
 import { syncPendingMutations } from "@/lib/offline/sync-engine";
@@ -35,7 +35,6 @@ export default function OfflineProvider({ children }) {
   }, [refreshPending]);
 
   useEffect(() => {
-    installOfflineFetchPatch();
     setOnline(isOnline());
 
     if ("serviceWorker" in navigator) {
@@ -75,10 +74,16 @@ export default function OfflineProvider({ children }) {
       if (isOnline()) void runSync();
     });
 
+    const onQueueChanged = () => {
+      void refreshPending();
+    };
+    window.addEventListener("owedue-offline-queue-changed", onQueueChanged);
+
     return () => {
       unsubNetwork();
       unsubStore();
       unsubHydrate();
+      window.removeEventListener("owedue-offline-queue-changed", onQueueChanged);
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
   }, [runSync, refreshPending]);

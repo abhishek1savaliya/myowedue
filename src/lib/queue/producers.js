@@ -1,3 +1,4 @@
+import "server-only";
 import { getEmailQueue, getPdfQueue, getCronFanoutQueue, getCommunityQueue, getFileOpsQueue, getCacheQueue } from "./queues.js";
 import { sendMail } from "@/lib/mailer";
 

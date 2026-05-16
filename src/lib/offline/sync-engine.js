@@ -7,6 +7,8 @@ import {
   markMutationFailed,
   removeMutation,
 } from "@/lib/offline/mutation-queue";
+import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
+import { getNativeFetch } from "@/lib/offline/client-fetch";
 import { useApiCacheStore } from "@/stores/useApiCacheStore";
 
 let syncing = false;
@@ -26,26 +28,34 @@ export async function syncPendingMutations() {
 
   try {
     const queue = await listPendingMutations();
+    const communityIdMaps = { posts: new Map(), comments: new Map() };
+    const communityOffline = await import("@/lib/offline/community-pending");
 
     for (const item of queue) {
       if (!item?.id) continue;
 
       try {
-        const res = await fetch(item.url, {
+        const resolved = communityOffline.resolveCommunityOfflineMutation(item, communityIdMaps);
+        const nf = getNativeFetch() || fetch.bind(globalThis);
+        const res = await nf(resolved.url, {
           method: item.method,
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
             ...item.headers,
           },
-          body: item.body || undefined,
+          body: resolved.body || undefined,
         });
 
         const data = await res.json().catch(() => ({}));
 
         if (res.ok) {
+          communityOffline.recordCommunitySyncIds(item, data, communityIdMaps);
           await removeMutation(item.id);
           invalidateCachesForUrl(item.url);
+          if (String(item.url || "").includes("/api/community")) {
+            dispatchCommunityMutate();
+          }
           synced += 1;
         } else {
           await markMutationFailed(item.id, data?.message || `HTTP ${res.status}`);

@@ -121,9 +121,17 @@ export default function PeoplePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       setForm(initial);
       invalidateAfterMutation();
+      if (data.queued) {
+        showAlert(data.message || "Saved offline. Will sync when you're back online.", {
+          severity: "info",
+        });
+      }
+    } else {
+      showAlert(data.message || "Failed to add person", { severity: "error" });
     }
   }
 
@@ -147,11 +155,19 @@ export default function PeoplePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    const data = await res.json().catch(() => ({}));
 
     if (res.ok) {
       setEditingPersonId("");
       setForm(initial);
       invalidateAfterMutation();
+      if (data.queued) {
+        showAlert(data.message || "Saved offline. Will sync when you're back online.", {
+          severity: "info",
+        });
+      }
+    } else {
+      showAlert(data.message || "Failed to update person", { severity: "error" });
     }
   }
 

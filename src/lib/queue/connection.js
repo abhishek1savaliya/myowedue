@@ -1,3 +1,4 @@
+import "server-only";
 import IORedis from "ioredis";
 
 let _connection = null;

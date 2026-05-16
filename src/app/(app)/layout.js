@@ -1,8 +1,5 @@
 import Sidebar from "@/components/Sidebar";
 import AmbientBackground from "@/components/shell/AmbientBackground";
-import { startReminderCron } from "@/lib/cron";
-
-startReminderCron();
 
 export default function AppLayout({ children }) {
   return (

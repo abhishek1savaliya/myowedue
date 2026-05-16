@@ -1,7 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // pdfkit reads .afm font metrics from disk; bundling breaks __dirname (e.g. E:\ROOT\...).
-  serverExternalPackages: ["pdfkit"],
+  serverExternalPackages: [
+    "pdfkit",
+    "mongoose",
+    "mongodb",
+    "bullmq",
+    "ioredis",
+    "node-cron",
+  ],
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),

@@ -25,3 +25,4 @@ export async function fileOpsProcessor(job) {
 
   return { deleted, failed, total: files.length };
 }
+import "server-only";

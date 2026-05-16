@@ -15,7 +15,15 @@ import {
   isCommunityPostEditWindowOpen,
   wasCommunityPostEdited,
 } from "@/lib/community-post-edit-window";
-import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
+import { COMMUNITY_MUTATE_EVENT, dispatchCommunityMutate } from "@/lib/community-mutate-event";
+import { isOnline } from "@/lib/offline/network";
+import {
+  buildOptimisticCommunityComment,
+  buildOptimisticCommunityPost,
+  getPendingCommunityPosts,
+  isQueuedOfflineResponse,
+  mergePostsWithPending,
+} from "@/lib/offline/community-pending";
 import { normalizeSavedUsernameHandle } from "@/lib/community-usernames";
 import { normalizeCommunityTopicParam } from "@/lib/community-topic";
 import { cn } from "@/lib/utils";
@@ -105,12 +113,26 @@ function CommunityAuthorAttribution({ displayName, username, isSelf, verified, i
   );
 }
 
+function insertReplyInTree(nodes, parentId, reply) {
+  if (!Array.isArray(nodes)) return nodes;
+  return nodes.map((node) => {
+    if (String(node.id) === String(parentId)) {
+      return { ...node, replies: [...(node.replies || []), reply] };
+    }
+    if (node.replies?.length) {
+      return { ...node, replies: insertReplyInTree(node.replies, parentId, reply) };
+    }
+    return node;
+  });
+}
+
 function CommentBranch({
   node,
   postId,
   depth,
   onRefresh,
   onThreadMutate,
+  onOptimisticReply,
   currentUserId,
   canInteract,
   loginNextPath,
@@ -185,8 +207,20 @@ function CommentBranch({
       if (!res.ok) throw new Error(data.message || "Failed to reply");
       setReplyText("");
       setReplyOpen(false);
-      onThreadMutate?.();
-      onRefresh();
+      if (isQueuedOfflineResponse(data)) {
+        const user = useUserStore.getState().user;
+        const optimistic = buildOptimisticCommunityComment({
+          postId,
+          body: t,
+          user,
+          parentId: node.id,
+        });
+        onOptimisticReply?.(optimistic);
+        onNotifyError?.(data.message || "Reply saved offline. It will sync when you're back online.");
+      } else {
+        onThreadMutate?.();
+        onRefresh();
+      }
     } catch (err) {
       onNotifyError?.(err.message || "Failed to reply");
     } finally {
@@ -309,6 +343,7 @@ function CommentBranch({
               depth={depth + 1}
               onRefresh={onRefresh}
               onThreadMutate={onThreadMutate}
+              onOptimisticReply={onOptimisticReply}
               currentUserId={currentUserId}
               canInteract={canInteract}
               loginNextPath={loginNextPath}
@@ -358,6 +393,17 @@ export function PostCard({
   function goLogin() {
     router.push(`/login?next=${encodeURIComponent(loginNextPath)}`);
   }
+
+  const handleOptimisticComment = useCallback(
+    (comment) => {
+      const parentId = comment.parentId || comment.parent_id;
+      setComments((prev) =>
+        parentId ? insertReplyInTree(prev, parentId, comment) : [...prev, comment]
+      );
+      onCommentCountChange?.(post.id, 1);
+    },
+    [post.id, onCommentCountChange]
+  );
 
   const isOwnPost = Boolean(
     canInteract && currentUserId && String(post.author_id) === String(currentUserId)
@@ -581,8 +627,20 @@ export function PostCard({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Failed to comment");
       setCommentText("");
-      await loadComments(isDetail ? false : undefined);
-      onCommentCountChange(post.id, 1);
+      if (isQueuedOfflineResponse(data)) {
+        const user = useUserStore.getState().user;
+        handleOptimisticComment(
+          buildOptimisticCommunityComment({
+            postId: post.id,
+            body: t,
+            user,
+          })
+        );
+        onNotifyError?.(data.message || "Comment saved offline. It will sync when you're back online.");
+      } else {
+        await loadComments(isDetail ? false : undefined);
+        onCommentCountChange(post.id, 1);
+      }
       onCommunityMutate?.();
     } catch (err) {
       onNotifyError?.(err.message || "Failed to comment");
@@ -858,6 +916,7 @@ export function PostCard({
                         onCommentCountChange(post.id, 1);
                       }}
                       onThreadMutate={onCommunityMutate}
+                      onOptimisticReply={handleOptimisticComment}
                       currentUserId={currentUserId}
                       canInteract={canInteract}
                       loginNextPath={loginNextPath}
@@ -980,6 +1039,7 @@ export function PostCard({
                     onCommentCountChange(post.id, 1);
                   }}
                   onThreadMutate={onCommunityMutate}
+                  onOptimisticReply={handleOptimisticComment}
                   currentUserId={currentUserId}
                   canInteract={canInteract}
                   loginNextPath={loginNextPath}
@@ -1088,6 +1148,7 @@ export default function CommunityFeedClient({
   const [composer, setComposer] = useState("");
   const [posting, setPosting] = useState(false);
   const [configError, setConfigError] = useState(false);
+  const [offlineNotice, setOfflineNotice] = useState("");
   const [feedTab, setFeedTab] = useState("all");
   const [shareTarget, setShareTarget] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -1121,6 +1182,12 @@ export default function CommunityFeedClient({
     if (isMissingCommunityTables(rawMessage)) setConfigError(true);
   }, []);
 
+  const mergePendingIntoPosts = useCallback(async () => {
+    const user = useUserStore.getState().user;
+    const pending = await getPendingCommunityPosts(user);
+    setPosts((prev) => mergePostsWithPending(prev, pending));
+  }, []);
+
   /** Refetch liked/shared when session becomes available; ignore user id changes on "all" to avoid double fetch. */
   const tabAuthKey = useMemo(
     () => (feedTab === "liked" || feedTab === "shared" ? currentUserId || "__guest__" : "__all__"),
@@ -1142,6 +1209,21 @@ export default function CommunityFeedClient({
       }
 
       const hasSeed = !force && !isPortal && feedTab === "all" && !topicFilter && seedList.length > 0;
+
+      if (!isOnline()) {
+        setLoading(true);
+        setError("");
+        const user = useUserStore.getState().user;
+        const pending = await getPendingCommunityPosts(user);
+        setPosts((prev) => {
+          const base = prev.length > 0 ? prev : hasSeed ? seedList : [];
+          return mergePostsWithPending(base, pending);
+        });
+        setLoading(false);
+        setAuthResolved(true);
+        return;
+      }
+
       if (!hasSeed) {
         setLoading(true);
         setError("");
@@ -1214,6 +1296,19 @@ export default function CommunityFeedClient({
       cancelled = true;
     };
   }, [loadFeed, tabAuthKey]);
+
+  useEffect(() => {
+    const onQueueOrCommunitySync = () => {
+      void mergePendingIntoPosts();
+      if (isOnline()) void loadFeed({ force: true, isCancelled: () => false });
+    };
+    window.addEventListener("owedue-offline-queue-changed", onQueueOrCommunitySync);
+    window.addEventListener(COMMUNITY_MUTATE_EVENT, onQueueOrCommunitySync);
+    return () => {
+      window.removeEventListener("owedue-offline-queue-changed", onQueueOrCommunitySync);
+      window.removeEventListener(COMMUNITY_MUTATE_EVENT, onQueueOrCommunitySync);
+    };
+  }, [mergePendingIntoPosts, loadFeed]);
 
   const refreshFeed = useCallback(async () => {
     if (refreshing || loading) return;
@@ -1307,6 +1402,17 @@ export default function CommunityFeedClient({
       }
       setConfigError(false);
       setComposer("");
+      if (isQueuedOfflineResponse(data)) {
+        setOfflineNotice(data.message || "Post saved offline. It will sync when you're back online.");
+        const user = useUserStore.getState().user;
+        if (feedTab === "all") {
+          const optimistic = buildOptimisticCommunityPost({ body: t, user });
+          setPosts((prev) => dedupePostsById([optimistic, ...prev]));
+        }
+        dispatchCommunityMutate();
+        return;
+      }
+      setOfflineNotice("");
       if (feedTab === "all") {
         if (topicFilter) {
           try {
@@ -1509,6 +1615,9 @@ export default function CommunityFeedClient({
             : "w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500"
         }
       />
+      {offlineNotice ? (
+        <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">{offlineNotice}</p>
+      ) : null}
       <div className="mt-2 flex items-center justify-between gap-3">
         <span className="text-xs text-zinc-500">{composer.length}/280</span>
         <button

@@ -4,16 +4,11 @@ import Notification from "@/models/Notification";
 import User from "@/models/User";
 import { communityPostNotificationsCacheKey, delRedisKey, notificationsCacheKey, publishNotificationEvent } from "@/lib/redis";
 
-const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+import { formatUserDisplayName } from "@/lib/format-user-display-name";
 
-/** Display name for Mongo session user (community APIs). */
-export function formatUserDisplayName(user) {
-  const n = String(user?.name || "").trim();
-  if (n) return n;
-  const f = String(user?.firstName || "").trim();
-  const l = String(user?.lastName || "").trim();
-  return `${f} ${l}`.trim() || "Member";
-}
+export { formatUserDisplayName };
+
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function clip(s, n) {
   const t = String(s || "").replace(/\s+/g, " ").trim();

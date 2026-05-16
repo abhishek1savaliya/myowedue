@@ -64,3 +64,4 @@ async function handlePreWarmTrending() {
   await clearCommunityTrendingCache();
   return { warmed: true };
 }
+import "server-only";
