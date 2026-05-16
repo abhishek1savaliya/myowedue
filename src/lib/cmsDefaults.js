@@ -100,7 +100,7 @@ export const CMS_DEFAULT_CONTENT = {
       description: "Best for getting started with personal due tracking and everyday reminders.",
       features: [
         "50 active people and 50 active transactions",
-        "Basic dashboard and reporting",
+        "Basic dashboard with monthly & person charts",
         "CSV and JPG exports",
         "Standard reminder workflow",
       ],
@@ -117,6 +117,9 @@ export const CMS_DEFAULT_CONTENT = {
         "Unlimited people and transactions",
         "Recurring dues and payment links",
         "Premium PDF and Excel exports",
+        "Advanced dashboard insights (Pro-only analytics)",
+        "Private community likes (others cannot see your likes)",
+        "Edit posts within 5 minutes (Pro only)",
         "Advanced reports, support, and appearance controls",
       ],
       ctaLabel: "View Pro options",

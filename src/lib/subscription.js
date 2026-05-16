@@ -17,6 +17,7 @@ export const PLAN_DEFINITIONS = {
       "Manual reminders",
       `Limited records (${FREE_RECORD_LIMIT} active people and ${FREE_TRANSACTION_LIMIT} active transactions)`,
       "Basic dashboard",
+      "Monthly & person insight charts",
     ],
   },
   pro_monthly: {
@@ -29,6 +30,9 @@ export const PLAN_DEFINITIONS = {
       "Unlimited records",
       "Smart reminders (SMS/WhatsApp ready)",
       "Advanced reports",
+      "Advanced dashboard insights (efficiency, exposure, concentration)",
+      "Private likes on community posts (hidden from others)",
+      "Edit community posts within 5 minutes of posting",
       "Recurring dues",
       "Export to PDF and Excel",
       "Payment links workspace",

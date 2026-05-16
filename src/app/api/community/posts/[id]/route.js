@@ -7,21 +7,13 @@ import { extractPostTopics } from "@/lib/post-topic-extraction";
 import { persistCommunityPostSeo, revalidateCommunityPostSeo } from "@/lib/community-post-seo";
 import { clearCommunityCaches } from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
+import { hasActivePremium } from "@/lib/subscription";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
-
-function aggregateEngagement(likesRows, commentRows, currentUserId) {
-  const likeCount = {};
-  const commentCount = {};
-  const likedByMe = new Set();
-  for (const row of likesRows || []) {
-    likeCount[row.post_id] = (likeCount[row.post_id] || 0) + 1;
-    if (String(row.user_id) === String(currentUserId)) likedByMe.add(row.post_id);
-  }
-  for (const row of commentRows || []) {
-    commentCount[row.post_id] = (commentCount[row.post_id] || 0) + 1;
-  }
-  return { likeCount, commentCount, likedByMe };
-}
+import {
+  aggregateEngagementWithPrivateLikes,
+  communityViewerPayload,
+  getPrivateLikeUserIdSet,
+} from "@/lib/community-private-likes";
 
 export async function GET(request, { params }) {
   const user = await getSessionUser(request);
@@ -70,7 +62,13 @@ export async function GET(request, { params }) {
     return fail(commentsRes.error.message, 500);
   }
 
-  const { likeCount, commentCount, likedByMe } = aggregateEngagement(likesRes.data, commentsRes.data, currentUserId);
+  const privateLikerIds = await getPrivateLikeUserIdSet((likesRes.data || []).map((r) => r.user_id));
+  const { likeCount, commentCount, likedByMe } = aggregateEngagementWithPrivateLikes(
+    likesRes.data,
+    commentsRes.data,
+    currentUserId,
+    privateLikerIds
+  );
   const base = {
     ...row,
     likeCount: likeCount[row.id] || 0,
@@ -80,7 +78,7 @@ export async function GET(request, { params }) {
   const [verified] = await attachAuthorVerifiedToPosts([base]);
   const [post] = await attachPrivacyAwareAuthorLabels(supabase, [verified], currentUserId);
 
-  return ok({ post, currentUserId });
+  return ok({ post, currentUserId, viewer: communityViewerPayload(user) });
 }
 
 export async function PATCH(request, { params }) {
@@ -127,6 +125,10 @@ export async function PATCH(request, { params }) {
 
   if (String(row.author_id) !== String(user._id)) {
     return fail("You can only edit your own posts.", 403);
+  }
+
+  if (!hasActivePremium(user)) {
+    return fail("Editing posts is a Pro feature. Free accounts can delete posts only.", 403);
   }
 
   if (!isCommunityPostEditWindowOpen(row.created_at)) {
@@ -192,7 +194,13 @@ export async function PATCH(request, { params }) {
     return fail(commentsRes.error.message, 500);
   }
 
-  const { likeCount, commentCount, likedByMe } = aggregateEngagement(likesRes.data, commentsRes.data, currentUserId);
+  const privateLikerIds = await getPrivateLikeUserIdSet((likesRes.data || []).map((r) => r.user_id));
+  const { likeCount, commentCount, likedByMe } = aggregateEngagementWithPrivateLikes(
+    likesRes.data,
+    commentsRes.data,
+    currentUserId,
+    privateLikerIds
+  );
   const base = {
     ...fresh,
     likeCount: likeCount[fresh.id] || 0,
@@ -200,7 +208,7 @@ export async function PATCH(request, { params }) {
     liked: likedByMe.has(fresh.id),
   };
   const [verified] = await attachAuthorVerifiedToPosts([base]);
-  const [post] = await attachAuthorUsernamesToPosts(supabase, [verified]);
+  const [post] = await attachPrivacyAwareAuthorLabels(supabase, [verified], currentUserId);
 
   void persistCommunityPostSeo(supabase, postId, fresh).then(() => {
     revalidateCommunityPostSeo(postId);

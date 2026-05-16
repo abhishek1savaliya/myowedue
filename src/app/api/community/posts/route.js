@@ -17,8 +17,14 @@ import {
 } from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
-import { hasActivePremium } from "@/lib/subscription";
+import {
+  aggregateEngagementWithPrivateLikes,
+  buildPublicLikesMap,
+  communityViewerPayload,
+  getPrivateLikeUserIdSet,
+} from "@/lib/community-private-likes";
 import { enqueueCommunityJob } from "@/lib/queue/producers";
+import { COMMUNITY_POST_LIST_SELECT } from "@/lib/community-post-edit-window";
 import { persistCommunityPostSeo, revalidateCommunityPostSeo } from "@/lib/community-post-seo";
 
 const PAGE_SIZE = 10;
@@ -28,11 +34,7 @@ const PERSONALIZED_CURSOR_PREFIX = "p2:";
 const PERSONALIZED_MAX_CANDIDATES = 200;
 
 function viewerPayload(sessionUser) {
-  if (!sessionUser) return null;
-  return {
-    isPremium: hasActivePremium(sessionUser),
-    showVerifiedBadge: Boolean(sessionUser.showVerifiedBadge),
-  };
+  return communityViewerPayload(sessionUser);
 }
 
 function serveFeedCache(cacheKey, payload, sessionUser) {
@@ -47,20 +49,6 @@ function displayName(user) {
   const f = String(user?.firstName || "").trim();
   const l = String(user?.lastName || "").trim();
   return `${f} ${l}`.trim() || "Member";
-}
-
-function aggregateEngagement(likesRows, commentRows, currentUserId) {
-  const likeCount = {};
-  const commentCount = {};
-  const likedByMe = new Set();
-  for (const row of likesRows || []) {
-    likeCount[row.post_id] = (likeCount[row.post_id] || 0) + 1;
-    if (String(row.user_id) === String(currentUserId)) likedByMe.add(row.post_id);
-  }
-  for (const row of commentRows || []) {
-    commentCount[row.post_id] = (commentCount[row.post_id] || 0) + 1;
-  }
-  return { likeCount, commentCount, likedByMe };
 }
 
 function parseFeedFilter(searchParams) {
@@ -100,7 +88,13 @@ async function enrichAndVerifyPosts(supabase, page, currentUserId) {
   if (likesRes.error) return { error: likesRes.error };
   if (commentsRes.error) return { error: commentsRes.error };
 
-  const { likeCount, commentCount, likedByMe } = aggregateEngagement(likesRes.data, commentsRes.data, currentUserId);
+  const privateLikerIds = await getPrivateLikeUserIdSet((likesRes.data || []).map((r) => r.user_id));
+  const { likeCount, commentCount, likedByMe } = aggregateEngagementWithPrivateLikes(
+    likesRes.data,
+    commentsRes.data,
+    currentUserId,
+    privateLikerIds
+  );
 
   const verifiedMap = new Map((verifiedPosts || []).map((p) => [p.id, p.authorVerified]));
 
@@ -149,7 +143,7 @@ export async function GET(request) {
 
     let topicQuery = supabase
       .from("community_posts")
-      .select("id, author_id, author_name, body, share_count, created_at, post_topics!inner(topic)")
+      .select(`${COMMUNITY_POST_LIST_SELECT}, post_topics!inner(topic)`)
       .eq("post_topics.topic", topicNormalized)
       .order("created_at", { ascending: false })
       .limit(PAGE_SIZE + 1);
@@ -235,7 +229,7 @@ export async function GET(request) {
 
     const { data: postsRaw, error: pErr } = await supabase
       .from("community_posts")
-      .select("id, author_id, author_name, body, share_count, created_at")
+      .select(COMMUNITY_POST_LIST_SELECT)
       .in("id", postIds);
 
     if (pErr) {
@@ -288,7 +282,7 @@ export async function GET(request) {
 
     const { data: postsRaw, error: pErr } = await supabase
       .from("community_posts")
-      .select("id, author_id, author_name, body, share_count, created_at")
+      .select(COMMUNITY_POST_LIST_SELECT)
       .in("id", postIds);
 
     if (pErr) {
@@ -314,7 +308,7 @@ export async function GET(request) {
   if (filter === "mine") {
     let mineQuery = supabase
       .from("community_posts")
-      .select("id, author_id, author_name, body, share_count, created_at")
+      .select(COMMUNITY_POST_LIST_SELECT)
       .eq("author_id", currentUserId)
       .order("created_at", { ascending: false })
       .limit(PAGE_SIZE + 1);
@@ -363,7 +357,7 @@ export async function GET(request) {
     const [candidateRes, followingRes, likesRes, sharesRes, myCommentsRes, signalRes, userVecRes] = await Promise.all([
       supabase
         .from("community_posts")
-        .select("id, author_id, author_name, body, share_count, created_at")
+        .select(COMMUNITY_POST_LIST_SELECT)
         .order("created_at", { ascending: false })
         .range(dbOffset, dbOffset + PERSONALIZED_MAX_CANDIDATES - 1),
       supabase.from("community_follows").select("following_id").eq("follower_id", currentUserId),
@@ -412,7 +406,7 @@ export async function GET(request) {
 
     const [candidateLikes, candidateComments, postVecRes] = await Promise.all([
       candidateIds.length > 0
-        ? supabase.from("community_post_likes").select("post_id").in("post_id", candidateIds)
+        ? supabase.from("community_post_likes").select("post_id, user_id").in("post_id", candidateIds)
         : { data: [], error: null },
       candidateIds.length > 0
         ? supabase.from("community_comments").select("post_id").in("post_id", candidateIds)
@@ -429,9 +423,9 @@ export async function GET(request) {
       return fail(err.message || "Failed to enrich personalized feed", 500);
     }
 
-    const likesMap = new Map();
+    const privateLikerIds = await getPrivateLikeUserIdSet((candidateLikes.data || []).map((r) => r.user_id));
+    const likesMap = await buildPublicLikesMap(candidateLikes.data || [], currentUserId, privateLikerIds);
     const commentsMap = new Map();
-    for (const r of candidateLikes.data || []) likesMap.set(r.post_id, (likesMap.get(r.post_id) || 0) + 1);
     for (const r of candidateComments.data || []) commentsMap.set(r.post_id, (commentsMap.get(r.post_id) || 0) + 1);
 
     const phase1 = rankPersonalizedPosts({
@@ -513,7 +507,7 @@ export async function GET(request) {
 
   let query = supabase
     .from("community_posts")
-    .select("id, author_id, author_name, body, share_count, created_at")
+    .select(COMMUNITY_POST_LIST_SELECT)
     .order("created_at", { ascending: false })
     .limit(PAGE_SIZE + 1);
 
@@ -581,7 +575,7 @@ export async function POST(request) {
       author_name: displayName(user),
       body,
     })
-    .select("id, author_id, author_name, body, share_count, created_at")
+    .select(COMMUNITY_POST_LIST_SELECT)
     .single();
 
   if (insErr) {

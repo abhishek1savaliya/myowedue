@@ -61,9 +61,11 @@ export default function ReportsPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <a
-          href={isPremium ? "/api/export/pdf" : "#"}
-          className={`rounded-2xl p-4 text-center text-sm font-medium ${
-            isPremium ? "border border-black bg-black text-white" : "border border-zinc-200 bg-zinc-100 text-zinc-400"
+          href={isPremium ? "/api/export/pdf" : "/my-subscription?purchase=1"}
+          className={`rounded-2xl p-4 text-center text-sm font-medium transition ${
+            isPremium
+              ? "border border-black bg-black text-white hover:opacity-90"
+              : "border border-amber-300 bg-amber-50 text-amber-950 hover:border-amber-400 hover:bg-amber-100 dark:border-amber-500/45 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-950/55"
           }`}
         >
           {isPremium ? "Download Premium PDF" : "Premium PDF Export"}
@@ -84,7 +86,11 @@ export default function ReportsPage() {
 
       {!isPremium ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Free plan includes a basic report snapshot. Upgrade in Settings to unlock advanced insights, premium PDF export, Excel export, recurring-dues intelligence, and priority support.
+          Free plan includes a basic report snapshot.{" "}
+          <a href="/my-subscription?purchase=1" className="font-semibold underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200">
+            Upgrade to Pro
+          </a>{" "}
+          to unlock advanced insights, premium PDF export, Excel export, recurring-dues intelligence, and priority support.
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-3">

@@ -8,10 +8,14 @@ import MiniBarChart from "@/components/MiniBarChart";
 import EmptyState from "@/components/EmptyState";
 import Loader from "@/components/Loader";
 import DashboardCurrencyConverter from "@/components/DashboardCurrencyConverter";
+import InsightProUpsellCard from "@/components/dashboard/InsightProUpsellCard";
+import PremiumAdvancedInsights from "@/components/dashboard/PremiumAdvancedInsights";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useUserStore } from "@/stores/useUserStore";
 
 export default function DashboardPage() {
   const [selectedCurrency, setSelectedCurrency] = useState("AUD");
+  const isPremium = Boolean(useUserStore((s) => s.user?.isPremium));
   const cacheKey = `dashboard:${selectedCurrency}`;
 
   const { data, loading, error, revalidating } = useCachedFetch(
@@ -139,9 +143,27 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <MiniBarChart title={`Monthly Insight (${dashboardCurrency})`} data={data?.monthlyInsights || []} xKey="month" aKey="credit" bKey="debit" />
-        <MiniBarChart title={`Person-wise Insight (${dashboardCurrency})`} data={data?.personInsights || []} xKey="person" aKey="credit" bKey="debit" />
+        <MiniBarChart
+          variant="monthly"
+          currency={dashboardCurrency}
+          title={`Monthly Insight (${dashboardCurrency})`}
+          data={data?.monthlyInsights || []}
+          xKey="month"
+          aKey="credit"
+          bKey="debit"
+        />
+        <MiniBarChart
+          variant="person"
+          currency={dashboardCurrency}
+          title={`Person-wise Insight (${dashboardCurrency})`}
+          data={data?.personInsights || []}
+          xKey="person"
+          aKey="credit"
+          bKey="debit"
+        />
       </section>
+
+      {isPremium ? <PremiumAdvancedInsights data={data} /> : <InsightProUpsellCard />}
 
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-2xl border border-fuchsia-200 bg-linear-to-br from-fuchsia-50 to-white p-5">

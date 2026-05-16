@@ -5,6 +5,12 @@ import { fail, ok } from "@/lib/api";
 import SubscriptionVoucher from "@/models/SubscriptionVoucher";
 import { recordSubscriptionEvent } from "@/lib/subscription-history";
 import { getPremiumGraceEndDate, hasActivePremium, PREMIUM_MONTHLY_DURATION_DAYS } from "@/lib/subscription";
+import { getUsdRatesForUsage } from "@/lib/exchangeRates";
+import {
+  getSubscriptionCharge,
+  normalizeSubscriptionCurrency,
+  SUBSCRIPTION_PRICE_USD,
+} from "@/lib/subscription-pricing";
 
 const PREMIUM_YEARLY_DURATION_DAYS = 365;
 
@@ -21,8 +27,11 @@ export async function POST(req) {
     const dbUser = await User.findById(user._id);
     if (!dbUser) return fail("User not found", 404);
 
+    const paymentCurrency = normalizeSubscriptionCurrency(body.currency);
+    const rates = await getUsdRatesForUsage();
+
     let durationDays = selectedPlan === "pro_yearly" ? PREMIUM_YEARLY_DURATION_DAYS : PREMIUM_MONTHLY_DURATION_DAYS;
-    let amountCharged = selectedPlan === "pro_yearly" ? 70 : 7;
+    let amountCharged = getSubscriptionCharge(selectedPlan, paymentCurrency, rates);
     let source = "manual_checkout";
     let plan = selectedPlan;
     let billingCycle = selectedPlan === "pro_yearly" ? "yearly" : "monthly";
@@ -45,6 +54,7 @@ export async function POST(req) {
       durationDays = Number(voucher.durationDays || PREMIUM_MONTHLY_DURATION_DAYS);
       amountCharged = 0;
       source = "voucher";
+      // currency kept for history; charge is zero
       plan = "pro_monthly";
       billingCycle = "monthly";
     }
@@ -81,13 +91,19 @@ export async function POST(req) {
         : `Subscription activated via ${plan === "pro_yearly" ? "Pro yearly" : "Pro monthly"} payment.`,
       status: "completed",
       amount: amountCharged,
-      currency: "USD",
+      currency: paymentCurrency,
       billingCycle,
       meta: {
         source,
         voucherCode: normalizedCode || null,
         subscriptionPlan: plan,
         subscriptionEndDate: nextEndDate,
+        amountUsd:
+          normalizedCode && amountCharged === 0
+            ? 0
+            : selectedPlan === "pro_yearly"
+              ? SUBSCRIPTION_PRICE_USD.yearly
+              : SUBSCRIPTION_PRICE_USD.monthly,
       },
     });
 
@@ -98,7 +114,7 @@ export async function POST(req) {
         description: `Voucher ${normalizedCode} set payable amount to $0.`,
         status: "completed",
         amount: 0,
-        currency: "USD",
+        currency: paymentCurrency,
         billingCycle: "voucher",
         meta: {
           voucherCode: normalizedCode,
@@ -114,6 +130,7 @@ export async function POST(req) {
       isPremium: true,
       subscriptionPlan: plan,
       amountCharged,
+      currency: paymentCurrency,
       voucherApplied: normalizedCode || null,
       activatedAt: new Date(),
       subscriptionEndDate: nextEndDate,

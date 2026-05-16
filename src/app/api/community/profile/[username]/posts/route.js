@@ -6,6 +6,8 @@ import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-
 import { getSessionUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 import { hasActivePremium } from "@/lib/subscription";
+import { COMMUNITY_POST_LIST_SELECT } from "@/lib/community-post-edit-window";
+import { buildPublicLikesMap, getPrivateLikeUserIdSet } from "@/lib/community-private-likes";
 
 /**
  * Public profile posts feed. Visible without login only when profile is public.
@@ -88,7 +90,7 @@ export async function GET(request, { params }) {
     if (ids.length > 0) {
       const { data: relatedPosts, error: relatedErr } = await supabase
         .from("community_posts")
-        .select("id, author_id, author_name, body, share_count, created_at")
+        .select(COMMUNITY_POST_LIST_SELECT)
         .in("id", ids);
       if (relatedErr) {
         postsErr = relatedErr;
@@ -100,7 +102,7 @@ export async function GET(request, { params }) {
   } else {
     const { data, error } = await supabase
       .from("community_posts")
-      .select("id, author_id, author_name, body, share_count, created_at")
+      .select(COMMUNITY_POST_LIST_SELECT)
       .eq("author_id", profileUserId)
       .order("created_at", { ascending: false })
       .limit(100);
@@ -118,7 +120,7 @@ export async function GET(request, { params }) {
   let comments = [];
   if (postIds.length > 0) {
     const [{ data: likeRows, error: likesErr }, { data: commentRows, error: commentsErr }] = await Promise.all([
-      supabase.from("community_post_likes").select("post_id").in("post_id", postIds),
+      supabase.from("community_post_likes").select("post_id, user_id").in("post_id", postIds),
       supabase.from("community_comments").select("post_id").in("post_id", postIds),
     ]);
     if (likesErr) {
@@ -135,9 +137,9 @@ export async function GET(request, { params }) {
     comments = commentRows || [];
   }
 
-  const likeCount = {};
+  const privateLikerIds = await getPrivateLikeUserIdSet(likes.map((r) => r.user_id));
+  const likesMap = await buildPublicLikesMap(likes, viewerId, privateLikerIds);
   const commentCount = {};
-  for (const row of likes) likeCount[row.post_id] = (likeCount[row.post_id] || 0) + 1;
   for (const row of comments) commentCount[row.post_id] = (commentCount[row.post_id] || 0) + 1;
 
   const authorVerified = hasActivePremium(user) && Boolean(user.showVerifiedBadge);
@@ -145,7 +147,7 @@ export async function GET(request, { params }) {
     ...p,
     author_username: parsed.normalized,
     authorVerified,
-    likeCount: likeCount[p.id] || 0,
+    likeCount: likesMap.get(p.id) || 0,
     commentCount: commentCount[p.id] || 0,
   }));
 

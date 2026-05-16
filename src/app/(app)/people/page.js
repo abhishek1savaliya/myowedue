@@ -260,7 +260,7 @@ export default function PeoplePage() {
                         [p._id]: e.target.value,
                       }))
                     }
-                    className="people-card-btn w-24 rounded-lg border border-amber-200/80 bg-amber-50/40 px-2 py-2 text-xs font-medium text-stone-800 outline-none ring-amber-400/25 focus:ring-2"
+                    className="people-card-invoice-select w-24 rounded-lg px-2 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-amber-500/30"
                   >
                     {invoiceOptions.map((currency) => (
                       <option key={currency} value={currency}>
@@ -271,7 +271,7 @@ export default function PeoplePage() {
                   <button
                     type="button"
                     onClick={() => openInvoiceModal(p)}
-                    className="people-card-btn rounded-lg border border-amber-300/90 bg-[linear-gradient(180deg,#fffdfb_0%,#fef3c7_100%)] px-3 py-2 text-center text-xs font-semibold text-amber-950 shadow-sm shadow-amber-900/10 transition hover:border-amber-400 hover:brightness-[1.02] sm:w-auto"
+                    className="people-card-invoice-btn rounded-lg px-3 py-2 text-center text-xs sm:w-auto"
                   >
                     Invoice
                   </button>

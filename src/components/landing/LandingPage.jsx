@@ -163,7 +163,12 @@ export default function LandingPage({
             <LandingPricingCard
               plan={{
                 ...freePlan,
-                features: freePlan.features || ["Unlimited people", "Core reminders", "Community access"],
+                features: freePlan.features || [
+                  "Core people & transaction tracking",
+                  "Basic monthly & person insight charts",
+                  "CSV and JPG exports",
+                  "Community access",
+                ],
                 ctaLabel: freePlan.ctaLabel || "Get started free",
               }}
             />
@@ -173,6 +178,9 @@ export default function LandingPage({
                 ...paidPlan,
                 features: paidPlan.features || [
                   "Everything in Free",
+                  "Advanced dashboard insights",
+                  "Private likes on community posts",
+                  "Edit posts within 5 minutes",
                   "Premium PDF exports",
                   "Recurring dues",
                   "Priority support",

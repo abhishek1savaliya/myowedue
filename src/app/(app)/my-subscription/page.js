@@ -1,24 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CreditCard, Gem, ReceiptText, ShieldCheck, Ticket, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { CreditCard, Gem, ReceiptText } from "lucide-react";
 import Loader from "@/components/Loader";
 import ModalPortal from "@/components/ModalPortal";
+import PurchaseSubscriptionModal from "@/components/subscription/PurchaseSubscriptionModal";
 import { useCachedParallel } from "@/hooks/useCachedParallel";
 import { CACHE_KEYS } from "@/lib/cache-keys";
 import { refreshAppCache } from "@/lib/refresh-app-cache";
+import { DEFAULT_FX } from "@/lib/currency";
+import {
+  getSubscriptionCharge,
+  getSubscriptionPriceBundle,
+  normalizeSubscriptionCurrency,
+  SUBSCRIPTION_CURRENCIES,
+} from "@/lib/subscription-pricing";
 import { applyAppearancePreference } from "@/lib/theme-client";
 import { useUserStore } from "@/stores/useUserStore";
-
-const PRO_BENEFITS = [
-  { feature: "Records", free: "500 people + 700 transactions", pro: "Unlimited people and transactions" },
-  { feature: "Reminders", free: "Manual", pro: "Smart reminder workflows" },
-  { feature: "Reports", free: "Basic snapshot", pro: "Advanced reports and insights" },
-  { feature: "Exports", free: "CSV and JPG", pro: "Premium PDF and Excel" },
-  { feature: "Recurring dues", free: "No", pro: "Yes" },
-  { feature: "Premium UI", free: "Standard", pro: "Premium dark UI and typography controls" },
-  { feature: "Support", free: "Standard", pro: "Priority support" },
-];
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -26,6 +25,7 @@ function formatDateTime(value) {
 }
 
 export default function MySubscriptionPage() {
+  const searchParams = useSearchParams();
   const fetchUser = useUserStore((s) => s.fetchUser);
   const { data: cached, loading, refresh } = useCachedParallel(
     [
@@ -48,12 +48,59 @@ export default function MySubscriptionPage() {
   const [successPayload, setSuccessPayload] = useState(null);
   const [paymentMessage, setPaymentMessage] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("pro_monthly");
+  const [billingCycle, setBillingCycle] = useState("monthly");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [paymentCurrency, setPaymentCurrency] = useState("USD");
+  const [exchangeRates, setExchangeRates] = useState(null);
+  const [ratesLoading, setRatesLoading] = useState(false);
 
-  const payableAmount = useMemo(() => {
-    if (selectedPlan === "pro_yearly") return 70;
-    return voucherCode.trim() ? 0 : 7;
-  }, [selectedPlan, voucherCode]);
+  function openPurchaseModal() {
+    setError("");
+    setSelectedPlan("pro_monthly");
+    setBillingCycle("monthly");
+    setShowPurchaseModal(true);
+  }
+
+  useEffect(() => {
+    if (searchParams.get("purchase") !== "1" || loading) return;
+    if (status?.isPremium) return;
+    openPurchaseModal();
+  }, [searchParams, loading, status?.isPremium]);
+
+  const effectiveRates = exchangeRates || DEFAULT_FX;
+
+  const priceBundle = useMemo(
+    () => getSubscriptionPriceBundle(paymentCurrency, effectiveRates),
+    [paymentCurrency, effectiveRates]
+  );
+
+  const payableAmount = useMemo(
+    () =>
+      getSubscriptionCharge(selectedPlan, paymentCurrency, effectiveRates, {
+        voucherApplied: Boolean(voucherCode.trim()) && selectedPlan === "pro_monthly",
+      }),
+    [selectedPlan, paymentCurrency, effectiveRates, voucherCode]
+  );
+
+  useEffect(() => {
+    if (!showPurchaseModal) return undefined;
+    let cancelled = false;
+    (async () => {
+      setRatesLoading(true);
+      try {
+        const res = await fetch("/api/exchange-rates", { cache: "no-store" });
+        const json = await res.json().catch(() => ({}));
+        if (!cancelled && json?.rates) setExchangeRates(json.rates);
+      } catch {
+        if (!cancelled) setExchangeRates(null);
+      } finally {
+        if (!cancelled) setRatesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showPurchaseModal]);
 
   const projectedEndDate = useMemo(() => {
     const durationDays = selectedPlan === "pro_yearly" ? 365 : 30;
@@ -72,6 +119,8 @@ export default function MySubscriptionPage() {
   }
 
   async function handlePayNow() {
+    if (selectedPlan !== "pro_monthly" && selectedPlan !== "pro_yearly") return;
+
     setSaving(true);
     setError("");
 
@@ -87,6 +136,7 @@ export default function MySubscriptionPage() {
       body: JSON.stringify({
         plan: selectedPlan,
         voucherCode: voucherCode.trim(),
+        currency: normalizeSubscriptionCurrency(paymentCurrency),
       }),
     });
 
@@ -130,85 +180,133 @@ export default function MySubscriptionPage() {
   const endDate = status?.subscriptionEndDate;
   const graceEndDate = status?.graceEndDate;
   const canPurchaseSubscription = !isPremium || inGracePeriod;
+  const showProBillingDetails = isPremium || inGracePeriod || Boolean(endDate) || Boolean(graceEndDate);
+  const sectionCard =
+    "rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-slate-900/90 sm:p-5";
+  const miniCard =
+    "rounded-xl border border-zinc-200 bg-zinc-50/90 p-4 dark:border-zinc-700 dark:bg-slate-800/60";
+  const statLabel = "text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400";
+  const statValue = "mt-2 text-base font-semibold text-zinc-900 dark:text-zinc-50";
 
   return (
     <div className="subscription-ui mx-auto w-full max-w-6xl space-y-6">
       <header>
-        <h1 className="text-3xl font-semibold tracking-tight">My Subscription</h1>
-        <p className="text-sm text-zinc-600">Manage your plan, apply voucher codes, and keep Pro benefits active.</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">My Subscription</h1>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          {isPremium
+            ? "Manage your plan, apply voucher codes, and keep Pro benefits active."
+            : "You're on the free plan. Upgrade anytime for unlimited records, premium exports, and more."}
+        </p>
       </header>
 
-      <section className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-4 shadow-[0_4px_20px_rgba(245,158,11,0.10)] sm:p-5">
+      <section className={sectionCard}>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${isPremium ? "border-amber-400 bg-gradient-to-r from-amber-400 to-orange-400 text-white shadow-[0_2px_8px_rgba(245,158,11,0.35)]" : "border-zinc-300 bg-zinc-50 text-zinc-600"}`}>
+          <span
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
+              isPremium
+                ? "border-amber-400/80 bg-amber-500 text-white shadow-sm"
+                : "border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-600 dark:bg-slate-800 dark:text-zinc-200"
+            }`}
+          >
             <Gem className="h-3.5 w-3.5" />
             {status?.subscriptionLabel || "Free Plan"}
           </span>
           {inGracePeriod ? (
-            <span className="inline-flex rounded-full border border-emerald-400 bg-gradient-to-r from-emerald-400 to-teal-400 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white shadow-[0_2px_8px_rgba(16,185,129,0.35)]">
-              Grace Period Active
+            <span className="inline-flex rounded-full border border-emerald-500/50 bg-emerald-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+              Grace period active
             </span>
           ) : null}
         </div>
 
-        <div className="mt-4 grid gap-3 sm:gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-600">Pro ends</p>
-            <p className="mt-2 text-base font-semibold text-sky-900">{endDate ? formatDateTime(endDate) : "No active subscription"}</p>
+        {showProBillingDetails ? (
+          <div className="mt-4 grid gap-3 sm:gap-4 md:grid-cols-2">
+            <div className={miniCard}>
+              <p className={statLabel}>Pro ends</p>
+              <p className={statValue}>{endDate ? formatDateTime(endDate) : "No active subscription"}</p>
+            </div>
+            <div className={miniCard}>
+              <p className={statLabel}>Grace period ends</p>
+              <p className={statValue}>{graceEndDate ? formatDateTime(graceEndDate) : "—"}</p>
+            </div>
           </div>
-          <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-600">Grace period ends</p>
-            <p className="mt-2 text-base font-semibold text-violet-900">{graceEndDate ? formatDateTime(graceEndDate) : "-"}</p>
+        ) : (
+          <div className={`${miniCard} mt-4`}>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">What&apos;s included on Free</p>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <li>50 active people and 50 active transactions</li>
+              <li>Core dashboard, reminders, and community access</li>
+              <li>CSV and JPG exports</li>
+            </ul>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Upgrade to Pro for unlimited records, premium PDF/Excel exports, smart reminders, recurring dues, and the
+              premium UI theme.
+            </p>
           </div>
-        </div>
+        )}
 
-        <div className="subscription-warning mt-4 rounded-xl border border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 p-4 text-sm text-orange-800">
-          <p className="font-semibold">⚠ Pay before due date to avoid losing benefits.</p>
-          <p className="mt-1">
-            After subscription ends, premium stays active for 7 extra days. If payment is not completed before grace end date, premium benefits are removed.
-          </p>
-        </div>
+        {isPremium || inGracePeriod ? (
+          <div className="subscription-warning mt-4 rounded-xl border border-amber-300/70 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/35 dark:text-amber-50">
+            <p className="font-semibold">Pay before your due date to keep Pro benefits.</p>
+            <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
+              After your billing period ends, premium stays active for 7 extra days. If payment is not completed before
+              the grace end date, Pro benefits are removed.
+            </p>
+          </div>
+        ) : null}
 
         {canPurchaseSubscription ? (
           <div className="mt-5">
             <button
               type="button"
-              onClick={() => {
-                setError("");
-                setShowPurchaseModal(true);
-              }}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(245,158,11,0.4)] transition hover:from-amber-600 hover:to-orange-600"
+              onClick={openPurchaseModal}
+              className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-400"
             >
-              Purchase Subscription
+              {isPremium ? "Renew or extend Pro" : "Upgrade to Pro"}
             </button>
           </div>
         ) : null}
       </section>
 
-      <section className="space-y-4 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 shadow-[0_4px_20px_rgba(99,102,241,0.08)] sm:p-5">
+      <section className={`${sectionCard} space-y-4`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-indigo-900">Payments</h2>
-            <p className="mt-1 text-sm text-indigo-700/70">See subscription-related events like purchase, renewal, voucher application, and cancellation.</p>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Payments</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              {isPremium
+                ? "Subscription events like purchase, renewal, voucher application, and cancellation."
+                : "Billing history appears here after you upgrade or apply a voucher."}
+            </p>
           </div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-gradient-to-r from-indigo-500 to-sky-500 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-[0_2px_8px_rgba(99,102,241,0.35)]">
+          <span
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
+              isPremium
+                ? "border-indigo-400/60 bg-indigo-600 text-white"
+                : "border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-600 dark:bg-slate-800 dark:text-zinc-200"
+            }`}
+          >
             <CreditCard className="h-3.5 w-3.5" />
             {status?.subscriptionLabel || "Free Plan"}
           </span>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-600">Current Plan</p>
-            <p className="mt-2 text-xl font-semibold text-amber-900">{status?.subscriptionLabel || "Free Plan"}</p>
+          <div className={miniCard}>
+            <p className={statLabel}>Current plan</p>
+            <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              {status?.subscriptionLabel || "Free Plan"}
+            </p>
           </div>
-          <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-600">Renewal / End Date</p>
-            <p className="mt-2 text-xl font-semibold text-emerald-900">{endDate ? new Date(endDate).toLocaleDateString() : "No active cycle"}</p>
+          <div className={miniCard}>
+            <p className={statLabel}>Renewal / end date</p>
+            <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              {endDate ? new Date(endDate).toLocaleDateString() : isPremium ? "—" : "Not subscribed"}
+            </p>
           </div>
-          <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-cyan-50 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-600">Billing Source</p>
-            <p className="mt-2 text-xl font-semibold text-sky-900">{isPremium ? "Voucher / manual setup" : "Free tier"}</p>
+          <div className={miniCard}>
+            <p className={statLabel}>Billing source</p>
+            <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              {isPremium ? "Voucher / manual setup" : "Free tier"}
+            </p>
           </div>
         </div>
 
@@ -226,29 +324,40 @@ export default function MySubscriptionPage() {
 
         {showCancelConfirm ? (
           <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-sm rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 p-6 shadow-2xl">
-              <h2 className="text-lg font-semibold text-rose-700">Cancel Subscription?</h2>
-              <p className="mt-2 text-sm leading-6 text-rose-600/80">
-                You will lose all Pro benefits immediately after the grace period ends. This action cannot be undone.
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setShowCancelConfirm(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cancel-subscription-title"
+              className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-700 dark:bg-slate-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 id="cancel-subscription-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Cancel subscription?
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                You will lose Pro benefits after your grace period ends. This cannot be undone.
               </p>
-              <div className="mt-5 flex gap-3">
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirm(false)}
+                  className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-slate-800 dark:text-zinc-100 dark:hover:bg-slate-700 sm:w-auto"
+                >
+                  Keep subscription
+                </button>
                 <button
                   type="button"
                   onClick={async () => {
                     setShowCancelConfirm(false);
                     await cancelSubscription();
                   }}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(244,63,94,0.35)] hover:from-rose-600 hover:to-pink-600"
+                  className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60 sm:w-auto"
                 >
                   Yes, cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCancelConfirm(false)}
-                  className="flex-1 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:from-emerald-100 hover:to-teal-100"
-                >
-                  Keep subscription
                 </button>
               </div>
             </div>
@@ -256,23 +365,28 @@ export default function MySubscriptionPage() {
           </ModalPortal>
         ) : null}
 
-        {paymentMessage ? <p className="text-sm text-zinc-600">{paymentMessage}</p> : null}
+        {paymentMessage ? <p className="text-sm text-zinc-600 dark:text-zinc-400">{paymentMessage}</p> : null}
 
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <ReceiptText className="h-4 w-4 text-zinc-500" />
-            <p className="text-sm font-medium text-black">Payment & Subscription History</p>
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Payment & subscription history</p>
           </div>
 
           {paymentLoading ? (
             <Loader />
           ) : paymentHistory.length ? (
             paymentHistory.map((item) => (
-              <article key={item._id} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <article
+                key={item._id}
+                className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-slate-800/50"
+              >
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-black">{item.title}</p>
-                    <p className="mt-1 text-sm text-zinc-600">{item.description || "No additional detail."}</p>
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{item.title}</p>
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                      {item.description || "No additional detail."}
+                    </p>
                   </div>
                   <div className="text-left sm:text-right">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{String(item.eventType || "event").replaceAll("_", " ")}</p>
@@ -288,118 +402,38 @@ export default function MySubscriptionPage() {
               </article>
             ))
           ) : (
-            <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600">
-              No subscription payment events yet. Voucher activation, purchase, renewal, auto-payment deductions, and cancellations will appear here.
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-600 dark:bg-slate-800/40 dark:text-zinc-400">
+              {isPremium
+                ? "No subscription payment events yet. Purchases, renewals, vouchers, and cancellations will appear here."
+                : "No billing history yet. Upgrade to Pro or apply a voucher to see payment events here."}
             </div>
           )}
         </div>
       </section>
 
-      {showPurchaseModal ? (
-        <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
-          <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl sm:p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold text-black">Pro Subscription Benefits</h2>
-                <p className="mt-1 text-sm text-zinc-600">Choose Monthly ($7) or Yearly ($70). Voucher works only on Monthly.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPurchaseModal(false)}
-                className="rounded-lg border border-zinc-300 p-1.5 text-zinc-500 hover:text-zinc-800"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200">
-              <table className="w-full min-w-155 text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-200 bg-zinc-50 text-left">
-                    <th className="px-3 py-2 font-semibold text-zinc-700">Benefit</th>
-                    <th className="px-3 py-2 font-semibold text-zinc-700">Free</th>
-                    <th className="px-3 py-2 font-semibold text-amber-700">Pro</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {PRO_BENEFITS.map((row) => (
-                    <tr key={row.feature} className="border-b border-zinc-100">
-                      <td className="px-3 py-2 font-medium text-zinc-800">{row.feature}</td>
-                      <td className="px-3 py-2 text-zinc-600">{row.free}</td>
-                      <td className="px-3 py-2 text-zinc-800">{row.pro}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-              <label className="text-sm text-zinc-700">
-                <span className="mb-1 inline-flex items-center gap-2 font-medium">
-                  <CreditCard className="h-4 w-4" /> Select Plan
-                </span>
-                <select
-                  value={selectedPlan}
-                  onChange={(e) => {
-                    const plan = e.target.value;
-                    setSelectedPlan(plan);
-                    if (plan === "pro_yearly") {
-                      setVoucherCode("");
-                    }
-                  }}
-                  className="w-full rounded-xl border border-zinc-300 px-3 py-2"
-                >
-                  <option value="pro_monthly">Pro Monthly - $7</option>
-                  <option value="pro_yearly">Pro Yearly - $70</option>
-                </select>
-              </label>
-              <label className="text-sm text-zinc-700">
-                <span className="mb-1 inline-flex items-center gap-2 font-medium">
-                  <Ticket className="h-4 w-4" /> Voucher Code
-                </span>
-                <input
-                  value={voucherCode}
-                  onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-                  placeholder={selectedPlan === "pro_yearly" ? "Voucher not available for yearly plan" : "Enter voucher"}
-                  disabled={selectedPlan === "pro_yearly"}
-                  className="w-full rounded-xl border border-zinc-300 px-3 py-2 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
-                />
-              </label>
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-                <p>Amount to pay</p>
-                <p className="mt-1 text-xl font-semibold text-black">${payableAmount}</p>
-                <p className="mt-2 text-xs text-zinc-500">
-                  Subscription active until <span className="font-semibold text-zinc-700">{projectedEndDate}</span>
-                </p>
-              </div>
-            </div>
-
-            {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
-
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <button
-                type="button"
-                onClick={handlePayNow}
-                disabled={saving}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 sm:w-auto"
-              >
-                {saving ? <Loader className="py-0 text-white" /> : <ShieldCheck className="h-4 w-4" />}
-                {saving ? "Processing..." : "Pay Now"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowPurchaseModal(false)}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 sm:w-auto"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      ) : null}
+      <PurchaseSubscriptionModal
+        open={showPurchaseModal}
+        onClose={() => setShowPurchaseModal(false)}
+        billingCycle={billingCycle}
+        onBillingCycleChange={setBillingCycle}
+        selectedPlan={selectedPlan}
+        onSelectPlan={(plan) => {
+          setSelectedPlan(plan);
+          if (plan === "pro_yearly") setVoucherCode("");
+        }}
+        voucherCode={voucherCode}
+        onVoucherChange={setVoucherCode}
+        paymentCurrency={paymentCurrency}
+        onPaymentCurrencyChange={setPaymentCurrency}
+        supportedCurrencies={SUBSCRIPTION_CURRENCIES}
+        priceBundle={priceBundle}
+        ratesLoading={ratesLoading}
+        payableAmount={payableAmount}
+        projectedEndDate={projectedEndDate}
+        error={error}
+        saving={saving}
+        onPayNow={handlePayNow}
+      />
 
       {showSuccessModal && successPayload ? (
         <ModalPortal>

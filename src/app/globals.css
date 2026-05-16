@@ -426,6 +426,55 @@ summary {
   border-color: #64748b !important;
 }
 
+/* People page: invoice controls (not .people-card-btn — avoids dark-theme color clash) */
+.people-card-invoice-select {
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background-color: #fffbeb;
+  color: #292524;
+}
+
+.people-card-invoice-btn {
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  background-color: #fef3c7;
+  background-image: linear-gradient(180deg, #fffdfb 0%, #fde68a 100%);
+  color: #451a03;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(120, 53, 15, 0.08);
+  transition:
+    border-color 160ms ease,
+    filter 160ms ease;
+}
+
+.people-card-invoice-btn:hover {
+  border-color: rgba(245, 158, 11, 0.85);
+  filter: brightness(1.03);
+}
+
+:root[data-theme="dark"] .people-card-invoice-select {
+  border-color: rgba(245, 158, 11, 0.38) !important;
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  background-image: none !important;
+  color: #fef3c7 !important;
+}
+
+:root[data-theme="dark"] .people-card-invoice-btn {
+  border-color: rgba(251, 191, 36, 0.5) !important;
+  background-color: rgba(69, 26, 3, 0.92) !important;
+  background-image: linear-gradient(
+    180deg,
+    rgba(146, 64, 14, 0.55) 0%,
+    rgba(69, 26, 3, 0.98) 100%
+  ) !important;
+  color: #fef3c7 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="dark"] .people-card-invoice-btn:hover {
+  border-color: rgba(252, 211, 77, 0.7) !important;
+  background-color: rgba(120, 53, 15, 0.95) !important;
+  filter: none;
+}
+
 h1,
 h2,
 h3 {
@@ -742,9 +791,114 @@ main > * {
 
 /* My Subscription scoped readability in dark mode */
 :root[data-theme="dark"] .subscription-ui .subscription-warning {
-  background-color: rgba(120, 53, 15, 0.26) !important;
-  border-color: rgba(217, 119, 6, 0.55) !important;
-  color: #fde68a !important;
+  background-color: rgba(69, 26, 3, 0.55) !important;
+  border-color: rgba(251, 191, 36, 0.45) !important;
+  color: #fef3c7 !important;
+}
+
+:root[data-theme="dark"] .subscription-ui .subscription-warning p {
+  color: inherit !important;
+}
+
+/* Dashboard currency converter — solid surfaces (avoids premium gradient / glass clashes) */
+.dashboard-fx-converter {
+  border-radius: 1rem;
+  border: 1px solid rgb(228 228 231);
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-fx-converter::before {
+  display: none !important;
+}
+
+.dashboard-fx-field {
+  border-color: rgb(212 212 216);
+  background-color: rgb(250 250 250);
+  color: rgb(24 24 27);
+}
+
+.dashboard-fx-field:focus {
+  border-color: rgb(245 158 11);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.dashboard-fx-chevron {
+  color: rgb(113 113 122);
+}
+
+.dashboard-fx-swap-icon {
+  color: rgb(113 113 122);
+}
+
+.dashboard-fx-rate {
+  color: rgb(39 39 42);
+}
+
+.dashboard-fx-route,
+.dashboard-fx-loading {
+  color: rgb(113 113 122);
+}
+
+:root[data-theme="dark"] .dashboard-fx-converter {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .dashboard-fx-field {
+  border-color: rgba(255, 255, 255, 0.14);
+  background-color: rgba(9, 14, 28, 0.9);
+  color: rgb(244 244 245);
+}
+
+:root[data-theme="dark"] .dashboard-fx-field:focus {
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+}
+
+:root[data-theme="dark"] .dashboard-fx-chevron,
+:root[data-theme="dark"] .dashboard-fx-swap-icon,
+:root[data-theme="dark"] .dashboard-fx-route,
+:root[data-theme="dark"] .dashboard-fx-loading {
+  color: rgb(161 161 170);
+}
+
+:root[data-theme="dark"] .dashboard-fx-rate {
+  color: rgb(228 228 231);
+}
+
+/* Free tier: keep converter readable even if premium-ui flag is still bootstrapping */
+:root[data-premium-ui="false"] .dashboard-fx-converter,
+:root:not([data-premium-ui="true"]) .dashboard-fx-converter {
+  background-image: none !important;
+}
+
+:root[data-premium-ui="false"] .dashboard-fx-converter .dashboard-fx-field,
+:root:not([data-premium-ui="true"]) .dashboard-fx-converter .dashboard-fx-field {
+  background-image: none !important;
+}
+
+/* Premium: subtle amber accent without metallic shimmer on fields */
+:root[data-premium-ui="true"] .dashboard-fx-converter {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(15, 23, 42, 0.78);
+}
+
+:root[data-premium-ui="true"]:not([data-theme="dark"]) .dashboard-fx-converter {
+  background: linear-gradient(145deg, #fffdf7 0%, #ffffff 55%, #f8fafc 100%);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+:root[data-premium-ui="true"] .dashboard-fx-converter .dashboard-fx-field {
+  background-color: rgba(10, 16, 34, 0.55);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+:root[data-premium-ui="true"]:not([data-theme="dark"]) .dashboard-fx-converter .dashboard-fx-field {
+  background-color: #ffffff;
+  border-color: rgb(212 212 216);
+  color: rgb(24 24 27);
 }
 
 :root[data-theme="dark"] .subscription-ui .bg-amber-50 {
@@ -1527,4 +1681,124 @@ main > * {
 
 [data-ui-v2="true"][data-theme="dark"] .shadow-\[0_8px_30px_rgba\(0\,0\,0\,0\.04\)\] {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* ── Premium dashboard insight cards (monthly / person-wise) ── */
+.premium-insight-card {
+  position: relative;
+}
+
+.premium-insight-card-glow {
+  position: absolute;
+  inset: -40% -20% auto -20%;
+  height: 55%;
+  opacity: 0.55;
+  filter: blur(48px);
+  pointer-events: none;
+}
+
+.premium-insight-card--monthly .premium-insight-card-glow {
+  background: radial-gradient(ellipse at 30% 20%, rgba(245, 158, 11, 0.22), transparent 58%),
+    radial-gradient(ellipse at 80% 10%, rgba(167, 139, 250, 0.14), transparent 50%);
+}
+
+.premium-insight-card--person .premium-insight-card-glow {
+  background: radial-gradient(ellipse at 25% 15%, rgba(16, 185, 129, 0.2), transparent 55%),
+    radial-gradient(ellipse at 85% 5%, rgba(56, 189, 248, 0.14), transparent 48%);
+}
+
+.premium-insight-card--advanced .premium-insight-card-glow {
+  background: radial-gradient(ellipse at 20% 10%, rgba(167, 139, 250, 0.22), transparent 55%),
+    radial-gradient(ellipse at 75% 20%, rgba(245, 158, 11, 0.18), transparent 50%);
+}
+
+.premium-insight-card--advanced::after {
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.85), rgba(245, 158, 11, 0.8));
+}
+
+.premium-insight-card--advanced .premium-insight-icon {
+  color: #7c3aed;
+}
+
+:root[data-theme="dark"] .premium-insight-card--advanced .premium-insight-icon {
+  color: #c4b5fd;
+}
+
+.premium-insight-card--monthly::after,
+.premium-insight-card--person::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 9999px 9999px 0 0;
+}
+
+.premium-insight-card--monthly::after {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.85), rgba(167, 139, 250, 0.75));
+}
+
+.premium-insight-card--person::after {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.85), rgba(56, 189, 248, 0.75));
+}
+
+.premium-insight-icon {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(250, 250, 249, 0.7));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+  color: #b45309;
+}
+
+.premium-insight-card--person .premium-insight-icon {
+  color: #047857;
+}
+
+.premium-insight-bar-track {
+  height: 0.625rem;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.premium-insight-bar-given {
+  background: linear-gradient(90deg, #f59e0b 0%, #fb923c 100%);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.premium-insight-bar-received {
+  background: linear-gradient(90deg, #10b981 0%, #2dd4bf 100%);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.32);
+}
+
+:root[data-theme="dark"] .premium-insight-bar-track {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="dark"] .premium-insight-icon {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="dark"] .premium-insight-card--monthly .premium-insight-icon {
+  color: #fbbf24;
+}
+
+:root[data-theme="dark"] .premium-insight-card--person .premium-insight-icon {
+  color: #34d399;
+}
+
+:root[data-premium-ui="true"] .premium-insight-card {
+  border-color: var(--prem-card-border) !important;
+  box-shadow: var(--prem-glow), 0 10px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+:root[data-premium-ui="true"][data-theme="dark"] .premium-insight-card {
+  background: linear-gradient(155deg, rgba(15, 25, 48, 0.96) 0%, rgba(12, 20, 38, 0.98) 100%) !important;
+}
+
+:root[data-premium-ui="true"]:not([data-theme="dark"]) .premium-insight-card {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 251, 240, 0.92) 100%) !important;
 }

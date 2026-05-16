@@ -57,7 +57,10 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
             ? {
                 ...prev,
                 liked,
-                likeCount: Math.max(0, (prev.likeCount || 0) + (liked ? 1 : -1)),
+                likeCount:
+                  typeof data.likeCount === "number"
+                    ? data.likeCount
+                    : Math.max(0, (prev.likeCount || 0) + (liked ? 1 : -1)),
               }
             : prev
         );

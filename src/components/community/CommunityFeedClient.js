@@ -3,11 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import CommunityLikesPrivateBanner from "@/components/community/CommunityLikesPrivateBanner";
 import SharePostModal from "@/components/community/SharePostModal";
+import { useUserStore } from "@/stores/useUserStore";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { BadgeCheck, ChevronRight, Heart, Loader2, MessageCircle, Pencil, RefreshCw, Repeat2, Send, Trash2 } from "lucide-react";
-import { COMMUNITY_POST_EDIT_WINDOW_MS, isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window";
+import {
+  COMMUNITY_POST_EDIT_WINDOW_MS,
+  formatCommunityPostEditedLabel,
+  isCommunityPostEditWindowOpen,
+  wasCommunityPostEdited,
+} from "@/lib/community-post-edit-window";
 import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
 import { normalizeSavedUsernameHandle } from "@/lib/community-usernames";
 import { normalizeCommunityTopicParam } from "@/lib/community-topic";
@@ -333,6 +340,7 @@ export function PostCard({
   onPostUpdated,
 }) {
   const router = useRouter();
+  const viewerIsPremium = Boolean(useUserStore((s) => s.user?.isPremium));
   const isX = skin === "x";
   const isDetail = mode === "detail";
   const [commentsOpen, setCommentsOpen] = useState(isDetail);
@@ -362,6 +370,7 @@ export function PostCard({
   const [editWindowClosed, setEditWindowClosed] = useState(
     () => !isCommunityPostEditWindowOpen(post.created_at)
   );
+  const canEditPost = viewerIsPremium && isOwnPost && !editWindowClosed;
 
   useEffect(() => {
     if (!editing) setEditDraft(post.body);
@@ -395,10 +404,10 @@ export function PostCard({
   }, [editWindowClosed, editing, post.body]);
 
   const startEdit = useCallback(() => {
-    if (!canInteract || !isOwnPost || editWindowClosed) return;
+    if (!canInteract || !canEditPost) return;
     setEditDraft(post.body);
     setEditing(true);
-  }, [canInteract, isOwnPost, editWindowClosed, post.body]);
+  }, [canInteract, canEditPost, post.body]);
 
   const cancelEdit = useCallback(() => {
     setEditing(false);
@@ -596,6 +605,12 @@ export function PostCard({
           />
           <p className={`text-xs ${isX ? "text-zinc-500" : "text-zinc-500 dark:text-zinc-400"}`}>
             {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
+            {wasCommunityPostEdited(post.created_at, post.updated_at) ? (
+              <span className={isX ? "text-zinc-400" : "text-zinc-400 dark:text-zinc-500"}>
+                {" "}
+                · {formatCommunityPostEditedLabel(post.updated_at)}
+              </span>
+            ) : null}
           </p>
         </div>
       </div>
@@ -672,8 +687,8 @@ export function PostCard({
       : `${iconBtn} border-rose-200/90 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/40`;
     return (
       <div className="flex shrink-0 items-center justify-end gap-1.5" role="group" aria-label="Your post">
-        {!editWindowClosed ? (
-          <button type="button" onClick={startEdit} className={iconBtn} aria-label="Edit post" title="Edit post">
+        {canEditPost ? (
+          <button type="button" onClick={startEdit} className={iconBtn} aria-label="Edit post" title="Edit post (Pro)">
             <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
           </button>
         ) : null}
@@ -800,6 +815,11 @@ export function PostCard({
             </div>
             {renderOwnerControls(true)}
           </div>
+          {viewerIsPremium ? (
+            <CommunityLikesPrivateBanner className="mt-3" />
+          ) : canInteract ? (
+            <CommunityLikesPrivateBanner className="mt-3" showUpgradeHint />
+          ) : null}
           {commentsOpen || isDetail ? (
             <div className="mt-4 border-t border-white/[0.08] pt-4">
               {canInteract ? (
@@ -922,6 +942,11 @@ export function PostCard({
         </div>
         {renderOwnerControls(false)}
       </div>
+      {viewerIsPremium ? (
+        <CommunityLikesPrivateBanner className="mt-3 border-zinc-200/80 bg-zinc-50 dark:border-white/10 dark:bg-zinc-950/40 [&_p]:text-zinc-700 dark:[&_p]:text-zinc-200" />
+      ) : canInteract ? (
+        <CommunityLikesPrivateBanner className="mt-3" showUpgradeHint />
+      ) : null}
       {commentsOpen || isDetail ? (
         <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
           {canInteract ? (

@@ -4,6 +4,7 @@ import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-
 import { clearCommunityCaches } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { countPublicPostLikes, hasPrivateCommunityLikes } from "@/lib/community-private-likes";
 
 export async function POST(request, { params }) {
   const { user, error } = await requireUser(request);
@@ -38,17 +39,16 @@ export async function POST(request, { params }) {
       if (mapped) return fail(mapped, 503);
       return fail(delErr.message, 500);
     }
-    const { count: likeCount, error: countErr } = await supabase
-      .from("community_post_likes")
-      .select("*", { count: "exact", head: true })
-      .eq("post_id", postId);
-    if (countErr) {
-      const mapped = mapCommunitySupabaseError(countErr.message, setup);
+    let likeCount = 0;
+    try {
+      likeCount = await countPublicPostLikes(supabase, postId, uid);
+    } catch (countErr) {
+      const mapped = mapCommunitySupabaseError(countErr?.message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(countErr.message || "Like count failed", 500);
+      return fail(countErr?.message || "Like count failed", 500);
     }
     await clearCommunityCaches();
-    return ok({ liked: false, likeCount: likeCount ?? 0 });
+    return ok({ liked: false, likeCount });
   }
 
   const { error: insErr } = await supabase.from("community_post_likes").insert({ post_id: postId, user_id: uid });
@@ -63,7 +63,7 @@ export async function POST(request, { params }) {
     .select("author_id, body")
     .eq("id", postId)
     .maybeSingle();
-  if (postRow?.author_id && String(postRow.author_id) !== uid) {
+  if (postRow?.author_id && String(postRow.author_id) !== uid && !hasPrivateCommunityLikes(user)) {
     void notifyCommunityActivity({
       recipientUserId: String(postRow.author_id),
       actorUserId: uid,
@@ -83,16 +83,15 @@ export async function POST(request, { params }) {
     dwell_ms: 0,
   });
 
-  const { count: likeCount, error: countErr } = await supabase
-    .from("community_post_likes")
-    .select("*", { count: "exact", head: true })
-    .eq("post_id", postId);
-  if (countErr) {
-    const mapped = mapCommunitySupabaseError(countErr.message, setup);
+  let likeCount = 0;
+  try {
+    likeCount = await countPublicPostLikes(supabase, postId, uid);
+  } catch (countErr) {
+    const mapped = mapCommunitySupabaseError(countErr?.message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(countErr.message || "Like count failed", 500);
+    return fail(countErr?.message || "Like count failed", 500);
   }
 
   await clearCommunityCaches();
-  return ok({ liked: true, likeCount: likeCount ?? 0 });
+  return ok({ liked: true, likeCount });
 }

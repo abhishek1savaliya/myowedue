@@ -50,8 +50,8 @@ function crossRate(rates, from, to) {
   return t / f;
 }
 
-const selectClass =
-  "w-full appearance-none rounded-xl border border-zinc-200 bg-white py-2 pl-3 pr-8 text-sm font-medium text-zinc-900 shadow-sm outline-none ring-teal-500/20 transition focus:border-teal-400 focus:ring-2 disabled:cursor-wait disabled:opacity-60";
+const fieldClass =
+  "dashboard-fx-field w-full rounded-xl border py-2.5 text-sm font-medium tabular-nums outline-none transition disabled:cursor-wait disabled:opacity-60";
 
 export default function DashboardCurrencyConverter() {
   const [rates, setRates] = useState(null);
@@ -147,17 +147,14 @@ export default function DashboardCurrencyConverter() {
 
   function Chevron() {
     return (
-      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400" aria-hidden>
+      <span className="dashboard-fx-chevron pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" aria-hidden>
         ▾
       </span>
     );
   }
 
   return (
-    <section
-      className="rounded-2xl border border-teal-200/90 bg-linear-to-br from-teal-50/70 via-white to-white p-4 shadow-sm"
-      aria-label="Currency conversion"
-    >
+    <section className="dashboard-fx-converter p-4 sm:p-5" aria-label="Currency conversion">
       <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:gap-4">
         <div className="flex min-w-0 flex-col gap-2">
           <label className="sr-only" htmlFor="convert-left-currency">
@@ -169,7 +166,7 @@ export default function DashboardCurrencyConverter() {
               value={leftCode}
               onChange={(e) => setLeftCode(e.target.value)}
               disabled={ratesLoading}
-              className={selectClass}
+              className={`${fieldClass} appearance-none pl-3 pr-8 text-left`}
             >
               {PAIRS.map(({ code, country }) => (
                 <option key={code} value={code}>
@@ -190,22 +187,22 @@ export default function DashboardCurrencyConverter() {
             value={leftStr}
             onChange={onLeftChange}
             disabled={ratesLoading}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-right font-medium tabular-nums text-zinc-900 shadow-inner outline-none ring-teal-500/30 transition focus:border-teal-400 focus:ring-2 disabled:opacity-60"
+            className={`${fieldClass} px-3 text-right`}
             placeholder="0"
           />
         </div>
 
         <div className="flex max-w-[4.75rem] min-w-0 flex-col items-center justify-center gap-1 self-center px-0.5 sm:max-w-[8.5rem] sm:px-2">
-          <ArrowRightLeft className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden />
+          <ArrowRightLeft className="dashboard-fx-swap-icon h-4 w-4 shrink-0" aria-hidden />
           <p
-            className="w-full text-center text-[10px] font-semibold leading-snug text-zinc-800 sm:text-xs"
+            className="dashboard-fx-rate w-full text-center text-[10px] font-semibold leading-snug sm:text-xs"
             title={`${rateLine} · ${countryLine}`}
           >
             {rateLine}
           </p>
-          <p className="hidden w-full text-center text-[11px] leading-snug text-zinc-500 sm:block">{countryLine}</p>
+          <p className="dashboard-fx-route hidden w-full text-center text-[11px] leading-snug sm:block">{countryLine}</p>
           {ratesLoading ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500" aria-live="polite">
+            <span className="dashboard-fx-loading inline-flex items-center gap-1 text-[11px]" aria-live="polite">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
               Rates…
             </span>
@@ -222,7 +219,7 @@ export default function DashboardCurrencyConverter() {
               value={rightCode}
               onChange={(e) => setRightCode(e.target.value)}
               disabled={ratesLoading}
-              className={selectClass}
+              className={`${fieldClass} appearance-none pl-3 pr-8 text-left`}
             >
               {PAIRS.map(({ code, country }) => (
                 <option key={code} value={code}>
@@ -243,7 +240,7 @@ export default function DashboardCurrencyConverter() {
             value={rightStr}
             onChange={onRightChange}
             disabled={ratesLoading}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-right font-medium tabular-nums text-zinc-900 shadow-inner outline-none ring-teal-500/30 transition focus:border-teal-400 focus:ring-2 disabled:opacity-60"
+            className={`${fieldClass} px-3 text-right`}
             placeholder="0"
           />
         </div>
