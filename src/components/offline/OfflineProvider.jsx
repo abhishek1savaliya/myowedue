@@ -1,11 +1,9 @@
 "use client";
 
-import "@/lib/offline/install-fetch-patch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { hydrateApiCacheFromIndexedDB, persistApiCacheEntries } from "@/lib/offline/api-cache-persist";
 import { onNetworkStatusChange, isOnline } from "@/lib/offline/network";
 import { pendingMutationCount } from "@/lib/offline/mutation-queue";
-import { syncPendingMutations } from "@/lib/offline/sync-engine";
 import { whenApiCacheHydrated } from "@/lib/api-cache-hydration";
 import { useApiCacheStore } from "@/stores/useApiCacheStore";
 import OfflineBanner from "@/components/offline/OfflineBanner";
@@ -16,6 +14,7 @@ export default function OfflineProvider({ children }) {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const persistTimerRef = useRef(null);
+  const bootstrappedRef = useRef(false);
 
   const refreshPending = useCallback(async () => {
     const count = await pendingMutationCount();
@@ -26,7 +25,8 @@ export default function OfflineProvider({ children }) {
     if (!isOnline()) return;
     setSyncing(true);
     try {
-      const result = await syncPendingMutations();
+      const { syncOfflineQueue } = await import("@/lib/offline/offline-bootstrap");
+      const result = await syncOfflineQueue();
       setLastSync(result);
       await refreshPending();
     } finally {
@@ -35,6 +35,11 @@ export default function OfflineProvider({ children }) {
   }, [refreshPending]);
 
   useEffect(() => {
+    if (!bootstrappedRef.current) {
+      bootstrappedRef.current = true;
+      void import("@/lib/offline/offline-bootstrap").then((m) => m.bootstrapOfflineRuntime());
+    }
+
     setOnline(isOnline());
 
     if ("serviceWorker" in navigator) {

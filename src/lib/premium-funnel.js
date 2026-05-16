@@ -1,3 +1,4 @@
+import "server-only";
 import { connectDB } from "@/lib/db";
 import PremiumFunnelEvent from "@/models/PremiumFunnelEvent";
 import SubscriptionPayment from "@/models/SubscriptionPayment";

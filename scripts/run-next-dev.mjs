@@ -23,7 +23,7 @@ const cleaned = (process.env.NODE_OPTIONS || "")
 process.env.NODE_OPTIONS = [`--localstorage-file=${storageFile}`, cleaned].filter(Boolean).join(" ");
 
 const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
-const child = spawn(process.execPath, [nextBin, "dev"], {
+const child = spawn(process.execPath, [nextBin, "dev", "--webpack"], {
   cwd: root,
   env: process.env,
   stdio: "inherit",

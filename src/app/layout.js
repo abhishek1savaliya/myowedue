@@ -12,7 +12,7 @@ import "./globals.css";
 import "@vidstack/react/player/styles/base.css";
 import ThemeSync from "@/components/ThemeSync";
 import AppStoreBootstrap from "@/components/AppStoreBootstrap";
-import OfflineProvider from "@/components/offline/OfflineProvider";
+import OfflineProviderShell from "@/components/offline/OfflineProviderShell";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { AppAlertProvider } from "@/components/AppAlertProvider";
 import SeoJsonLd from "@/components/SeoJsonLd";
@@ -170,10 +170,10 @@ export default function RootLayout({ children }) {
         <AppStoreBootstrap />
         <ThemeSync />
         <AppAlertProvider>
-          <OfflineProvider>
+          <OfflineProviderShell>
             {children}
             <CookieConsentBanner />
-          </OfflineProvider>
+          </OfflineProviderShell>
         </AppAlertProvider>
       </body>
     </html>

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "postinstall": "node scripts/copy-pdf-worker.mjs",
-    "dev": "node --localstorage-file=.next/node-localstorage.json scripts/run-next-dev.mjs",
+    "dev": "node --localstorage-file=.next/node-localstorage.json node_modules/next/dist/bin/next dev --webpack",
     "build": "next build",
     "verify": "npm run build",
     "start": "next start",
@@ -55,6 +55,7 @@
     "react-dom": "19.2.4",
     "react-quill-new": "^3.8.3",
     "resend": "^6.10.0",
+    "server-only": "^0.0.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.6.0",

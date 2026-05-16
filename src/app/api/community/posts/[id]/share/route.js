@@ -1,5 +1,6 @@
 import { fail, ok } from "@/lib/api";
-import { notifyCommunityActivity, formatUserDisplayName } from "@/lib/community-notifications";
+import { notifyCommunityActivity } from "@/lib/community-notifications";
+import { formatUserDisplayName } from "@/lib/format-user-display-name";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityCaches } from "@/lib/redis";
 import { getSessionUser } from "@/lib/session";

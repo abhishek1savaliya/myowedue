@@ -9,11 +9,21 @@ const nextConfig = {
     "ioredis",
     "node-cron",
   ],
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       canvas: false,
     };
+    if (!isServer) {
+      const stub = false;
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        mongoose: stub,
+        mongodb: stub,
+        bullmq: stub,
+        ioredis: stub,
+      };
+    }
     return config;
   },
   turbopack: {

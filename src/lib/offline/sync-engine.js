@@ -1,6 +1,5 @@
 "use client";
 
-import { invalidateCachesForUrl } from "@/lib/offline/invalidate-from-url";
 import { isOnline } from "@/lib/offline/network";
 import {
   listPendingMutations,
@@ -52,6 +51,7 @@ export async function syncPendingMutations() {
         if (res.ok) {
           communityOffline.recordCommunitySyncIds(item, data, communityIdMaps);
           await removeMutation(item.id);
+          const { invalidateCachesForUrl } = await import("@/lib/offline/invalidate-from-url");
           invalidateCachesForUrl(item.url);
           if (String(item.url || "").includes("/api/community")) {
             dispatchCommunityMutate();

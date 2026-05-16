@@ -1,12 +1,10 @@
+import "server-only";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
 import { communityPostNotificationsCacheKey, delRedisKey, notificationsCacheKey, publishNotificationEvent } from "@/lib/redis";
-
 import { formatUserDisplayName } from "@/lib/format-user-display-name";
-
-export { formatUserDisplayName };
 
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 

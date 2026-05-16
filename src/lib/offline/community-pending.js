@@ -1,7 +1,14 @@
 "use client";
 
-import { formatUserDisplayName } from "@/lib/format-user-display-name";
 import { listPendingMutations } from "@/lib/offline/mutation-queue";
+
+function formatUserDisplayName(user) {
+  const n = String(user?.name || "").trim();
+  if (n) return n;
+  const f = String(user?.firstName || "").trim();
+  const l = String(user?.lastName || "").trim();
+  return `${f} ${l}`.trim() || "Member";
+}
 
 export const OFFLINE_POST_ID_PREFIX = "offline-post-";
 export const OFFLINE_COMMENT_ID_PREFIX = "offline-comment-";
