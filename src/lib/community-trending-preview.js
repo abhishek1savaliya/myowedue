@@ -11,15 +11,20 @@ export function getTrendingDisplayForUser(topics, limit = 10, { isPremium = fals
       rankOffset: 0,
       totalCount: full.length,
       isPreview: false,
+      hiddenAbove: 0,
+      hiddenBelow: 0,
     };
   }
 
   const start = Math.floor((full.length - 2) / 2);
+  const previewRows = full.slice(start, start + 2);
   return {
-    rows: full.slice(start, start + 2),
+    rows: previewRows,
     rankOffset: start,
     totalCount: full.length,
     isPreview: true,
     hiddenCount: Math.max(0, full.length - 2),
+    hiddenAbove: start,
+    hiddenBelow: Math.max(0, full.length - start - previewRows.length),
   };
 }

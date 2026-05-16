@@ -31,9 +31,10 @@ export default function TrendingTopicsCard({
     ? "community-glass-card rounded-xl border p-4 shadow-sm"
     : "rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90";
 
-  const { rows, rankOffset, totalCount, isPreview, hiddenCount } = getTrendingDisplayForUser(topics, limit, {
-    isPremium,
-  });
+  const { rows, rankOffset, totalCount, isPreview, hiddenCount, hiddenAbove, hiddenBelow } =
+    getTrendingDisplayForUser(topics, limit, {
+      isPremium,
+    });
 
   function topicHref(topic) {
     if (!linkBasePath) return null;
@@ -41,6 +42,37 @@ export default function TrendingTopicsCard({
     const q = new URLSearchParams();
     q.set("topic", topic);
     return `${base}?${q.toString()}`;
+  }
+
+  function renderProGate({ position, hidden }) {
+    const isAbove = position === "above";
+    const hint = isAbove
+      ? `${hidden} more above · ranks 1–${hidden}`
+      : `${hidden} more below · ranks ${rankOffset + rows.length + 1}–${totalCount}`;
+
+    return (
+      <li className="list-none">
+        <Link
+          href="/my-subscription?purchase=1"
+          className={`flex items-center gap-2.5 rounded-lg border border-dashed px-3 py-2.5 transition ${
+            shell
+              ? "border-amber-500/35 bg-amber-500/8 hover:border-amber-500/50 hover:bg-amber-500/12"
+              : "border-amber-300/80 bg-amber-50/80 hover:bg-amber-100 dark:border-amber-500/35 dark:bg-amber-950/30 dark:hover:bg-amber-950/45"
+          }`}
+        >
+          <Lock
+            className={`h-4 w-4 shrink-0 ${shell ? "text-amber-400" : "text-amber-600 dark:text-amber-400"}`}
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
+            <p className={`text-sm font-bold ${shell ? "text-amber-300" : "text-amber-700 dark:text-amber-300"}`}>
+              Pro
+            </p>
+            <p className={`text-[11px] ${shell ? "text-zinc-500" : "text-zinc-500 dark:text-zinc-400"}`}>{hint}</p>
+          </div>
+        </Link>
+      </li>
+    );
   }
 
   return (
@@ -62,6 +94,7 @@ export default function TrendingTopicsCard({
         <p className={`mt-4 text-sm ${shell ? "text-zinc-400" : "text-zinc-600 dark:text-zinc-400"}`}>No trending topics yet. Post something to seed the feed.</p>
       ) : (
         <ol className="mt-4 space-y-3">
+          {isPreview && hiddenAbove > 0 ? renderProGate({ position: "above", hidden: hiddenAbove }) : null}
           {rows.map((row, i) => {
             const href = topicHref(row.topic);
             const inner = (
@@ -96,6 +129,7 @@ export default function TrendingTopicsCard({
               </li>
             );
           })}
+          {isPreview && hiddenBelow > 0 ? renderProGate({ position: "below", hidden: hiddenBelow }) : null}
         </ol>
       )}
 

@@ -8,12 +8,19 @@ import { useAppAlert } from "@/components/AppAlertProvider";
 import { useCachedParallel } from "@/hooks/useCachedParallel";
 import { CACHE_KEYS } from "@/lib/cache-keys";
 import { refreshAppCache } from "@/lib/refresh-app-cache";
+import PeopleInsightsUpsell from "@/components/people/PeopleInsightsUpsell";
+import PeoplePremiumInsights from "@/components/people/PeoplePremiumInsights";
 import { normalizeCurrency, convertFromUSD, formatCurrency, DEFAULT_FX } from "@/lib/currency";
+import { buildPeopleInsights } from "@/lib/people-insights";
+import { useUserStore } from "@/stores/useUserStore";
 
 const initial = { name: "", email: "", phone: "" };
 
+const INSIGHT_CURRENCY = "AUD";
+
 export default function PeoplePage() {
   const { showAlert } = useAppAlert();
+  const isPremium = useUserStore((s) => s.user?.isPremium);
   const [form, setForm] = useState(initial);
   const { data: cached, loading, refresh, revalidating } = useCachedParallel(
     [
@@ -59,16 +66,39 @@ export default function PeoplePage() {
     }, 0);
   }
 
-  function getPersonTotals(person) {
-    const currency = getInvoiceCurrency(person._id);
+  function getPersonTotalsInCurrency(person, targetCurrency) {
     const pendingCreditByCurrency = person.pendingCreditByCurrency || { AUD: person.pendingCredit || 0 };
     const pendingDebitByCurrency = person.pendingDebitByCurrency || { AUD: person.pendingDebit || 0 };
-    const pendingCredit = getConvertedTotal(pendingCreditByCurrency, currency);
-    const pendingDebit = getConvertedTotal(pendingDebitByCurrency, currency);
+    const pendingCredit = getConvertedTotal(pendingCreditByCurrency, targetCurrency);
+    const pendingDebit = getConvertedTotal(pendingDebitByCurrency, targetCurrency);
     const dueAmount = Math.abs(pendingDebit - pendingCredit);
-    const dueDirection = pendingDebit > pendingCredit ? "you_owe_person" : pendingDebit < pendingCredit ? "person_owes_you" : "settled";
-    return { currency, pendingCredit, pendingDebit, dueAmount, dueDirection };
+    const dueDirection =
+      pendingDebit > pendingCredit
+        ? "you_owe_person"
+        : pendingDebit < pendingCredit
+          ? "person_owes_you"
+          : "settled";
+    return { currency: targetCurrency, pendingCredit, pendingDebit, dueAmount, dueDirection };
   }
+
+  function getPersonTotals(person) {
+    return getPersonTotalsInCurrency(person, getInvoiceCurrency(person._id));
+  }
+
+  const peopleInsights = useMemo(() => {
+    const entries = people.map((person) => {
+      const totals = getPersonTotalsInCurrency(person, INSIGHT_CURRENCY);
+      return {
+        id: person._id,
+        name: person.name || "Contact",
+        given: totals.pendingCredit,
+        received: totals.pendingDebit,
+        due: totals.dueAmount,
+        direction: totals.dueDirection,
+      };
+    });
+    return buildPeopleInsights(entries);
+  }, [people, rates]);
 
   useEffect(() => {
     if (!hasOverlayOpen) return undefined;
@@ -176,6 +206,14 @@ export default function PeoplePage() {
         <h1 className="text-3xl font-semibold tracking-tight">People</h1>
         <p className="text-sm text-zinc-600">Manage contacts and view give vs received-back balance.</p>
       </header>
+
+      {!loading && people.length > 0 ? (
+        isPremium ? (
+          <PeoplePremiumInsights insights={peopleInsights} currency={INSIGHT_CURRENCY} />
+        ) : (
+          <PeopleInsightsUpsell />
+        )
+      ) : null}
 
       <form onSubmit={editingPersonId ? saveEdit : addPerson} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-4">
         <input

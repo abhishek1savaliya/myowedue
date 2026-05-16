@@ -8,7 +8,11 @@ import ModalPortal from "@/components/ModalPortal";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { buildEventsPdf, downloadPdfBytes } from "@/lib/events-pdf";
 import { CACHE_KEYS } from "@/lib/cache-keys";
+import EventsInsightsUpsell from "@/components/events/EventsInsightsUpsell";
+import EventsPremiumInsights from "@/components/events/EventsPremiumInsights";
+import { buildEventsInsights } from "@/lib/events-insights";
 import { refreshAppCache } from "@/lib/refresh-app-cache";
+import { useUserStore } from "@/stores/useUserStore";
 
 const DEFAULT_TIMEZONE = "Australia/Melbourne";
 const TIMEZONE_OPTIONS = [
@@ -50,6 +54,7 @@ const emptyForm = {
 };
 
 export default function EventsPage() {
+  const isPremium = useUserStore((s) => s.user?.isPremium);
   const { data, loading, refresh } = useCachedFetch(CACHE_KEYS.events, "/api/events");
   const events = useMemo(() => data?.events || [], [data]);
   const [showForm, setShowForm] = useState(false);
@@ -181,6 +186,8 @@ export default function EventsPage() {
   const upcoming = events.filter((e) => new Date(e.startTime) >= new Date());
   const past = events.filter((e) => new Date(e.startTime) < new Date());
 
+  const eventsInsights = useMemo(() => buildEventsInsights(events), [events]);
+
   const selectedCount = selectedIds.size;
   const allSelected = events.length > 0 && selectedCount === events.length;
 
@@ -229,13 +236,21 @@ export default function EventsPage() {
   );
 
   const exportPdfAll = useCallback(() => {
+    if (!isPremium) {
+      window.location.href = "/my-subscription?purchase=1";
+      return;
+    }
     void runPdfExport(events, `All events (${events.length})`);
-  }, [events, runPdfExport]);
+  }, [events, isPremium, runPdfExport]);
 
   const exportPdfSelected = useCallback(() => {
+    if (!isPremium) {
+      window.location.href = "/my-subscription?purchase=1";
+      return;
+    }
     const picked = events.filter((e) => selectedIds.has(String(e._id)));
     void runPdfExport(picked, `Selected events (${picked.length})`);
-  }, [events, selectedIds, runPdfExport]);
+  }, [events, isPremium, selectedIds, runPdfExport]);
 
   return (
     <div className="mx-auto max-w-3xl px-3 py-5 sm:px-4 sm:py-8">
@@ -274,6 +289,12 @@ export default function EventsPage() {
           </button>
         </div>
       </div>
+
+      {!loading && events.length > 0 ? (
+        <div className="mb-5">
+          {isPremium ? <EventsPremiumInsights insights={eventsInsights} /> : <EventsInsightsUpsell />}
+        </div>
+      ) : null}
 
       {error && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -437,7 +458,9 @@ export default function EventsPage() {
       ) : (
         <div className="space-y-8">
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-700 dark:bg-zinc-900/40">
-            <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Export PDF (matches app theme)</p>
+            <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              {isPremium ? "Export PDF (matches app theme)" : "Premium PDF export — upgrade to Pro"}
+            </p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
                 <button
@@ -462,7 +485,7 @@ export default function EventsPage() {
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:flex-none"
                 >
                   {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
-                  All events
+                  {isPremium ? "All events" : "All events (Pro)"}
                 </button>
                 <button
                   type="button"
@@ -471,7 +494,7 @@ export default function EventsPage() {
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 sm:flex-none"
                 >
                   {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
-                  Selected
+                  {isPremium ? "Selected" : "Selected (Pro)"}
                 </button>
               </div>
             </div>

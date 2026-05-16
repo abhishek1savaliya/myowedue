@@ -30,7 +30,11 @@ import PdfViewer from "@/components/PdfViewer";
 import ProgressBar from "@/components/ProgressBar";
 import { useCachedParallel } from "@/hooks/useCachedParallel";
 import { CACHE_KEYS } from "@/lib/cache-keys";
+import FilesInsightsUpsell from "@/components/files/FilesInsightsUpsell";
+import FilesPremiumInsights from "@/components/files/FilesPremiumInsights";
+import { buildFilesInsights } from "@/lib/files-insights";
 import { refreshAppCache } from "@/lib/refresh-app-cache";
+import { useUserStore } from "@/stores/useUserStore";
 
 function formatBytes(bytes) {
   const value = Number(bytes || 0);
@@ -198,6 +202,7 @@ function uploadToCloudinary(uploadUrl, formData, onProgress) {
 }
 
 export default function FilesPageClient() {
+  const storePremium = useUserStore((s) => s.user?.isPremium);
   const filesCacheKey = CACHE_KEYS.filesList(FILE_PAGE_SIZE);
   const { data: cached, loading, refresh } = useCachedParallel(
     [
@@ -295,6 +300,15 @@ export default function FilesPageClient() {
   );
 
   const fileViewClasses = FILE_VIEW_CLASSES[fileView] || FILE_VIEW_CLASSES.medium;
+
+  const isPremiumUser = Boolean(storePremium ?? isPremium);
+
+  const filesInsights = useMemo(
+    () => buildFilesInsights({ files, folders, usageBytes, quotaBytes }),
+    [files, folders, usageBytes, quotaBytes]
+  );
+
+  const showFilesInsights = !loading && (files.length > 0 || folders.length > 0 || usageBytes > 0);
 
   const selectedCount = selectedFileIds.length;
 
@@ -892,6 +906,14 @@ export default function FilesPageClient() {
           and premium users get 10 GB.
         </p>
       </header>
+
+      {showFilesInsights ? (
+        isPremiumUser ? (
+          <FilesPremiumInsights insights={filesInsights} />
+        ) : (
+          <FilesInsightsUpsell />
+        )
+      ) : null}
 
       <div className="flex flex-1 flex-col gap-6 lg:flex-row">
         {/* Left Sidebar - Folders */}
