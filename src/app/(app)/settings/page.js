@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AlertCircle, Check, Lock, Loader2, Moon, PenSquare, Sun, X } from "lucide-react";
 import Loader from "@/components/Loader";
 import { useCommunityUsernameCheck } from "@/hooks/useCommunityUsernameCheck";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   COMMUNITY_USERNAME_MAX,
   COMMUNITY_USERNAME_MIN,
@@ -12,19 +13,76 @@ import {
   tryNormalizeCommunityUsername,
 } from "@/lib/community-usernames";
 import { FONT_PRESETS, FONT_SIZE_PRESETS } from "@/lib/appearance";
+import { CACHE_KEYS } from "@/lib/cache-keys";
 import { applyAppearancePreference, applyThemePreference } from "@/lib/theme-client";
 import {
   persistAppearancePreference,
   persistThemePreference,
 } from "@/lib/cookie-preferences";
+import { useApiCacheStore } from "@/stores/useApiCacheStore";
 import { useUserStore } from "@/stores/useUserStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useThemeStore } from "@/stores/useThemeStore";
+
+function applyUserToSettingsState(user, setters) {
+  if (!user) return;
+  const {
+    setProfile,
+    setFrequency,
+    setDarkMode,
+    setIsPremium,
+    setFontPreset,
+    setFontSizePreset,
+    setNotificationsEnabled,
+    setCommunityUsername,
+    setSavedCommunityUsername,
+    setCommunityUsernameEditMode,
+    setUsernameMessage,
+    setProfileLoadedOk,
+  } = setters;
+
+  setProfile({
+    firstName: user.firstName || "",
+    lastName: user.lastName || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    joinDate: user.joinDate || "",
+  });
+  setFrequency(user.reminderFrequency || "weekly");
+  const userDarkMode = Boolean(user.darkMode);
+  const premium = Boolean(user.isPremium);
+  const nextFontPreset = user.fontPreset || "manrope";
+  const nextFontSizePreset = user.fontSizePreset || "size-4";
+  setDarkMode(userDarkMode);
+  applyThemePreference(userDarkMode);
+  setIsPremium(premium);
+  setFontPreset(nextFontPreset);
+  setFontSizePreset(nextFontSizePreset);
+  applyAppearancePreference({
+    fontPreset: nextFontPreset,
+    fontSizePreset: nextFontSizePreset,
+    isPremium: premium,
+  });
+  persistThemePreference({ scope: "auth", isDarkMode: userDarkMode });
+  persistAppearancePreference({
+    fontPreset: nextFontPreset,
+    fontSizePreset: nextFontSizePreset,
+    isPremium: premium,
+  });
+  setNotificationsEnabled(user.notificationsEnabled !== false);
+  const handle = typeof user.communityUsername === "string" ? user.communityUsername : "";
+  setCommunityUsername(handle);
+  setSavedCommunityUsername(handle);
+  setCommunityUsernameEditMode(normalizeSavedUsernameHandle(handle).length === 0);
+  setUsernameMessage("");
+  setProfileLoadedOk(true);
+}
 
 export default function SettingsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const applyThemeForPath = useThemeStore((s) => s.applyThemeForPath);
+  const storeUser = useUserStore((s) => s.user);
   const [profile, setProfile] = useState({
     firstName: "",
     lastName: "",
@@ -38,12 +96,10 @@ export default function SettingsPage() {
   const [fontPreset, setFontPreset] = useState("manrope");
   const [fontSizePreset, setFontSizePreset] = useState("size-4");
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileMessage, setProfileMessage] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
   const [concurrentSessionLimit, setConcurrentSessionLimit] = useState(1);
   const [recentLogins, setRecentLogins] = useState([]);
-  const [loadingLoginActivity, setLoadingLoginActivity] = useState(true);
   const [loginActivityMessage, setLoginActivityMessage] = useState("");
   const [communityUsername, setCommunityUsername] = useState("");
   const [savedCommunityUsername, setSavedCommunityUsername] = useState("");
@@ -51,73 +107,84 @@ export default function SettingsPage() {
   /** When false and a handle exists, show read-only @handle with edit control. */
   const [communityUsernameEditMode, setCommunityUsernameEditMode] = useState(true);
   /** Only true after a successful /api/auth/me — avoids blocking Save when profile state is still initial empty. */
-  const [profileLoadedOk, setProfileLoadedOk] = useState(false);
+  const [profileLoadedOk, setProfileLoadedOk] = useState(() => Boolean(storeUser));
 
-  async function loadProfile() {
-    setLoadingProfile(true);
-    setProfileLoadedOk(false);
-    const res = await fetch("/api/auth/me", { cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
+  const {
+    data: profilePayload,
+    loading: profileLoading,
+    error: profileError,
+    revalidating: profileRevalidating,
+  } = useCachedFetch(CACHE_KEYS.user, "/api/auth/me");
 
-    if (res.ok && data?.user) {
-      const user = data.user;
-      setProfile({
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        email: user.email || "",
-        phone: user.phone || "",
-        joinDate: user.joinDate || "",
-      });
-      setFrequency(user.reminderFrequency || "weekly");
-      const userDarkMode = Boolean(user.darkMode);
-      const premium = Boolean(user.isPremium);
-      const nextFontPreset = user.fontPreset || "manrope";
-      const nextFontSizePreset = user.fontSizePreset || "size-4";
-      setDarkMode(userDarkMode);
-      applyThemePreference(userDarkMode);
-      setIsPremium(premium);
-      setFontPreset(nextFontPreset);
-      setFontSizePreset(nextFontSizePreset);
-      applyAppearancePreference({
-        fontPreset: nextFontPreset,
-        fontSizePreset: nextFontSizePreset,
-        isPremium: premium,
-      });
-      persistThemePreference({ scope: "auth", isDarkMode: userDarkMode });
-      persistAppearancePreference({
-        fontPreset: nextFontPreset,
-        fontSizePreset: nextFontSizePreset,
-        isPremium: premium,
-      });
-      setNotificationsEnabled(user.notificationsEnabled !== false);
-      const handle = typeof user.communityUsername === "string" ? user.communityUsername : "";
-      setCommunityUsername(handle);
-      setSavedCommunityUsername(handle);
-      setCommunityUsernameEditMode(normalizeSavedUsernameHandle(handle).length === 0);
-      setUsernameMessage("");
-      setProfileLoadedOk(true);
-    }
+  const {
+    data: loginActivityPayload,
+    loading: loginActivityLoading,
+    error: loginActivityError,
+    refresh: refreshLoginActivity,
+  } = useCachedFetch(CACHE_KEYS.loginActivity, "/api/auth/login-activity");
 
-    setLoadingProfile(false);
-  }
+  const hasProfileData = Boolean(profilePayload?.user) || Boolean(storeUser);
+  const loadingProfile = profileLoading && !hasProfileData;
 
-  async function loadLoginActivity() {
-    setLoadingLoginActivity(true);
-    const res = await fetch("/api/auth/login-activity", { cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      setConcurrentSessionLimit(Math.min(5, Math.max(1, Number(data.concurrentSessionLimit || 1))));
-      setRecentLogins(Array.isArray(data.recentLogins) ? data.recentLogins : []);
-    } else {
-      setLoginActivityMessage(data.message || "Failed to load login activity");
-    }
-    setLoadingLoginActivity(false);
-  }
+  const formSetters = useMemo(
+    () => ({
+      setProfile,
+      setFrequency,
+      setDarkMode,
+      setIsPremium,
+      setFontPreset,
+      setFontSizePreset,
+      setNotificationsEnabled,
+      setCommunityUsername,
+      setSavedCommunityUsername,
+      setCommunityUsernameEditMode,
+      setUsernameMessage,
+      setProfileLoadedOk,
+    }),
+    []
+  );
+
+  const hydrateFromUser = useCallback(
+    (user) => applyUserToSettingsState(user, formSetters),
+    [formSetters]
+  );
+
+  useLayoutEffect(() => {
+    if (storeUser) hydrateFromUser(storeUser);
+  }, [storeUser, hydrateFromUser]);
 
   useEffect(() => {
-    loadProfile();
-    loadLoginActivity();
-  }, []);
+    if (profilePayload?.user) {
+      hydrateFromUser(profilePayload.user);
+      useUserStore.getState().setUser(profilePayload.user);
+    }
+  }, [profilePayload, hydrateFromUser]);
+
+  useEffect(() => {
+    if (!loginActivityPayload) return;
+    if (loginActivityPayload.concurrentSessionLimit != null || loginActivityPayload.recentLogins) {
+      setConcurrentSessionLimit(
+        Math.min(5, Math.max(1, Number(loginActivityPayload.concurrentSessionLimit || 1)))
+      );
+      setRecentLogins(
+        Array.isArray(loginActivityPayload.recentLogins) ? loginActivityPayload.recentLogins : []
+      );
+    }
+  }, [loginActivityPayload]);
+
+  useEffect(() => {
+    if (profileError && !hasProfileData) {
+      setProfileMessage(profileError);
+    }
+  }, [profileError, hasProfileData]);
+
+  useEffect(() => {
+    if (loginActivityError && !loginActivityPayload) {
+      setLoginActivityMessage(loginActivityError);
+    }
+  }, [loginActivityError, loginActivityPayload]);
+
+  const loadingLoginActivity = loginActivityLoading && !loginActivityPayload;
 
   const savedNorm = normalizeSavedUsernameHandle(savedCommunityUsername);
   const hasSavedCommunityUsername = savedNorm.length > 0;
@@ -166,15 +233,9 @@ export default function SettingsPage() {
 
     const data = await res.json().catch(() => ({}));
     if (res.ok && data?.user) {
+      useApiCacheStore.getState().setEntry(CACHE_KEYS.user, data);
       useUserStore.getState().setUser(data.user);
-      setProfile((prev) => ({
-        ...prev,
-        firstName: data.user.firstName || prev.firstName,
-        lastName: data.user.lastName || prev.lastName,
-        email: data.user.email || prev.email,
-        phone: data.user.phone || prev.phone,
-        joinDate: data.user.joinDate || prev.joinDate,
-      }));
+      hydrateFromUser(data.user);
     }
 
     setProfileMessage(res.ok ? "Profile updated" : data.message || "Failed to update profile");
@@ -277,7 +338,7 @@ export default function SettingsPage() {
       return;
     }
     setLoginActivityMessage("Concurrent device limit updated");
-    await loadLoginActivity();
+    await refreshLoginActivity();
   }
 
   return (
@@ -287,7 +348,9 @@ export default function SettingsPage() {
         <p className="text-sm text-zinc-600">Update your profile and configure reminders and preferences.</p>
       </header>
 
-      <section className="max-w-3xl rounded-2xl border border-zinc-200 bg-white p-5">
+      <section
+        className={`max-w-3xl rounded-2xl border border-zinc-200 bg-white p-5 transition-opacity ${profileRevalidating ? "opacity-[0.92]" : ""}`}
+      >
         <h2 className="text-base font-semibold text-black">Profile</h2>
         <p className="mt-1 text-xs text-zinc-500">
           {profile.joinDate ? `Joined on ${new Date(profile.joinDate).toLocaleDateString()}` : "Join date unavailable"}
@@ -624,7 +687,7 @@ export default function SettingsPage() {
             </button>
             <button
               type="button"
-              onClick={loadLoginActivity}
+              onClick={() => refreshLoginActivity()}
               className="rounded-xl border border-zinc-400 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-black hover:bg-zinc-50"
             >
               Refresh Activity

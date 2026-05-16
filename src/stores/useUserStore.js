@@ -3,6 +3,8 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { createDebouncedSessionStorage } from "@/lib/debounced-storage";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { useApiCacheStore } from "@/stores/useApiCacheStore";
 
 const debouncedSessionStorage = createDebouncedSessionStorage(450);
 
@@ -57,6 +59,7 @@ export const useUserStore = create(
             const data = await res.json().catch(() => ({}));
 
             if (res.ok && data?.user) {
+              useApiCacheStore.getState().setEntry(CACHE_KEYS.user, { user: data.user });
               set({
                 user: data.user,
                 status: "ready",

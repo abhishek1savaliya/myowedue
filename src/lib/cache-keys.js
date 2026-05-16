@@ -2,6 +2,7 @@
 
 export const CACHE_KEYS = {
   user: "auth:me",
+  loginActivity: "auth:login-activity",
   exchangeRates: "exchange-rates",
   people: "person:list",
   person: (id) => `person:${id}`,
@@ -73,5 +74,8 @@ export function invalidateAppData(store, groups = []) {
   if (hit("content")) {
     store.invalidatePrefix("content:");
   }
-  if (hit("user")) store.invalidate(CACHE_KEYS.user);
+  if (hit("user")) {
+    store.invalidate(CACHE_KEYS.user);
+    store.invalidate(CACHE_KEYS.loginActivity);
+  }
 }
