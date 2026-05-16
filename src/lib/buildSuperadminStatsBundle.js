@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import Transaction from "@/models/Transaction";
 import { fetchSuperadminAnalyticsExtras } from "@/lib/adminSuperadminAnalytics";
+import { buildPremiumAdminInsights } from "@/lib/premium-funnel";
 
 /**
  * Full superadmin analytics payload (same shape as GET /api/admin/stats).
@@ -20,6 +21,7 @@ export async function buildSuperadminStatsBundle() {
     newTransactionsThisMonth,
     recentUsers,
     extras,
+    premium,
   ] = await Promise.all([
     User.countDocuments({}),
     Transaction.countDocuments({ isDeleted: false }),
@@ -44,6 +46,7 @@ export async function buildSuperadminStatsBundle() {
       .select("name email createdAt isPremium")
       .lean(),
     fetchSuperadminAnalyticsExtras(now),
+    buildPremiumAdminInsights(now),
   ]);
 
   const monthRanges = [];
@@ -94,5 +97,6 @@ export async function buildSuperadminStatsBundle() {
     monthlyTrend,
     monthlyTransactionsTrend,
     ...extras,
+    premium,
   };
 }

@@ -79,11 +79,11 @@ export default function AdminVouchersPage() {
   }
 
   if (!admin || !["superadmin", "manager"].includes(admin.role)) {
-    return <div className="p-6 text-sm text-slate-400">You do not have access to voucher management.</div>;
+    return <div className="p-4 text-sm text-slate-400 sm:p-6">You do not have access to voucher management.</div>;
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-4 pb-10 sm:p-6 sm:pb-12">
       <div>
         <h1 className="text-2xl font-bold text-white">Subscription Vouchers</h1>
         <p className="mt-1 text-sm text-slate-400">Super admin and manager can generate voucher codes for users to apply during subscription purchase.</p>

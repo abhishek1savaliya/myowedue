@@ -1802,3 +1802,26 @@ main > * {
 :root[data-premium-ui="true"]:not([data-theme="dark"]) .premium-insight-card {
   background: linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 251, 240, 0.92) 100%) !important;
 }
+
+/* Admin panel — native select dropdowns (Windows/Chrome) */
+[data-admin-panel="true"] {
+  color-scheme: dark;
+}
+
+[data-admin-panel="true"] select {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #475569 !important;
+}
+
+[data-admin-panel="true"] select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+[data-admin-panel="true"] select option:checked,
+[data-admin-panel="true"] select option:hover,
+[data-admin-panel="true"] select option:focus {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+}

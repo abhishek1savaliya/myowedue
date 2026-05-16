@@ -19,12 +19,13 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useAppAlert } from "@/components/AppAlertProvider";
+import PremiumInsightsPanel from "@/components/admin/PremiumInsightsPanel";
 
 function StatCard({ label, value, accent }) {
   return (
     <div className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-5 backdrop-blur-sm">
       <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{label}</p>
-      <p className={`mt-2 text-3xl font-bold ${accent}`}>{value == null ? "-" : value.toLocaleString()}</p>
+      <p className={`mt-2 text-2xl font-bold sm:text-3xl ${accent}`}>{value == null ? "-" : value.toLocaleString()}</p>
     </div>
   );
 }
@@ -94,12 +95,12 @@ function ManagerDashboard({ admin }) {
   const active = tickets.filter((t) => t.status === "open" || t.status === "in_progress").length;
 
   return (
-    <section className="relative p-6">
+    <section className="relative p-4 pb-10 sm:p-6 sm:pb-12">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(45,212,191,0.12),transparent_35%),radial-gradient(circle_at_88%_88%,rgba(14,165,233,0.12),transparent_36%)]" />
       <div className="relative space-y-6">
         <div className="rounded-2xl border border-cyan-500/25 bg-slate-900/70 p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.15em] text-cyan-300">Manager Workspace</p>
-          <h1 className="mt-2 text-3xl font-bold text-white">Hello, {admin?.name}</h1>
+          <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Hello, {admin?.name}</h1>
           <p className="mt-1 text-sm text-slate-300">Monitor your queue, balance assignments, and unblock your team quickly.</p>
         </div>
 
@@ -157,12 +158,12 @@ function SupportDashboard({ admin }) {
   const active = tickets.filter((t) => t.status === "open" || t.status === "in_progress").length;
 
   return (
-    <section className="relative p-6">
+    <section className="relative p-4 pb-10 sm:p-6 sm:pb-12">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_8%,rgba(59,130,246,0.14),transparent_32%),radial-gradient(circle_at_90%_90%,rgba(16,185,129,0.1),transparent_35%)]" />
       <div className="relative space-y-6">
         <div className="rounded-2xl border border-blue-500/25 bg-slate-900/70 p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.15em] text-blue-300">Support Desk</p>
-          <h1 className="mt-2 text-3xl font-bold text-white">{admin?.name}</h1>
+          <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">{admin?.name}</h1>
           <p className="mt-1 text-sm text-slate-300">Focus only on your assigned cases and keep response quality high.</p>
           {admin?.employeeId && <p className="mt-3 font-mono text-xs text-slate-500">Employee ID: {admin.employeeId}</p>}
         </div>
@@ -224,7 +225,7 @@ function KpiTile({ icon: Icon, label, value, sub, accent }) {
       <div className="relative flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-          <p className={`mt-2 text-3xl font-bold tabular-nums tracking-tight ${accent.text}`}>
+          <p className={`mt-2 text-2xl font-bold tabular-nums tracking-tight sm:text-3xl ${accent.text}`}>
             {value == null ? "—" : value.toLocaleString()}
           </p>
           {sub && <p className="mt-1.5 text-xs text-slate-500">{sub}</p>}
@@ -355,6 +356,7 @@ function SuperAdminDashboard({ admin }) {
     tickets,
     team,
     posts,
+    premium,
   } = data || {};
 
   const tb = tickets?.byStatus || {};
@@ -371,8 +373,8 @@ function SuperAdminDashboard({ admin }) {
     <div className="relative min-h-full">
       <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(251,191,36,0.08),transparent),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(56,189,248,0.06),transparent),radial-gradient(ellipse_60%_40%_at_0%_80%,rgba(167,139,250,0.05),transparent)]" />
 
-      <div className="space-y-8 p-6 pb-12">
-        <header className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-linear-to-br from-slate-900/95 via-slate-900/90 to-slate-950/95 px-6 py-8 shadow-xl shadow-black/30 md:px-8">
+      <div className="space-y-6 p-4 pb-10 sm:space-y-8 sm:p-6 sm:pb-12">
+        <header className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-linear-to-br from-slate-900/95 via-slate-900/90 to-slate-950/95 px-4 py-6 shadow-xl shadow-black/30 sm:px-6 sm:py-8 md:px-8">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-amber-400/50 to-transparent" />
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -380,17 +382,17 @@ function SuperAdminDashboard({ admin }) {
                 <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
                 Executive overview
               </p>
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">Command center</h1>
+              <h1 className="mt-4 text-2xl font-bold tracking-tight text-white sm:text-3xl md:text-4xl">Command center</h1>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-400">
                 Real-time platform health, growth, support load, team footprint, and community engagement — in one view.
               </p>
             </div>
-            <div className="flex flex-col items-end gap-3 text-right">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end sm:text-right md:gap-3">
               <button
                 type="button"
                 onClick={downloadReportPdf}
                 disabled={pdfLoading}
-                className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2.5 text-sm font-semibold text-amber-100 shadow-sm transition hover:bg-amber-500/25 disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2.5 text-sm font-semibold text-amber-100 shadow-sm transition hover:bg-amber-500/25 disabled:opacity-50 sm:w-auto"
               >
                 <FileDown className="h-4 w-4 shrink-0" strokeWidth={2} />
                 {pdfLoading ? "Building PDF…" : "Export full report (PDF)"}
@@ -399,7 +401,7 @@ function SuperAdminDashboard({ admin }) {
                 type="button"
                 onClick={reindexAlgoliaUsernames}
                 disabled={reindexLoading}
-                className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/15 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-sm transition hover:bg-cyan-500/25 disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/15 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-sm transition hover:bg-cyan-500/25 disabled:opacity-50 sm:w-auto"
               >
                 <RefreshCw className={`h-4 w-4 shrink-0 ${reindexLoading ? "animate-spin" : ""}`} strokeWidth={2} />
                 {reindexLoading ? "Reindexing…" : "Reindex usernames (Algolia)"}
@@ -452,6 +454,26 @@ function SuperAdminDashboard({ admin }) {
             accent={{ text: "text-rose-300", icon: "text-rose-300", iconWrap: "border-rose-500/30 bg-rose-500/10", blob: "bg-rose-400" }}
           />
         </section>
+
+        {premium?.summary ? (
+          <section className="rounded-2xl border border-amber-500/25 bg-slate-900/50 p-6 backdrop-blur-sm">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Crown className="h-4 w-4 text-amber-400" strokeWidth={2} />
+                  Premium insights
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Clicks, funnel, conversions, and revenue — full detail on the Premium page.
+                </p>
+              </div>
+              <Link href="/admin/premium" className="text-xs font-semibold text-amber-400 hover:text-amber-300">
+                Open Premium analytics →
+              </Link>
+            </div>
+            <PremiumInsightsPanel data={premium} compact />
+          </section>
+        ) : null}
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-700/80 bg-slate-900/50 p-6 backdrop-blur-sm">

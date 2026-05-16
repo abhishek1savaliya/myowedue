@@ -122,9 +122,9 @@ export default function AdminContentEditorPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 pb-10 sm:p-6 sm:pb-12">
       <header>
-        <h1 className="text-2xl font-bold text-white">Content Editor</h1>
+        <h1 className="text-xl font-bold text-white sm:text-2xl">Content Editor</h1>
         <p className="mt-1 text-sm text-slate-400">
           Manage public page content. Role:{" "}
           <span className="font-semibold uppercase text-cyan-300">{adminRole || "…"}</span>

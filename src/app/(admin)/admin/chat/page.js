@@ -112,25 +112,25 @@ export default function AdminChatPage() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6 text-slate-400">Loading chat…</div>
+      <div className="p-4 sm:p-6">
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4 text-slate-400 sm:p-6">Loading chat…</div>
       </div>
     );
   }
 
   return (
-    <section className="relative p-6">
+    <section className="relative p-4 pb-10 sm:p-6 sm:pb-12">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_6%,rgba(56,189,248,0.12),transparent_34%),radial-gradient(circle_at_90%_92%,rgba(16,185,129,0.1),transparent_36%)]" />
-      <div className="relative mx-auto max-w-4xl space-y-5">
+      <div className="relative mx-auto max-w-4xl space-y-4 sm:space-y-5">
         <div>
-          <h1 className="text-2xl font-bold text-white">Chat</h1>
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Chat</h1>
           <p className="mt-1 text-sm text-slate-400">
             Direct messages. Support can read messages from Admin but cannot send replies here. Managers and super admins can send per your contact list.
           </p>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
-          <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,240px)_1fr] lg:gap-5">
+          <div className="max-h-[min(40vh,320px)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900/70 p-4 lg:max-h-none">
             <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
               Conversation
             </label>
@@ -160,7 +160,7 @@ export default function AdminChatPage() {
             )}
           </div>
 
-          <div className="flex min-h-[420px] flex-col rounded-2xl border border-slate-700 bg-slate-900/70">
+          <div className="flex min-h-[min(52vh,420px)] flex-col rounded-2xl border border-slate-700 bg-slate-900/70 sm:min-h-[420px]">
             {!peerId ? (
               <div className="flex flex-1 items-center justify-center p-8 text-sm text-slate-500">
                 Select someone to start chatting.
@@ -190,8 +190,8 @@ export default function AdminChatPage() {
                           key={m.id}
                           className={`rounded-xl border px-3 py-2 ${
                             mine
-                              ? "ml-8 border-cyan-500/30 bg-cyan-500/10"
-                              : "mr-8 border-slate-700 bg-slate-950/80"
+                              ? "ml-4 border-cyan-500/30 bg-cyan-500/10 sm:ml-8"
+                              : "mr-4 border-slate-700 bg-slate-950/80 sm:mr-8"
                           }`}
                         >
                           <div className="mb-1 flex items-center justify-between gap-2">

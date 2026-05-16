@@ -17,6 +17,7 @@ import {
   SUBSCRIPTION_CURRENCIES,
 } from "@/lib/subscription-pricing";
 import { applyAppearancePreference } from "@/lib/theme-client";
+import { trackPremiumFunnel } from "@/lib/track-premium-funnel-client";
 import { useUserStore } from "@/stores/useUserStore";
 
 function formatDateTime(value) {
@@ -54,17 +55,24 @@ export default function MySubscriptionPage() {
   const [exchangeRates, setExchangeRates] = useState(null);
   const [ratesLoading, setRatesLoading] = useState(false);
 
-  function openPurchaseModal() {
+  function openPurchaseModal(source = "subscription_page") {
     setError("");
     setSelectedPlan("pro_monthly");
     setBillingCycle("monthly");
     setShowPurchaseModal(true);
+    trackPremiumFunnel("purchase_modal_open", { source });
   }
+
+  useEffect(() => {
+    if (loading) return;
+    trackPremiumFunnel("subscription_page_view", { source: "my_subscription" });
+  }, [loading]);
 
   useEffect(() => {
     if (searchParams.get("purchase") !== "1" || loading) return;
     if (status?.isPremium) return;
-    openPurchaseModal();
+    trackPremiumFunnel("upgrade_click", { source: "purchase_query", meta: { purchase: "1" } });
+    openPurchaseModal("purchase_query");
   }, [searchParams, loading, status?.isPremium]);
 
   const effectiveRates = exchangeRates || DEFAULT_FX;
@@ -120,6 +128,11 @@ export default function MySubscriptionPage() {
 
   async function handlePayNow() {
     if (selectedPlan !== "pro_monthly" && selectedPlan !== "pro_yearly") return;
+
+    trackPremiumFunnel("purchase_checkout_start", {
+      source: "purchase_modal",
+      meta: { plan: selectedPlan, currency: paymentCurrency },
+    });
 
     setSaving(true);
     setError("");

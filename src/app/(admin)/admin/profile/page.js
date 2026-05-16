@@ -122,14 +122,14 @@ export default function AdminProfilePage() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6 text-slate-400">Loading profile...</div>
+      <div className="p-4 sm:p-6">
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4 text-slate-400 sm:p-6">Loading profile...</div>
       </div>
     );
   }
 
   return (
-    <section className="relative p-6">
+    <section className="relative p-4 pb-10 sm:p-6 sm:pb-12">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_6%,rgba(56,189,248,0.12),transparent_34%),radial-gradient(circle_at_90%_92%,rgba(16,185,129,0.1),transparent_36%)]" />
       <div className="relative grid gap-6 lg:grid-cols-[1fr_1.2fr]">
         <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6 space-y-5">

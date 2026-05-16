@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import BackButton from "@/components/BackButton";
+import { adminSelect } from "@/components/admin/admin-shell";
 
 const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
 const STATUS_COLORS = {
@@ -112,7 +113,7 @@ export default function TicketDetailPage() {
   if (!ticket) return null;
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 pb-10 sm:p-6 sm:pb-12">
       <div className="flex items-center gap-3">
         <BackButton href="/admin/tickets" label="Back to tickets" />
       </div>
@@ -188,7 +189,7 @@ export default function TicketDetailPage() {
                   setAssignManager(e.target.value);
                   setAssignTo("");
                 }}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
+                className={adminSelect}
               >
                 <option value="">— Select manager —</option>
                 {managers.map((m) => (
@@ -211,7 +212,7 @@ export default function TicketDetailPage() {
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
+                className={adminSelect}
               >
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
@@ -229,7 +230,7 @@ export default function TicketDetailPage() {
               <select
                 value={assignTo}
                 onChange={(e) => setAssignTo(e.target.value)}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
+                className={adminSelect}
               >
                 <option value="">— Keep current —</option>
                 {supportMembers.map((m) => (

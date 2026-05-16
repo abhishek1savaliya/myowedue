@@ -56,14 +56,14 @@ export default function AdminTicketsPage() {
   const doneCount = tickets.filter((t) => t.status === "resolved" || t.status === "closed").length;
 
   return (
-    <section className="relative p-6">
+    <section className="relative p-4 pb-10 sm:p-6 sm:pb-12">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(45,212,191,0.1),transparent_34%),radial-gradient(circle_at_90%_100%,rgba(59,130,246,0.12),transparent_34%)]" />
       <div className="relative space-y-6">
         <div className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
             {me?.role === "support" ? "Support Queue" : me?.role === "manager" ? "Manager Queue" : "Global Queue"}
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-white">
+          <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">
             {me?.role === "support" ? "My Assigned Tickets" : me?.role === "manager" ? "My Team Tickets" : "All Support Tickets"}
           </h1>
           <p className="mt-1 text-sm text-slate-300">
@@ -71,7 +71,7 @@ export default function AdminTicketsPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           <div className="rounded-xl border border-slate-700/70 bg-slate-900/70 p-4">
             <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Total</p>
             <p className="mt-2 text-2xl font-bold text-white">{total}</p>
@@ -97,9 +97,9 @@ export default function AdminTicketsPage() {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-slate-400">{total} tickets in this view</div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[
               { value: "", label: "Active" },
               { value: "all", label: "All" },
@@ -113,7 +113,7 @@ export default function AdminTicketsPage() {
                 key={value || "active"}
                 type="button"
                 onClick={() => { setStatusFilter(value); setPage(1); }}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors ${
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors ${
                   statusFilter === value
                     ? "bg-cyan-400 text-slate-900"
                     : "border border-slate-700 text-slate-400 hover:border-cyan-400/40 hover:text-cyan-200"

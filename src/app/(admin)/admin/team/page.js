@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppAlert } from "@/components/AppAlertProvider";
+import { adminSelect } from "@/components/admin/admin-shell";
 
 const ROLES_SUPERADMIN = ["support", "manager", "superadmin"];
 
@@ -77,7 +78,7 @@ function SuperadminRoleEditor({ member, managers, viewerId, soleSuperadmin, onSa
           setRole(r);
           if (r === "support" && !managerId && managers[0]) setManagerId(managers[0].id);
         }}
-        className="w-full rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        className={`${adminSelect} px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50`}
       >
         {ROLES_SUPERADMIN.map((r) => (
           <option key={r} value={r}>
@@ -90,7 +91,7 @@ function SuperadminRoleEditor({ member, managers, viewerId, soleSuperadmin, onSa
           value={managerId}
           disabled={lockedSoleSuperadmin}
           onChange={(e) => setManagerId(e.target.value)}
-          className="w-full rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className={`${adminSelect} px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50`}
         >
           <option value="">Select manager</option>
           {managers.map((mgr) => (
@@ -366,10 +367,10 @@ export default function AdminTeamPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-4 pb-10 sm:p-6 sm:pb-12">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Team</h1>
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Team</h1>
           <p className="text-sm text-gray-400 mt-0.5">
             {viewerRole === "support"
               ? "Your manager and teammates (view only)"
@@ -390,7 +391,7 @@ export default function AdminTeamPage() {
                   : { ...f, name: "", email: "" }
               );
             }}
-            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-amber-400 transition-colors"
+            className="w-full rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-amber-400 sm:w-auto"
           >
             {showForm ? "Cancel" : "+ Add Employee"}
           </button>
@@ -497,7 +498,7 @@ export default function AdminTeamPage() {
                       managerId: e.target.value === "support" ? form.managerId : "",
                     })
                   }
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
+                  className={adminSelect}
                 >
                   {ROLES_SUPERADMIN.map((r) => (
                     <option key={r} value={r}>
@@ -514,7 +515,7 @@ export default function AdminTeamPage() {
                   value={form.managerId}
                   onChange={(e) => setForm({ ...form, managerId: e.target.value })}
                   required
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
+                  className={adminSelect}
                 >
                   <option value="">Select manager</option>
                   {managers.map((m) => (

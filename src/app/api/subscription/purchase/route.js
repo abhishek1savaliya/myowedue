@@ -3,6 +3,7 @@ import User from "@/models/User";
 import { requireUser } from "@/lib/session";
 import { fail, ok } from "@/lib/api";
 import SubscriptionVoucher from "@/models/SubscriptionVoucher";
+import { recordPremiumFunnelEvent } from "@/lib/premium-funnel";
 import { recordSubscriptionEvent } from "@/lib/subscription-history";
 import { getPremiumGraceEndDate, hasActivePremium, PREMIUM_MONTHLY_DURATION_DAYS } from "@/lib/subscription";
 import { getUsdRatesForUsage } from "@/lib/exchangeRates";
@@ -104,6 +105,18 @@ export async function POST(req) {
             : selectedPlan === "pro_yearly"
               ? SUBSCRIPTION_PRICE_USD.yearly
               : SUBSCRIPTION_PRICE_USD.monthly,
+      },
+    });
+
+    await recordPremiumFunnelEvent(dbUser._id, {
+      eventType: "purchase_completed",
+      source: normalizedCode ? "voucher" : source,
+      meta: {
+        plan,
+        billingCycle,
+        amountCharged,
+        currency: paymentCurrency,
+        eventType,
       },
     });
 
