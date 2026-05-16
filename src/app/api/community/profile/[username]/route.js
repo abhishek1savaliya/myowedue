@@ -1,6 +1,9 @@
 import { fail, ok } from "@/lib/api";
-import { connectDB } from "@/lib/db";
-import User from "@/models/User";
+import { resolveCommunityProfileSegment } from "@/lib/community-member-search";
+import {
+  resolvePublicDisplayName,
+  resolvePublicUsernameLabel,
+} from "@/lib/community-profile-privacy";
 import { normalizeSavedUsernameHandle, tryNormalizeCommunityUsername } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { getSessionUser } from "@/lib/session";
@@ -36,38 +39,13 @@ export async function GET(request, { params }) {
     return fail("Community unavailable.", 503);
   }
 
-  const { data: rowExact, error: qErr } = await supabase
-    .from("community_usernames")
-    .select("user_id")
-    .eq("username", parsed.normalized)
-    .maybeSingle();
-
-  if (qErr) {
-    const mapped = mapCommunitySupabaseError(qErr.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(qErr.message || "Lookup failed", 500);
-  }
-
-  let row = rowExact;
-  if (!row?.user_id) {
-    const { data: rowInsensitive, error: iErr } = await supabase
-      .from("community_usernames")
-      .select("user_id")
-      .ilike("username", parsed.normalized)
-      .maybeSingle();
-    if (iErr) {
-      const mapped = mapCommunitySupabaseError(iErr.message, setup);
-      if (mapped) return fail(mapped, 503);
-      return fail(iErr.message || "Lookup failed", 500);
-    }
-    row = rowInsensitive;
-  }
-
-  if (!row?.user_id) {
+  const resolved = await resolveCommunityProfileSegment(normalized);
+  if (!resolved) {
     return fail("Profile not found.", 404);
   }
 
-  const profileUserId = String(row.user_id);
+  const { realHandle, user } = resolved;
+  const profileUserId = String(user._id);
 
   const [{ count: followersCount, error: fcErr }, { count: followingCount, error: fgErr }] = await Promise.all([
     supabase.from("community_follows").select("*", { count: "exact", head: true }).eq("following_id", profileUserId),
@@ -103,27 +81,20 @@ export async function GET(request, { params }) {
     viewerState = { isSelf, isFollowing };
   }
 
-  await connectDB();
-  const user = await User.findById(profileUserId).select(
-    "name firstName lastName createdAt showVerifiedBadge subscriptionEndDate isPremium subscriptionPlan communityProfileVisibility"
-  );
-
-  if (!user) {
-    return fail("Profile not found.", 404);
-  }
-
-  const displayName = String(
-    user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Member"
-  ).trim();
   const verified = hasActivePremium(user) && Boolean(user.showVerifiedBadge);
   const joinedAt = user.createdAt ? new Date(user.createdAt).toISOString() : null;
   const visibility = user.communityProfileVisibility === "private" ? "private" : "public";
   const isPrivateForViewer = visibility === "private" && !(viewerState?.isSelf);
+  const isSelf = Boolean(viewerState?.isSelf);
+
+  const displayName = resolvePublicDisplayName(user, { isSelf });
+  const publicUsernameLabel = resolvePublicUsernameLabel(realHandle, user, { isSelf });
 
   return ok({
     profile: {
-      id: String(user._id),
-      username: parsed.normalized,
+      id: profileUserId,
+      username: realHandle,
+      publicUsername: publicUsernameLabel,
       displayName,
       visibility,
       verified: isPrivateForViewer ? false : verified,

@@ -13,6 +13,8 @@ import {
   notificationsCacheKey,
   publishNotificationEvent,
 } from "@/lib/redis";
+import { assertCommunityHandleAvailable } from "@/lib/community-handle-availability";
+import { validateCommunityPrivacyPayload } from "@/lib/community-profile-privacy";
 import { hasActivePremium } from "@/lib/subscription";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 
@@ -102,7 +104,12 @@ export async function PATCH(request) {
     const body = await request.json();
     const hasBadgeUpdate = typeof body.showVerifiedBadge === "boolean";
     const hasVisibilityUpdate = typeof body.communityProfileVisibility === "string";
-    if (!hasBadgeUpdate && !hasVisibilityUpdate) {
+    const hasPrivacyAliasUpdate =
+      typeof body.communityPublicName === "string" ||
+      typeof body.communityPublicNameEnabled === "boolean" ||
+      typeof body.communityPublicUsername === "string" ||
+      typeof body.communityPublicUsernameEnabled === "boolean";
+    if (!hasBadgeUpdate && !hasVisibilityUpdate && !hasPrivacyAliasUpdate) {
       return fail("No valid preference updates provided.", 422);
     }
 
@@ -124,6 +131,20 @@ export async function PATCH(request) {
     if (hasBadgeUpdate) updates.showVerifiedBadge = body.showVerifiedBadge;
     if (nextVisibility) updates.communityProfileVisibility = nextVisibility;
 
+    if (hasPrivacyAliasUpdate) {
+      const validated = validateCommunityPrivacyPayload(body);
+      if (!validated.ok) return fail(validated.error, 422);
+      Object.assign(updates, validated.updates);
+
+      if (updates.communityPublicUsername) {
+        const supabase = isSupabaseCommunityConfigured() ? getSupabaseAdmin() : null;
+        const conflict = await assertCommunityHandleAvailable(updates.communityPublicUsername, user._id, {
+          supabase,
+        });
+        if (conflict) return fail(conflict, 409);
+      }
+    }
+
     const updated = await User.findByIdAndUpdate(
       user._id,
       { $set: updates },
@@ -133,10 +154,15 @@ export async function PATCH(request) {
 
     await clearCommunityCaches();
 
+    const safe = safeUser(updated);
     return ok({
-      user: safeUser(updated),
+      user: safe,
       showVerifiedBadge: Boolean(updated.showVerifiedBadge),
       communityProfileVisibility: updated.communityProfileVisibility === "private" ? "private" : "public",
+      communityPublicName: safe.communityPublicName,
+      communityPublicNameEnabled: safe.communityPublicNameEnabled,
+      communityPublicUsername: safe.communityPublicUsername,
+      communityPublicUsernameEnabled: safe.communityPublicUsernameEnabled,
       message: "Community preferences updated",
     });
   } catch {

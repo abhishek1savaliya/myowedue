@@ -41,6 +41,7 @@ export default function CommunitySearchPageClient() {
   const [q, setQ] = useState("");
   const [recent, setRecent] = useState([]);
   const [matches, setMatches] = useState([]);
+  const [memberResults, setMemberResults] = useState([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function CommunitySearchPageClient() {
     const prefix = suggestPrefix(q);
     if (prefix.length < 1) {
       setMatches([]);
+      setMemberResults([]);
       setSuggestLoading(false);
       return;
     }
@@ -64,16 +66,25 @@ export default function CommunitySearchPageClient() {
     const t = window.setTimeout(async () => {
       setSuggestLoading(true);
       try {
-        const res = await fetch(`/api/community/username/suggest?q=${encodeURIComponent(prefix)}`, {
+        const res = await fetch(`/api/community/username/suggest?q=${encodeURIComponent(q.trim())}`, {
           signal: ac.signal,
           cache: "no-store",
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           setMatches([]);
+          setMemberResults([]);
           return;
         }
-        setMatches(Array.isArray(data.matches) ? data.matches : []);
+        const results = Array.isArray(data.results) ? data.results : [];
+        setMemberResults(results);
+        setMatches(
+          results.length > 0
+            ? results.map((r) => r.username).filter(Boolean)
+            : Array.isArray(data.matches)
+              ? data.matches
+              : []
+        );
       } catch (e) {
         if (e?.name === "AbortError") return;
         setMatches([]);
@@ -147,7 +158,9 @@ export default function CommunitySearchPageClient() {
 
       <div className="mx-auto max-w-xl px-4 py-5 sm:px-6">
         <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Search Members</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Find community members by @username.</p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Find members by @username, public alias, or display name.
+        </p>
 
         <form onSubmit={onSubmit} className="mt-5">
           <label htmlFor="community-search-page" className="sr-only">
@@ -160,7 +173,7 @@ export default function CommunitySearchPageClient() {
               id="community-search-page"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Type a @username..."
+              placeholder="Name or @username..."
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
@@ -191,23 +204,30 @@ export default function CommunitySearchPageClient() {
                 <Loader2 className="h-4 w-4 animate-spin text-zinc-400" aria-label="Searching" />
               ) : null}
             </div>
-            {matches.length === 0 && !suggestLoading ? (
+            {memberResults.length === 0 && !suggestLoading ? (
               <p className="mt-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                No members match that handle.
+                No members match that search.
               </p>
             ) : (
               <ul className="mt-3 space-y-2">
-                {matches.map((u) => (
-                  <li key={u}>
+                {memberResults.map((row) => (
+                  <li key={row.username}>
                     <button
                       type="button"
-                      onClick={() => pickMatch(u)}
+                      onClick={() => pickMatch(row.username)}
                       className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/80 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-bold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                        {u.slice(0, 1).toUpperCase()}
+                        {String(row.displayName || row.username || "?").slice(0, 1).toUpperCase()}
                       </div>
-                      <span className="min-w-0 truncate font-medium text-zinc-900 dark:text-zinc-100">@{u}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-zinc-900 dark:text-zinc-100">
+                          {row.displayName || row.username}
+                        </span>
+                        <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
+                          {row.matchLabel || `@${row.username}`}
+                        </span>
+                      </span>
                     </button>
                   </li>
                 ))}

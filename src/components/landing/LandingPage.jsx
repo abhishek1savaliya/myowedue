@@ -11,6 +11,7 @@ import SpotlightCard from "@/components/landing/SpotlightCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cmsPlainText } from "@/lib/cms-plain-text";
 import { DEFAULT_FEATURES, DEFAULT_SECURITY } from "@/lib/landing-defaults";
 import { landingH3, landingMuted, landingMutedSm, landingSeparator } from "@/lib/landing-classes";
 import { cn } from "@/lib/utils";
@@ -30,14 +31,14 @@ export default function LandingPage({
           ...DEFAULT_FEATURES[i % DEFAULT_FEATURES.length],
           eyebrow: f.eyebrow || DEFAULT_FEATURES[i % DEFAULT_FEATURES.length].eyebrow,
           title: f.title || "Feature",
-          description: f.description?.replace(/<[^>]+>/g, "") || "",
+          description: cmsPlainText(f.description),
           span: DEFAULT_FEATURES[i % DEFAULT_FEATURES.length].span,
         }))
       : DEFAULT_FEATURES;
 
   const steps =
     howItWorksSteps.length > 0
-      ? howItWorksSteps
+      ? howItWorksSteps.map((step) => cmsPlainText(step))
       : [
           "Create your workspace in under two minutes",
           "Add people, cards, and your first due",
@@ -49,7 +50,7 @@ export default function LandingPage({
     securityItems.length > 0
       ? securityItems.map((item, i) => ({
           title: item.title,
-          description: item.description?.replace(/<[^>]+>/g, "") || "",
+          description: cmsPlainText(item.description),
           icon: DEFAULT_SECURITY[i % DEFAULT_SECURITY.length].icon,
         }))
       : DEFAULT_SECURITY;
@@ -154,7 +155,7 @@ export default function LandingPage({
             eyebrow={content.plansEyebrow || "Pricing"}
             title={content.plansTitle || "Plans that scale with your hustle"}
             description={
-              content.plansDescription?.replace(/<[^>]+>/g, " ") ||
+              cmsPlainText(content.plansDescription) ||
               "Start free. Upgrade when you need premium exports, recurring dues, and advanced reminders."
             }
           />

@@ -64,5 +64,12 @@ export function safeUser(user) {
     concurrentSessionLimit: Math.min(5, Math.max(1, Number(user.concurrentSessionLimit || 1))),
     showVerifiedBadge: isPremium ? Boolean(user.showVerifiedBadge) : false,
     communityProfileVisibility: user.communityProfileVisibility === "private" ? "private" : "public",
+    communityPublicName: String(user.communityPublicName || "").trim(),
+    communityPublicNameEnabled: Boolean(user.communityPublicNameEnabled),
+    communityPublicUsername: String(user.communityPublicUsername || "")
+      .trim()
+      .toLowerCase()
+      .replace(/^@+/, ""),
+    communityPublicUsernameEnabled: Boolean(user.communityPublicUsernameEnabled),
   };
 }

@@ -2,7 +2,7 @@ import { fail, ok } from "@/lib/api";
 import { attachAuthorVerifiedToPosts } from "@/lib/community-author-verified";
 import { embedText, embeddingModelName, vectorToPgLiteral } from "@/lib/communityEmbeddings";
 import { buildSignalsScoreMap, rerankWithPhase2 } from "@/lib/communityPhase2Ranking";
-import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames";
+import { attachPrivacyAwareAuthorLabels } from "@/lib/community-author-display";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { normalizeCommunityTopicParam } from "@/lib/community-topic";
 import { rankPersonalizedPosts } from "@/lib/communityPersonalization";
@@ -91,11 +91,10 @@ async function enrichAndVerifyPosts(supabase, page, currentUserId) {
   const postIds = page.map((p) => p.id);
   if (postIds.length === 0) return { posts: [] };
 
-  const [likesRes, commentsRes, verifiedPosts, usernamePosts] = await Promise.all([
+  const [likesRes, commentsRes, verifiedPosts] = await Promise.all([
     supabase.from("community_post_likes").select("post_id, user_id").in("post_id", postIds),
     supabase.from("community_comments").select("post_id").in("post_id", postIds),
     attachAuthorVerifiedToPosts(page),
-    attachAuthorUsernamesToPosts(supabase, page),
   ]);
 
   if (likesRes.error) return { error: likesRes.error };
@@ -104,7 +103,6 @@ async function enrichAndVerifyPosts(supabase, page, currentUserId) {
   const { likeCount, commentCount, likedByMe } = aggregateEngagement(likesRes.data, commentsRes.data, currentUserId);
 
   const verifiedMap = new Map((verifiedPosts || []).map((p) => [p.id, p.authorVerified]));
-  const usernameMap = new Map((usernamePosts || []).map((p) => [p.id, p.author_username]));
 
   const posts = page.map((p) => ({
     ...p,
@@ -112,10 +110,10 @@ async function enrichAndVerifyPosts(supabase, page, currentUserId) {
     commentCount: commentCount[p.id] || 0,
     liked: likedByMe.has(p.id),
     authorVerified: verifiedMap.get(p.id) || false,
-    author_username: usernameMap.get(p.id) || null,
   }));
 
-  return { posts };
+  const withPrivacy = await attachPrivacyAwareAuthorLabels(supabase, posts, currentUserId);
+  return { posts: withPrivacy };
 }
 
 export async function GET(request) {
@@ -489,21 +487,17 @@ export async function GET(request) {
     }
 
     const myLikedSet = new Set((likesRes.data || []).map((r) => r.post_id));
-    const [verifiedPosts, usernamePosts] = await Promise.all([
-      attachAuthorVerifiedToPosts(rankedPage),
-      attachAuthorUsernamesToPosts(supabase, rankedPage),
-    ]);
+    const verifiedPosts = await attachAuthorVerifiedToPosts(rankedPage);
     const verifiedMap = new Map((verifiedPosts || []).map((p) => [p.id, p.authorVerified]));
-    const usernameMap = new Map((usernamePosts || []).map((p) => [p.id, p.author_username]));
 
-    const finalPosts = rankedPage.map((p) => ({
+    const mappedPosts = rankedPage.map((p) => ({
       ...p,
       likeCount: likesMap.get(p.id) || 0,
       commentCount: commentsMap.get(p.id) || 0,
       liked: myLikedSet.has(p.id),
       authorVerified: verifiedMap.get(p.id) || false,
-      author_username: usernameMap.get(p.id) || null,
     }));
+    const finalPosts = await attachPrivacyAwareAuthorLabels(supabase, mappedPosts, currentUserId);
 
     const payload = {
       posts: finalPosts,
@@ -636,6 +630,6 @@ export async function POST(request) {
 
   const basePost = { ...data, likeCount: 0, commentCount: 0, liked: false };
   const [verified] = await attachAuthorVerifiedToPosts([basePost]);
-  const [post] = await attachAuthorUsernamesToPosts(supabase, [verified]);
-  return ok({ post });
+  const [withPrivacy] = await attachPrivacyAwareAuthorLabels(supabase, [verified], String(user._id));
+  return ok({ post: withPrivacy });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Settings2 } from "lucide-react";
+import { BadgeCheck, Settings2 } from "lucide-react";
 import { communityProfilePathByUsername } from "@/lib/community-usernames";
 import { COMMUNITY_GLASS_CARD } from "@/lib/community-ui";
 import { useUserStore } from "@/stores/useUserStore";
@@ -40,6 +40,7 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
 
   const name = me?.name || [me?.firstName, me?.lastName].filter(Boolean).join(" ") || "Member";
   const handle = typeof me?.communityUsername === "string" ? me.communityUsername : "";
+  const verified = Boolean(me?.showVerifiedBadge);
   const profileHref = handle ? communityProfilePathByUsername(handle) : "/community/settings";
   const initial = String(name).trim().slice(0, 1).toUpperCase() || "?";
 
@@ -54,7 +55,12 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
           {initial}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{name}</p>
+          <p className="flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            <span className="truncate">{name}</span>
+            {verified ? (
+              <BadgeCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified" />
+            ) : null}
+          </p>
           <p className="mt-0.5 truncate text-xs text-zinc-400">
             {handle ? `@${handle}` : "Set @username →"}
           </p>

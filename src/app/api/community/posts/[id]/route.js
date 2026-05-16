@@ -1,6 +1,6 @@
 import { fail, ok } from "@/lib/api";
 import { attachAuthorVerifiedToPosts } from "@/lib/community-author-verified";
-import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames";
+import { attachPrivacyAwareAuthorLabels } from "@/lib/community-author-display";
 import { isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { extractPostTopics } from "@/lib/post-topic-extraction";
@@ -78,7 +78,7 @@ export async function GET(request, { params }) {
     liked: likedByMe.has(row.id),
   };
   const [verified] = await attachAuthorVerifiedToPosts([base]);
-  const [post] = await attachAuthorUsernamesToPosts(supabase, [verified]);
+  const [post] = await attachPrivacyAwareAuthorLabels(supabase, [verified], currentUserId);
 
   return ok({ post, currentUserId });
 }

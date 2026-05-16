@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/api";
+import { assertCommunityHandleAvailable } from "@/lib/community-handle-availability";
 import { COMMUNITY_USERNAME_MAX, COMMUNITY_USERNAME_MIN, normalizeCommunityUsername } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { upsertCommunityUsernameInAlgolia } from "@/lib/community-algolia";
@@ -65,6 +66,9 @@ export async function PUT(request) {
 
   const uid = String(user._id);
   const now = new Date().toISOString();
+
+  const conflict = await assertCommunityHandleAvailable(normalized, uid, { supabase });
+  if (conflict) return fail(conflict, 409);
 
   const { error: upsertErr } = await supabase.from("community_usernames").upsert(
     {

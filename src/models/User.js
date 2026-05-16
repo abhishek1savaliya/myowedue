@@ -33,6 +33,14 @@ const UserSchema = new Schema(
     showVerifiedBadge: { type: Boolean, default: false },
     /** Community profile visibility: public (full) or private (name + @username only to others). */
     communityProfileVisibility: { type: String, enum: ["public", "private"], default: "public" },
+    /** Optional public display name when extra privacy is enabled. */
+    communityPublicName: { type: String, trim: true, default: "" },
+    /** When true, others see communityPublicName instead of the legal name. */
+    communityPublicNameEnabled: { type: Boolean, default: false },
+    /** Optional discoverable @alias (does not replace the real community handle). */
+    communityPublicUsername: { type: String, trim: true, lowercase: true, default: "" },
+    /** When true, others can find/show the public @alias alongside the real handle. */
+    communityPublicUsernameEnabled: { type: Boolean, default: false },
     subscriptionPlan: {
       type: String,
       enum: ["free", "pro_monthly", "pro_yearly"],
@@ -83,6 +91,16 @@ if (mongoose.models.User) {
   if (!User.schema.path("showVerifiedBadge")) missingPaths.showVerifiedBadge = { type: Boolean, default: false };
   if (!User.schema.path("communityProfileVisibility")) {
     missingPaths.communityProfileVisibility = { type: String, enum: ["public", "private"], default: "public" };
+  }
+  if (!User.schema.path("communityPublicName")) missingPaths.communityPublicName = { type: String, trim: true, default: "" };
+  if (!User.schema.path("communityPublicNameEnabled")) {
+    missingPaths.communityPublicNameEnabled = { type: Boolean, default: false };
+  }
+  if (!User.schema.path("communityPublicUsername")) {
+    missingPaths.communityPublicUsername = { type: String, trim: true, lowercase: true, default: "" };
+  }
+  if (!User.schema.path("communityPublicUsernameEnabled")) {
+    missingPaths.communityPublicUsernameEnabled = { type: Boolean, default: false };
   }
   if (!User.schema.path("subscriptionPlan")) {
     missingPaths.subscriptionPlan = {

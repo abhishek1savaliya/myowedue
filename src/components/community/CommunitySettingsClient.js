@@ -39,6 +39,7 @@ export default function CommunitySettingsClient() {
   const [viewer, setViewer] = useState(null);
   const [savingBadge, setSavingBadge] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
+  const [savingPrivacyAliases, setSavingPrivacyAliases] = useState(false);
   const [communityUsername, setCommunityUsername] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
   /** When false and a handle exists, show read-only @handle with edit icon instead of the form. */
@@ -69,6 +70,10 @@ export default function CommunitySettingsClient() {
         isPremium: Boolean(u?.isPremium),
         showVerifiedBadge: Boolean(u?.showVerifiedBadge),
         communityProfileVisibility: u?.communityProfileVisibility === "private" ? "private" : "public",
+        communityPublicName: String(u?.communityPublicName || ""),
+        communityPublicNameEnabled: Boolean(u?.communityPublicNameEnabled),
+        communityPublicUsername: String(u?.communityPublicUsername || ""),
+        communityPublicUsernameEnabled: Boolean(u?.communityPublicUsernameEnabled),
       });
     } catch {
       setError("Could not load account.");
@@ -91,6 +96,18 @@ export default function CommunitySettingsClient() {
     enabled: usernameCheckEnabled,
     savedNormalized: savedNorm,
   });
+
+  const savedPublicUsernameNorm = normalizeSavedUsernameHandle(viewer?.communityPublicUsername || "");
+  const publicUsernameDraft = viewer?.communityPublicUsername || "";
+  const publicUsernameCheckEnabled =
+    loggedIn && !loading && String(publicUsernameDraft || "").trim().length > 0;
+  const { checking: publicUsernameChecking, result: publicUsernameCheck } = useCommunityUsernameCheck(
+    publicUsernameDraft,
+    {
+      enabled: publicUsernameCheckEnabled,
+      savedNormalized: savedPublicUsernameNorm,
+    }
+  );
 
   /** GET /api/auth/me can miss Supabase; when check says this handle is already yours, sync saved state. */
   useEffect(() => {
@@ -212,6 +229,74 @@ export default function CommunitySettingsClient() {
       }
     },
     [loggedIn, savingVisibility]
+  );
+
+  const publicUsernameParsed = useMemo(
+    () => tryNormalizeCommunityUsername(publicUsernameDraft),
+    [publicUsernameDraft]
+  );
+
+  const savePrivacyAliases = useCallback(
+    async (patch) => {
+      if (!loggedIn || savingPrivacyAliases) return;
+      setSavingPrivacyAliases(true);
+      setError("");
+
+      const nextPublicUsername = patch.communityPublicUsername ?? viewer?.communityPublicUsername ?? "";
+      if (String(nextPublicUsername).trim()) {
+        const parsed = tryNormalizeCommunityUsername(nextPublicUsername);
+        if (!parsed.ok) {
+          setError(parsed.error);
+          setSavingPrivacyAliases(false);
+          return;
+        }
+        const unchanged = parsed.normalized === savedPublicUsernameNorm;
+        if (!unchanged && publicUsernameCheck?.available !== true) {
+          setError(
+            publicUsernameCheck?.status === "taken"
+              ? "That public @username is already taken."
+              : "Fix the public @username above before saving."
+          );
+          setSavingPrivacyAliases(false);
+          return;
+        }
+      }
+
+      try {
+        const res = await fetch("/api/auth/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            communityPublicName: patch.communityPublicName ?? viewer?.communityPublicName ?? "",
+            communityPublicNameEnabled:
+              patch.communityPublicNameEnabled ?? viewer?.communityPublicNameEnabled ?? false,
+            communityPublicUsername: patch.communityPublicUsername ?? viewer?.communityPublicUsername ?? "",
+            communityPublicUsernameEnabled:
+              patch.communityPublicUsernameEnabled ?? viewer?.communityPublicUsernameEnabled ?? false,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Failed to save");
+        setViewer((prev) =>
+          prev
+            ? {
+                ...prev,
+                communityPublicName: data.communityPublicName ?? prev.communityPublicName,
+                communityPublicNameEnabled: Boolean(data.communityPublicNameEnabled),
+                communityPublicUsername: data.communityPublicUsername ?? prev.communityPublicUsername,
+                communityPublicUsernameEnabled: Boolean(data.communityPublicUsernameEnabled),
+              }
+            : prev
+        );
+        dispatchCommunityMutate();
+      } catch (e) {
+        setError(e.message || "Failed to save privacy settings");
+      } finally {
+        setSavingPrivacyAliases(false);
+      }
+    },
+    [loggedIn, savingPrivacyAliases, viewer, savedPublicUsernameNorm, publicUsernameCheck]
   );
 
   return (
@@ -465,7 +550,8 @@ export default function CommunitySettingsClient() {
                 Profile privacy
               </h2>
               <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                Public shows full profile. Private shows only your name and @username to other users.
+                Public shows full profile. Private shows only your name and @username to other users. Extra privacy
+                below lets you use a different public name and @alias for discovery.
               </p>
               {loading ? (
                 <p className="mt-4 flex items-center gap-2 text-sm text-zinc-500">
@@ -480,25 +566,176 @@ export default function CommunitySettingsClient() {
                   to manage privacy.
                 </p>
               ) : (
-                <div className="mt-4 inline-flex rounded-xl border border-stone-200 bg-white p-1 dark:border-zinc-600 dark:bg-slate-900">
-                  {["public", "private"].map((mode) => {
-                    const active = (viewer?.communityProfileVisibility || "public") === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        disabled={savingVisibility}
-                        onClick={() => void updateProfileVisibility(mode)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${
-                          active
-                            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                            : "text-zinc-600 hover:bg-stone-100 dark:text-zinc-300 dark:hover:bg-slate-800"
+                <div className="mt-4 space-y-5">
+                  <div className="inline-flex rounded-xl border border-stone-200 bg-white p-1 dark:border-zinc-600 dark:bg-slate-900">
+                    {["public", "private"].map((mode) => {
+                      const active = (viewer?.communityProfileVisibility || "public") === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          disabled={savingVisibility}
+                          onClick={() => void updateProfileVisibility(mode)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                            active
+                              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                              : "text-zinc-600 hover:bg-stone-100 dark:text-zinc-300 dark:hover:bg-slate-800"
+                          }`}
+                        >
+                          {mode}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="space-y-4 border-t border-stone-200/80 pt-4 dark:border-zinc-700">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Extra privacy</p>
+
+                    <div className="space-y-2">
+                      <label htmlFor="community-public-name" className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                        Public display name
+                      </label>
+                      <input
+                        id="community-public-name"
+                        type="text"
+                        maxLength={80}
+                        value={viewer?.communityPublicName || ""}
+                        disabled={savingPrivacyAliases}
+                        onChange={(e) =>
+                          setViewer((prev) => (prev ? { ...prev, communityPublicName: e.target.value } : prev))
+                        }
+                        placeholder="Name shown to others when enabled"
+                        className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-amber-500/50 dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-100"
+                      />
+                      <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500 dark:border-zinc-600"
+                          checked={Boolean(viewer?.communityPublicNameEnabled)}
+                          disabled={savingPrivacyAliases}
+                          onChange={(e) =>
+                            void savePrivacyAliases({ communityPublicNameEnabled: e.target.checked })
+                          }
+                        />
+                        <span>
+                          Show this name to the world. When off, your real name is hidden and others can only find you
+                          by this name (if set).
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="community-public-username"
+                        className="text-xs font-medium text-zinc-800 dark:text-zinc-200"
+                      >
+                        Public @username
+                      </label>
+                      <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-500">
+                        Must be unique across all members (same rules as your main @handle). Availability is checked as
+                        you type.
+                      </p>
+                      <div
+                        className={`flex items-stretch overflow-hidden rounded-xl border bg-white dark:bg-slate-950 ${
+                          publicUsernameChecking
+                            ? "border-zinc-300 dark:border-zinc-600"
+                            : publicUsernameCheck?.available === true
+                              ? "border-emerald-500/90 dark:border-emerald-500/70"
+                              : publicUsernameCheck && publicUsernameCheck.available === false
+                                ? "border-rose-500/90 dark:border-rose-500/70"
+                                : "border-stone-200 dark:border-zinc-600"
                         }`}
                       >
-                        {mode}
-                      </button>
-                    );
-                  })}
+                        <span className="flex items-center border-r border-stone-200 bg-stone-50 px-3 text-sm text-zinc-500 dark:border-zinc-600 dark:bg-slate-950 dark:text-zinc-400">
+                          @
+                        </span>
+                        <input
+                          id="community-public-username"
+                          type="text"
+                          maxLength={COMMUNITY_USERNAME_MAX}
+                          value={viewer?.communityPublicUsername || ""}
+                          disabled={savingPrivacyAliases}
+                          onChange={(e) =>
+                            setViewer((prev) =>
+                              prev ? { ...prev, communityPublicUsername: e.target.value.replace(/^@+/, "") } : prev
+                            )
+                          }
+                          placeholder="public_handle"
+                          aria-invalid={publicUsernameCheck?.available === false}
+                          className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-zinc-900 outline-none dark:text-zinc-100"
+                        />
+                      </div>
+                      <div className="flex min-h-5 flex-wrap items-center gap-2 text-xs">
+                        {publicUsernameChecking ? (
+                          <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            Checking availability…
+                          </span>
+                        ) : publicUsernameCheck?.status === "short" ? (
+                          <span className="text-amber-800 dark:text-amber-300">
+                            Type at least {COMMUNITY_USERNAME_MIN} characters (
+                            {publicUsernameCheck.needed ?? COMMUNITY_USERNAME_MIN} more).
+                          </span>
+                        ) : publicUsernameCheck?.status === "long" ? (
+                          <span className="text-rose-700 dark:text-rose-300">
+                            Maximum {COMMUNITY_USERNAME_MAX} characters.
+                          </span>
+                        ) : publicUsernameCheck?.status === "invalid_chars" ? (
+                          <span className="text-rose-700 dark:text-rose-300">Only a–z, 0–9, and underscore.</span>
+                        ) : publicUsernameCheck?.status === "reserved" ? (
+                          <span className="text-rose-700 dark:text-rose-300">That username is reserved.</span>
+                        ) : publicUsernameCheck?.status === "taken" ? (
+                          <span className="flex items-center gap-1 text-rose-700 dark:text-rose-300">
+                            <X className="h-3.5 w-3.5" aria-hidden />
+                            Already taken.
+                          </span>
+                        ) : publicUsernameCheck?.status === "available" ? (
+                          <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                            <Check className="h-3.5 w-3.5" aria-hidden />
+                            Available.
+                          </span>
+                        ) : publicUsernameCheck?.status === "yours" ? (
+                          <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
+                            <Check className="h-3.5 w-3.5" aria-hidden />
+                            This is your current public @username.
+                          </span>
+                        ) : null}
+                      </div>
+                      <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500 dark:border-zinc-600"
+                          checked={Boolean(viewer?.communityPublicUsernameEnabled)}
+                          disabled={savingPrivacyAliases}
+                          onChange={(e) =>
+                            void savePrivacyAliases({ communityPublicUsernameEnabled: e.target.checked })
+                          }
+                        />
+                        <span>
+                          Show this @username to the world. When off, your real @handle is hidden from search; others
+                          find you only by this alias. When on, people can find you with both your real handle and this
+                          alias.
+                        </span>
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={
+                        savingPrivacyAliases ||
+                        publicUsernameChecking ||
+                        (String(publicUsernameDraft || "").trim() &&
+                          publicUsernameParsed.ok &&
+                          publicUsernameParsed.normalized !== savedPublicUsernameNorm &&
+                          publicUsernameCheck?.available !== true)
+                      }
+                      onClick={() => void savePrivacyAliases({})}
+                      className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                    >
+                      {savingPrivacyAliases ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+                      Save extra privacy
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
