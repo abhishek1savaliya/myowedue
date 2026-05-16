@@ -64,12 +64,12 @@ export default function LandingHero({ content, heroStats }) {
             {content.heroBadge || "Built for independent earners"}
           </Badge>
 
-          <h1 className="landing-display max-w-xl text-4xl font-bold leading-[1.08] text-white sm:text-5xl md:text-[3.25rem]">
+          <h1 className="landing-display max-w-xl text-4xl font-bold leading-[1.08] text-foreground sm:text-5xl md:text-[3.25rem]">
             {content.heroTitle || "The operating system for money you owe—and money owed to you."}
           </h1>
 
           <div
-            className="mt-6 max-w-lg text-base leading-relaxed text-zinc-400 md:text-lg"
+            className="mt-6 max-w-lg text-base leading-relaxed text-zinc-600 dark:text-zinc-400 md:text-lg"
             dangerouslySetInnerHTML={{
               __html:
                 content.heroDescription ||
@@ -102,9 +102,9 @@ export default function LandingHero({ content, heroStats }) {
             {stats.map((stat, idx) => (
               <div
                 key={`${stat.label}-${idx}`}
-                className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-4 sm:px-4"
+                className="rounded-xl border border-zinc-200/90 bg-white/90 px-3 py-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03] sm:px-4"
               >
-                <p className="text-xl font-semibold tabular-nums text-white sm:text-2xl">
+                <p className="text-xl font-semibold tabular-nums text-foreground sm:text-2xl">
                   <AnimatedCounter value={stat.value || "0"} />
                 </p>
                 <p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500 sm:text-xs">

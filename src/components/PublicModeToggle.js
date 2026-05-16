@@ -6,31 +6,42 @@ import { Moon, Sun } from "lucide-react";
 import { persistThemePreference } from "@/lib/cookie-preferences";
 import { useThemeStore } from "@/stores/useThemeStore";
 
+function readIsDark() {
+  if (typeof document === "undefined") return false;
+  return document.documentElement.getAttribute("data-theme") === "dark";
+}
+
+function isPublicPath(pathname) {
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/contact-us") ||
+    pathname.startsWith("/privacy-policy") ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup")
+  );
+}
+
 /**
  * @param {{ tone?: "default" | "onDark" }} props
  */
 export default function PublicModeToggle({ tone = "default" }) {
   const pathname = usePathname();
   const applyThemeForPath = useThemeStore((s) => s.applyThemeForPath);
-  const getTheme = useThemeStore((s) => s.getTheme);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    const scope =
-      pathname === "/" ||
-      pathname.startsWith("/contact-us") ||
-      pathname.startsWith("/privacy-policy") ||
-      pathname.startsWith("/login") ||
-      pathname.startsWith("/signup")
-        ? "public"
-        : "auth";
-    setIsDark(getTheme(scope) === "dark");
-  }, [pathname, getTheme]);
+    setIsDark(readIsDark());
+    const el = document.documentElement;
+    const obs = new MutationObserver(() => setIsDark(readIsDark()));
+    obs.observe(el, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
 
   const handleToggle = () => {
-    const next = !isDark;
+    const next = !readIsDark();
     setIsDark(next);
-    const scope = applyThemeForPath(pathname, next);
+    const scope = isPublicPath(pathname) ? "public" : "auth";
+    applyThemeForPath(pathname, next);
     persistThemePreference({ scope, isDarkMode: next });
   };
 

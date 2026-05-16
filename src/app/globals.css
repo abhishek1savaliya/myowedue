@@ -1268,9 +1268,32 @@ main > * {
   z-index: 0;
   pointer-events: none;
   background:
+    radial-gradient(circle at 10% 0%, rgba(245, 158, 11, 0.1), transparent 36%),
+    radial-gradient(circle at 90% 100%, rgba(16, 185, 129, 0.08), transparent 38%),
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.08), transparent);
+}
+
+[data-theme="dark"] .landing-page::before {
+  background:
     radial-gradient(circle at 10% 0%, rgba(245, 158, 11, 0.12), transparent 36%),
     radial-gradient(circle at 90% 100%, rgba(16, 185, 129, 0.1), transparent 38%),
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.12), transparent);
+}
+
+[data-theme="light"] .landing-card {
+  border-color: rgb(228 228 231);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .landing-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+}
+
+.landing-card-glow {
+  background: radial-gradient(520px circle at 50% 0%, rgba(245, 158, 11, 0.1), transparent 55%);
 }
 
 .landing-page > * {
@@ -1383,42 +1406,10 @@ main > * {
   padding: 0 !important;
 }
 
-.landing-trending-wrap h2,
-.landing-trending-wrap .text-zinc-900,
-.landing-trending-wrap .dark\:text-zinc-100 {
-  color: #f4f4f5 !important;
-}
-
-.landing-trending-wrap .text-zinc-600,
-.landing-trending-wrap .text-zinc-500,
-.landing-trending-wrap .dark\:text-zinc-400 {
-  color: #a1a1aa !important;
-}
-
-.landing-trending-wrap ol {
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  background: rgba(255, 255, 255, 0.02) !important;
-}
-
-.landing-trending-wrap .divide-zinc-100 > * {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-.landing-trending-wrap .rounded-lg.border.border-zinc-200 {
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  background: rgba(255, 255, 255, 0.04) !important;
-}
-
 .landing-trending-wrap a.rounded-lg.bg-zinc-900 {
   background: linear-gradient(to right, #f59e0b, #d97706) !important;
   color: #0f172a !important;
   border: none !important;
-}
-
-.landing-trending-wrap a.rounded-lg.border.border-zinc-300 {
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: #e4e4e7 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

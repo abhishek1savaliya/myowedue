@@ -1,169 +1,19 @@
-"use client";
-
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import {
-  ArrowRight,
-  Bell,
-  Calendar,
-  Check,
-  FileText,
-  Fingerprint,
-  Layers,
-  Lock,
-  MessageCircle,
-  Receipt,
-  Shield,
-  Sparkles,
-  TrendingUp,
-  Zap,
-} from "lucide-react";
+import { ArrowRight, Layers, Sparkles, Zap } from "lucide-react";
 import PublicFooter from "@/components/PublicFooter";
 import LandingNavbar from "@/components/landing/LandingNavbar";
 import LandingHero from "@/components/landing/LandingHero";
+import LandingSectionHeading from "@/components/landing/LandingSectionHeading";
+import LandingPricingCard from "@/components/landing/LandingPricingCard";
+import LandingWorkflowTabs from "@/components/landing/LandingWorkflowTabs";
+import LandingTrendingBlock from "@/components/landing/LandingTrendingBlock";
 import SpotlightCard from "@/components/landing/SpotlightCard";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DEFAULT_FEATURES, DEFAULT_SECURITY } from "@/lib/landing-defaults";
+import { landingH3, landingMuted, landingMutedSm, landingSeparator } from "@/lib/landing-classes";
 import { cn } from "@/lib/utils";
-
-const HomeTrendingSection = dynamic(() => import("@/components/HomeTrendingSection"), {
-  loading: () => (
-    <div className="min-h-[200px] animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02]" aria-hidden />
-  ),
-  ssr: false,
-});
-
-const DEFAULT_FEATURES = [
-  {
-    eyebrow: "Ledger",
-    title: "Credits & debits in one timeline",
-    description: "Every handshake, invoice, and IOU—organized with running balances and smart filters.",
-    icon: Receipt,
-    span: "md:col-span-2 md:row-span-2",
-  },
-  {
-    eyebrow: "Reminders",
-    title: "Never miss a due date",
-    description: "Email and in-app nudges tuned to your rhythm.",
-    icon: Bell,
-    span: "",
-  },
-  {
-    eyebrow: "People",
-    title: "Contacts that stay in sync",
-    description: "Link dues to real people with full history.",
-    icon: MessageCircle,
-    span: "",
-  },
-  {
-    eyebrow: "Files",
-    title: "Receipts & agreements",
-    description: "Attach proof to any transaction.",
-    icon: FileText,
-    span: "md:col-span-2",
-  },
-  {
-    eyebrow: "Events",
-    title: "Calendar-aware cash flow",
-    description: "See what's coming before it hits.",
-    icon: Calendar,
-    span: "",
-  },
-  {
-    eyebrow: "Reports",
-    title: "Export-ready insights",
-    description: "PDF summaries built for accountants and clients.",
-    icon: TrendingUp,
-    span: "",
-  },
-];
-
-const DEFAULT_SECURITY = [
-  {
-    title: "Encryption by default",
-    description: "Sensitive fields protected in transit and at rest with industry-standard cryptography.",
-    icon: Lock,
-  },
-  {
-    title: "Session integrity",
-    description: "Secure cookies, rotation, and device-aware login activity controls.",
-    icon: Fingerprint,
-  },
-  {
-    title: "Your data, your rules",
-    description: "Export, audit, and delete on your terms—no dark patterns.",
-    icon: Shield,
-  },
-];
-
-function SectionHeading({ eyebrow, title, description, className, align = "center" }) {
-  return (
-    <div
-      className={cn(
-        "max-w-2xl",
-        align === "center" ? "mx-auto text-center" : "text-left",
-        className
-      )}
-    >
-      <Badge variant="secondary" className="mb-4">
-        {eyebrow}
-      </Badge>
-      <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{title}</h2>
-      {description ? (
-        <p className="mt-4 text-base leading-relaxed text-zinc-400 md:text-lg">{description}</p>
-      ) : null}
-    </div>
-  );
-}
-
-function PricingCard({ plan, featured = false }) {
-  const features = Array.isArray(plan.features) ? plan.features : [];
-  return (
-    <SpotlightCard
-      className={cn(
-        "flex h-full flex-col p-7 md:p-8",
-        featured && "border-amber-500/30 ring-1 ring-amber-500/20"
-      )}
-    >
-      {featured ? (
-        <Badge className="mb-4 w-fit">Most popular</Badge>
-      ) : (
-        <Badge variant="secondary" className="mb-4 w-fit">
-          {plan.badge || "Plan"}
-        </Badge>
-      )}
-      <h3 className="text-2xl font-semibold text-white">{plan.name || "Plan"}</h3>
-      <div className="mt-3 flex items-end gap-2">
-        <span className="text-4xl font-bold text-white">{plan.price || "$0"}</span>
-        <span className="pb-1 text-sm text-zinc-500">{plan.billing || ""}</span>
-      </div>
-      <div
-        className="mt-4 text-sm leading-relaxed text-zinc-400 cms-html"
-        dangerouslySetInnerHTML={{ __html: plan.description || "" }}
-      />
-      <ul className="mt-6 flex-1 space-y-3">
-        {features.map((item, idx) => (
-          <li key={idx} className="flex items-start gap-2.5 text-sm text-zinc-300">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-            {item}
-          </li>
-        ))}
-      </ul>
-      <Button
-        className="mt-8 w-full"
-        variant={featured ? "default" : "secondary"}
-        asChild
-      >
-        <Link href={plan.ctaHref || "/signup"}>
-          {plan.ctaLabel || "Get started"}
-          {featured ? <ArrowRight className="h-4 w-4" /> : null}
-        </Link>
-      </Button>
-    </SpotlightCard>
-  );
-}
 
 export default function LandingPage({
   content = {},
@@ -205,29 +55,29 @@ export default function LandingPage({
       : DEFAULT_SECURITY;
 
   return (
-    <div className="landing-page relative min-h-screen overflow-x-hidden bg-[#030712] text-zinc-100">
+    <div className="landing-page relative min-h-screen overflow-x-hidden bg-background text-foreground">
       <LandingNavbar />
 
       <LandingHero content={content} heroStats={heroStats} />
 
       <section id="features" className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
-          <SectionHeading
+          <LandingSectionHeading
             eyebrow={content.featuresEyebrow || "Platform"}
             title={content.featuresTitle || "Everything you need in one workspace"}
             description="A bento-grade product surface—minimal chrome, maximum clarity for money in motion."
           />
           <div className="mt-14 grid gap-4 md:grid-cols-3 md:auto-rows-[minmax(140px,auto)]">
-            {featureList.map((feature, idx) => {
+            {featureList.map((feature) => {
               const Icon = feature.icon || Layers;
               return (
                 <SpotlightCard key={feature.title} className={cn("h-full", feature.span)}>
                   <Badge variant="emerald" className="mb-3 w-fit">
                     {feature.eyebrow}
                   </Badge>
-                  <Icon className="mb-4 h-6 w-6 text-amber-400/90" />
-                  <h3 className="text-lg font-semibold text-white">{feature.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{feature.description}</p>
+                  <Icon className="mb-4 h-6 w-6 text-amber-500 dark:text-amber-400/90" />
+                  <h3 className={landingH3}>{feature.title}</h3>
+                  <p className={cn("mt-2 text-sm leading-relaxed", landingMuted)}>{feature.description}</p>
                 </SpotlightCard>
               );
             })}
@@ -235,13 +85,11 @@ export default function LandingPage({
         </div>
       </section>
 
-      <Separator className="mx-auto max-w-6xl bg-white/10" />
+      <Separator className={landingSeparator} />
 
       <section className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
-          <div className="landing-trending-wrap rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 md:p-8">
-            <HomeTrendingSection variant="landing" />
-          </div>
+          <LandingTrendingBlock />
         </div>
       </section>
 
@@ -249,41 +97,26 @@ export default function LandingPage({
         <div className="mx-auto max-w-6xl">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
             <div>
-              <SectionHeading
+              <LandingSectionHeading
                 align="left"
                 className="mx-0 max-w-none"
                 eyebrow={content.howItWorksEyebrow || "Workflow"}
                 title={content.howItWorksTitle || "From signup to control in four steps"}
                 description="Onboard fast, operate daily, and reconcile monthly—without spreadsheet chaos."
               />
-              <Tabs defaultValue="track" className="mt-10 hidden md:block">
-                <TabsList>
-                  <TabsTrigger value="track">Track</TabsTrigger>
-                  <TabsTrigger value="remind">Remind</TabsTrigger>
-                  <TabsTrigger value="report">Report</TabsTrigger>
-                </TabsList>
-                <TabsContent value="track">
-                  <p className="text-sm text-zinc-400">Unified ledger for every credit and debit you manage.</p>
-                </TabsContent>
-                <TabsContent value="remind">
-                  <p className="text-sm text-zinc-400">Smart schedules that respect timezone and tone.</p>
-                </TabsContent>
-                <TabsContent value="report">
-                  <p className="text-sm text-zinc-400">Investor-ready exports in one click.</p>
-                </TabsContent>
-              </Tabs>
+              <LandingWorkflowTabs />
             </div>
             <ol className="relative space-y-0">
               {steps.map((step, idx) => (
                 <li key={idx} className="relative flex gap-5 pb-10 last:pb-0">
                   {idx < steps.length - 1 ? (
-                    <span className="absolute left-[15px] top-10 h-[calc(100%-2rem)] w-px bg-gradient-to-b from-amber-500/50 to-transparent" />
+                    <span className="absolute left-[15px] top-10 h-[calc(100%-2rem)] w-px bg-linear-to-b from-amber-500/50 to-transparent" />
                   ) : null}
-                  <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/10 text-xs font-bold text-amber-200">
+                  <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/15 text-xs font-bold text-amber-800 dark:text-amber-200">
                     {idx + 1}
                   </span>
                   <SpotlightCard className="flex-1 p-5">
-                    <p className="text-sm font-medium leading-relaxed text-zinc-200">{step}</p>
+                    <p className={cn("text-sm font-medium leading-relaxed", landingMutedSm)}>{step}</p>
                   </SpotlightCard>
                 </li>
               ))}
@@ -294,20 +127,20 @@ export default function LandingPage({
 
       <section id="security" className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
-          <SectionHeading
+          <LandingSectionHeading
             eyebrow={content.securityEyebrow || "Trust"}
             title={content.securityTitle || "Enterprise-grade security, startup speed"}
           />
           <div className="mt-14 grid gap-4 md:grid-cols-3">
-            {security.map((item, idx) => {
-              const Icon = item.icon || Shield;
+            {security.map((item) => {
+              const Icon = item.icon;
               return (
                 <SpotlightCard key={item.title}>
                   <div className="mb-4 inline-flex rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-                    <Icon className="h-6 w-6 text-emerald-400" />
+                    <Icon className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{item.description}</p>
+                  <h3 className={landingH3}>{item.title}</h3>
+                  <p className={cn("mt-2 text-sm leading-relaxed", landingMuted)}>{item.description}</p>
                 </SpotlightCard>
               );
             })}
@@ -317,7 +150,7 @@ export default function LandingPage({
 
       <section id="pricing" className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
-          <SectionHeading
+          <LandingSectionHeading
             eyebrow={content.plansEyebrow || "Pricing"}
             title={content.plansTitle || "Plans that scale with your hustle"}
             description={
@@ -326,14 +159,14 @@ export default function LandingPage({
             }
           />
           <div className="mt-14 grid gap-6 lg:grid-cols-2">
-            <PricingCard
+            <LandingPricingCard
               plan={{
                 ...freePlan,
                 features: freePlan.features || ["Unlimited people", "Core reminders", "Community access"],
                 ctaLabel: freePlan.ctaLabel || "Get started free",
               }}
             />
-            <PricingCard
+            <LandingPricingCard
               featured
               plan={{
                 ...paidPlan,
@@ -361,10 +194,10 @@ export default function LandingPage({
                 <Zap className="mr-1 h-3 w-3" />
                 Ready when you are
               </Badge>
-              <h2 className="text-2xl font-semibold text-white md:text-3xl">
+              <h2 className={cn(landingH3, "text-2xl md:text-3xl")}>
                 {content.finalCtaTitle || "Join thousands tracking dues effortlessly."}
               </h2>
-              <p className="mt-3 text-sm text-zinc-400 md:text-base">
+              <p className={cn("mt-3 text-sm md:text-base", landingMuted)}>
                 Create your account in minutes. No credit card required on the free plan.
               </p>
             </div>
@@ -391,11 +224,11 @@ export default function LandingPage({
                 <Badge variant="emerald" className="mb-4">
                   {content.communityEyebrow || "Community"}
                 </Badge>
-                <h2 className="text-2xl font-semibold text-white md:text-3xl">
+                <h2 className={cn(landingH3, "text-2xl md:text-3xl")}>
                   {content.communityTitle || "Learn from others. Share what works."}
                 </h2>
                 <div
-                  className="mt-3 text-sm leading-relaxed text-zinc-400 cms-html [&_a]:text-amber-300"
+                  className={cn("mt-3 text-sm leading-relaxed cms-html [&_a]:text-amber-600 dark:[&_a]:text-amber-300", landingMuted)}
                   dangerouslySetInnerHTML={{
                     __html:
                       content.communityDescription ||
@@ -420,7 +253,7 @@ export default function LandingPage({
         </div>
       </section>
 
-      <PublicFooter />
+      <PublicFooter variant="landing" />
     </div>
   );
 }

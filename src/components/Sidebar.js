@@ -157,7 +157,7 @@ export default function Sidebar() {
         onClick={logout}
         className={cn(
           navLink,
-          "mt-2 w-full max-md:min-w-0 border-zinc-200/80 bg-zinc-50/80 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-zinc-400 dark:hover:border-white/12 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100 md:mt-4"
+          "mt-2 hidden w-full border-zinc-200/80 bg-zinc-50/80 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-zinc-400 dark:hover:border-white/12 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100 md:mt-4 md:flex"
         )}
       >
         <LogOut size={16} className="shrink-0" aria-hidden />

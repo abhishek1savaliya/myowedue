@@ -41,14 +41,14 @@ export default function LandingNavbar() {
         className={cn(
           "mx-auto flex max-w-6xl items-center justify-between gap-4 rounded-2xl border px-4 py-2.5 transition-[background-color,border-color,box-shadow] duration-200 sm:px-5",
           scrolled
-            ? "border-white/10 bg-slate-950/92 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+            ? "border-zinc-200/90 bg-background/95 shadow-[0_8px_32px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-slate-950/92 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
             : "border-transparent bg-transparent"
         )}
         aria-label="Primary"
       >
         <Link href="/" className="flex min-w-0 items-center gap-2.5">
           <Image src="/owedue-logo.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-lg" priority />
-          <span className="text-sm font-semibold tracking-tight text-white sm:text-base">OWE DUE</span>
+          <span className="text-sm font-semibold tracking-tight text-foreground sm:text-base">OWE DUE</span>
         </Link>
 
         <div className="hidden items-center gap-1 md:flex">
@@ -56,7 +56,7 @@ export default function LandingNavbar() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-foreground dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
             >
               {item.label}
             </Link>
@@ -64,7 +64,7 @@ export default function LandingNavbar() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <PublicModeToggle tone="onDark" />
+          <PublicModeToggle />
           <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
             <Link href="/login">Sign in</Link>
           </Button>

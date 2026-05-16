@@ -62,21 +62,13 @@ export default function HomeTrendingSection({ variant = "default" }) {
             <TrendingUp className="h-4 w-4 text-zinc-500 dark:text-zinc-400" aria-hidden />
             <h2
               id="home-trending-heading"
-              className={
-                isLanding
-                  ? "text-lg font-semibold tracking-tight text-white md:text-xl"
-                  : "text-lg font-semibold tracking-tight text-foreground md:text-xl"
-              }
+              className="text-lg font-semibold tracking-tight text-foreground md:text-xl"
             >
               Community activity
             </h2>
           </div>
           <p
-            className={
-              isLanding
-                ? "mt-2 max-w-xl text-sm leading-relaxed text-zinc-400"
-                : "mt-2 max-w-xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400"
-            }
+            className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400"
           >
             Popular discussion themes from the last 24 hours. Sign in to read full threads and participate.
           </p>

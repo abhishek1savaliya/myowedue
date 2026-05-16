@@ -23,6 +23,8 @@ export default function AnimatedCounter({ value, className }) {
 
     if (typeof IntersectionObserver === "undefined") return undefined;
 
+    let frameId = 0;
+
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (!entry?.isIntersecting || animatedRef.current) return;
@@ -31,16 +33,15 @@ export default function AnimatedCounter({ value, className }) {
 
         const duration = 900;
         const start = performance.now();
-        let frame = 0;
 
         function tick(now) {
           const t = Math.min(1, (now - start) / duration);
           const eased = 1 - (1 - t) ** 3;
           setDisplay(target * eased);
-          if (t < 1) frame = requestAnimationFrame(tick);
+          if (t < 1) frameId = requestAnimationFrame(tick);
         }
 
-        frame = requestAnimationFrame(tick);
+        frameId = requestAnimationFrame(tick);
       },
       { rootMargin: "-40px", threshold: 0.2 }
     );
@@ -48,7 +49,7 @@ export default function AnimatedCounter({ value, className }) {
     obs.observe(el);
     return () => {
       obs.disconnect();
-      if (frame) cancelAnimationFrame(frame);
+      if (frameId) cancelAnimationFrame(frameId);
     };
   }, [target]);
 
