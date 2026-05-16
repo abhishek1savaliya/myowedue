@@ -10,10 +10,11 @@ import CommunitySidebarProfile from "@/components/community/CommunitySidebarProf
 import SuggestedCreatorsRail from "@/components/community/SuggestedCreatorsRail";
 import TrendingTopicsFromApi from "@/components/community/TrendingTopicsFromApi";
 import CommunityStoreBootstrap from "@/components/community/CommunityStoreBootstrap";
+import { COMMUNITY_BTN_PRIMARY } from "@/lib/community-ui";
 import { useUserStore } from "@/stores/useUserStore";
 
 const navItem =
-  "group flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[15px] font-medium text-zinc-400 transition hover:border-white/10 hover:bg-white/5 hover:text-zinc-100";
+  "group flex w-full min-w-0 items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[15px] font-medium text-zinc-400 transition hover:border-white/10 hover:bg-white/5 hover:text-zinc-100";
 
 const navActive =
   "border-amber-500/30 bg-amber-500/10 text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.1)]";
@@ -30,8 +31,8 @@ function SidebarContent({
   onNavigate,
 }) {
   return (
-    <>
-      <nav className="flex shrink-0 flex-col gap-0.5" aria-label="Community">
+    <div className="flex w-full min-w-0 flex-1 flex-col">
+      <nav className="flex w-full shrink-0 flex-col gap-0.5" aria-label="Community">
         <Link
           href="/community"
           onClick={onNavigate}
@@ -79,23 +80,21 @@ function SidebarContent({
         </Link>
       </nav>
 
-      <div className="mt-4 shrink-0 space-y-3 border-t border-white/[0.08] pt-4">
-        <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Display</p>
-        <PublicModeToggle tone="onDark" />
-        <Link
-          href={postHref}
-          onClick={onNavigate}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
-        >
-          <PenSquare className="h-4 w-4" strokeWidth={2} />
+      <div className="mt-4 w-full shrink-0 space-y-3 border-t border-white/8 pt-4">
+        <div className="flex w-full items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Display</p>
+          <PublicModeToggle tone="onDark" />
+        </div>
+        <Link href={postHref} onClick={onNavigate} className={COMMUNITY_BTN_PRIMARY}>
+          <PenSquare className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
           Post
         </Link>
       </div>
 
-      <div className="mt-4 shrink-0 border-t border-white/[0.08] pt-4">
+      <div className="mt-4 w-full shrink-0 border-t border-white/8 pt-4">
         <CommunitySidebarProfile loggedIn={loggedIn} authChecked={authChecked} />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -189,7 +188,7 @@ export default function CommunityPublicShell({ children }) {
             onClick={closeDrawer}
             aria-hidden
           />
-          <aside className="absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto border-r border-white/[0.08] bg-slate-950 py-4 pl-4 pr-3 shadow-2xl">
+          <aside className="absolute inset-y-0 left-0 flex w-[min(280px,85vw)] max-w-[85vw] flex-col overflow-x-clip overflow-y-auto border-r border-white/8 bg-slate-950 px-4 py-4 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <Link
                 href="/"
@@ -226,7 +225,7 @@ export default function CommunityPublicShell({ children }) {
 
       <div className="relative mx-auto flex min-h-[calc(100dvh-53px)] max-w-[1200px] md:min-h-screen">
         {/* Desktop left sidebar */}
-        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-white/[0.08] bg-slate-950/95 py-4 pl-4 pr-3 md:flex md:flex-col">
+        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col overflow-x-clip border-r border-white/8 bg-slate-950/95 px-4 py-4 md:flex">
           <Link
             href="/"
             className="mb-5 inline-flex shrink-0 items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-50"

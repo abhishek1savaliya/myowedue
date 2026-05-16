@@ -36,7 +36,7 @@ export default function HomeTrendingSection({ variant = "default" }) {
       }
       aria-labelledby="home-trending-heading"
     >
-      <div className="flex flex-col gap-8 lg:flex-row lg:items-stretch lg:justify-between lg:gap-12">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-stretch sm:justify-between sm:gap-8 lg:gap-12">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">
             <TrendingUp className="h-4 w-4 text-zinc-500 dark:text-zinc-400" aria-hidden />
@@ -91,7 +91,7 @@ export default function HomeTrendingSection({ variant = "default" }) {
           )}
         </div>
 
-        <div className="flex shrink-0 flex-col justify-center rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800/50 lg:max-w-xs lg:self-stretch">
+        <div className="flex w-full shrink-0 flex-col justify-center rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800/50 sm:w-auto sm:max-w-xs sm:self-stretch">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Member access</p>
           <p className="mt-2 text-sm font-medium leading-snug text-foreground">View the full community feed</p>
           <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">

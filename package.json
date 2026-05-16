@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "postinstall": "node scripts/copy-pdf-worker.mjs",
-    "dev": "next dev",
+    "dev": "node --localstorage-file=.next/node-localstorage.json scripts/run-next-dev.mjs",
     "build": "next build",
     "verify": "npm run build",
     "start": "next start",

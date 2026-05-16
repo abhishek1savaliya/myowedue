@@ -4,8 +4,10 @@ import AmbientBackground from "@/components/shell/AmbientBackground";
 import { getCmsPageContent } from "@/lib/cmsPublic";
 
 export const metadata = {
-  title: "Privacy Policy | MYOWEDUE",
-  description: "Privacy policy for MYOWEDUE users.",
+  title: "Privacy policy",
+  description:
+    "Read how OWE DUE collects, stores, and protects your personal data, cookies, and account information.",
+  alternates: { canonical: "/privacy-policy" },
 };
 
 export default async function PrivacyPolicyPage() {

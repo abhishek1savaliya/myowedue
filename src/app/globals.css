@@ -40,6 +40,9 @@
 html {
   --ui-type-scale: var(--ui-type-scale-mobile);
   font-size: var(--ui-font-size-mobile);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 @media (min-width: 768px) {
@@ -53,7 +56,9 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--ui-body-font);
-  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   background-image:
     radial-gradient(circle at 12% 8%, rgba(245, 158, 11, 0.14), transparent 34%),
     radial-gradient(circle at 84% 84%, rgba(16, 185, 129, 0.12), transparent 34%),
@@ -1336,6 +1341,12 @@ main > * {
 [data-ui-v2="true"] body,
 [data-ui-v2="true"] .ui-v2-page {
   font-family: var(--ui-body-font);
+}
+
+[data-ui-v2="true"] .ui-v2-page {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 [data-ui-v2="true"] h1,

@@ -1,8 +1,16 @@
 import { fetchCommunityPostSitemapRows, getCommunitySiteUrl } from "@/lib/community-seo";
+import { PUBLIC_SITELINKS } from "@/lib/site-seo";
 
 export default async function sitemap() {
   const siteUrl = getCommunitySiteUrl();
   const now = new Date();
+
+  const staticFromNav = PUBLIC_SITELINKS.map((link) => ({
+    url: `${siteUrl}${link.path}`,
+    lastModified: now,
+    changeFrequency: link.path === "/community" ? "daily" : "monthly",
+    priority: link.path === "/" ? 1 : link.path === "/signup" ? 0.85 : 0.7,
+  }));
 
   const staticEntries = [
     {
@@ -11,36 +19,7 @@ export default async function sitemap() {
       changeFrequency: "weekly",
       priority: 1,
     },
-    {
-      url: `${siteUrl}/community`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.9,
-    },
-    {
-      url: `${siteUrl}/login`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.7,
-    },
-    {
-      url: `${siteUrl}/signup`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    {
-      url: `${siteUrl}/privacy-policy`,
-      lastModified: now,
-      changeFrequency: "yearly",
-      priority: 0.4,
-    },
-    {
-      url: `${siteUrl}/contact-us`,
-      lastModified: now,
-      changeFrequency: "yearly",
-      priority: 0.4,
-    },
+    ...staticFromNav.filter((e) => e.url !== `${siteUrl}/`),
   ];
 
   const rows = await fetchCommunityPostSitemapRows();
@@ -51,5 +30,12 @@ export default async function sitemap() {
     priority: 0.65,
   }));
 
-  return [...staticEntries, ...postEntries];
+  const seen = new Set();
+  const merged = [...staticEntries, ...postEntries].filter((entry) => {
+    if (seen.has(entry.url)) return false;
+    seen.add(entry.url);
+    return true;
+  });
+
+  return merged;
 }

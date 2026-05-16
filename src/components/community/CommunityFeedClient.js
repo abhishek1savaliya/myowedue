@@ -1023,6 +1023,20 @@ function normalizeInitialFeedPost(p) {
   };
 }
 
+/** Keep first occurrence per id (stable order) to avoid duplicate React keys. */
+function dedupePostsById(posts) {
+  if (!Array.isArray(posts)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const post of posts) {
+    const id = post?.id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(post);
+  }
+  return out;
+}
+
 /**
  * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x"; containerClassName?: string; initialFeedPosts?: Array<object> | null }} props
  */
@@ -1045,7 +1059,7 @@ export default function CommunityFeedClient({
 
   const seedList = useMemo(() => {
     if (isPortal || !Array.isArray(initialFeedPosts) || initialFeedPosts.length === 0) return [];
-    return initialFeedPosts.map(normalizeInitialFeedPost).filter(Boolean);
+    return dedupePostsById(initialFeedPosts.map(normalizeInitialFeedPost).filter(Boolean));
   }, [isPortal, initialFeedPosts]);
 
   const [posts, setPosts] = useState(() => seedList);
@@ -1065,6 +1079,7 @@ export default function CommunityFeedClient({
   const isX = !isPortal && skin === "x";
   const portalMineHome = isPortal;
   const canInteract = Boolean(currentUserId);
+  const feedPosts = useMemo(() => dedupePostsById(posts), [posts]);
 
   const nextCursorRef = useRef(null);
   const loadingMoreRef = useRef(false);
@@ -1072,6 +1087,8 @@ export default function CommunityFeedClient({
   /** After first successful feed GET, tab switches use inline loading instead of a full-page spinner. */
   const feedHydratedRef = useRef(false);
   const loadingRef = useRef(false);
+  /** Bumped on each feed reset so stale loadMore responses cannot append. */
+  const feedEpochRef = useRef(0);
 
   useEffect(() => {
     nextCursorRef.current = nextCursor;
@@ -1095,6 +1112,9 @@ export default function CommunityFeedClient({
 
   const loadFeed = useCallback(
     async ({ force = false, isCancelled = () => false } = {}) => {
+      const epoch = feedEpochRef.current + 1;
+      feedEpochRef.current = epoch;
+
       if ((feedTab === "liked" || feedTab === "shared") && !currentUserId) {
         setPosts([]);
         setNextCursor(null);
@@ -1144,8 +1164,9 @@ export default function CommunityFeedClient({
           }
           throw new Error(msg);
         }
+        if (isCancelled() || epoch !== feedEpochRef.current) return;
         setConfigError(false);
-        setPosts(data.posts || []);
+        setPosts(dedupePostsById(data.posts || []));
         setNextCursor(data.nextCursor || null);
         setCurrentUserId(data.currentUserId || "");
         setAuthResolved(true);
@@ -1193,6 +1214,7 @@ export default function CommunityFeedClient({
     if (!cursor || loadingMoreRef.current) return;
     if ((feedTab === "liked" || feedTab === "shared") && !currentUserId) return;
 
+    const epoch = feedEpochRef.current;
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
@@ -1202,7 +1224,8 @@ export default function CommunityFeedClient({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Failed to load more");
-      setPosts((prev) => [...prev, ...(data.posts || [])]);
+      if (epoch !== feedEpochRef.current) return;
+      setPosts((prev) => dedupePostsById([...prev, ...(data.posts || [])]));
       setNextCursor(data.nextCursor || null);
       setCurrentUserId(data.currentUserId || "");
     } catch (e) {
@@ -1276,14 +1299,14 @@ export default function CommunityFeedClient({
             });
             const refreshData = await refreshRes.json().catch(() => ({}));
             if (refreshRes.ok) {
-              setPosts(refreshData.posts || []);
+              setPosts(dedupePostsById(refreshData.posts || []));
               setNextCursor(refreshData.nextCursor || null);
             }
           } catch {
             /* ignore */
           }
         } else {
-          setPosts((prev) => [data.post, ...prev]);
+          setPosts((prev) => dedupePostsById([data.post, ...prev]));
         }
       }
       dispatchCommunityMutate();
@@ -1341,7 +1364,7 @@ export default function CommunityFeedClient({
       setPosts((prev) => {
         const mapped = prev.map((p) => (p.id === postId ? { ...p, share_count: nextCount } : p));
         if (feedTab === "shared" && canInteract && snapshotPost && !mapped.some((p) => p.id === postId)) {
-          return [{ ...snapshotPost, share_count: nextCount }, ...mapped];
+          return dedupePostsById([{ ...snapshotPost, share_count: nextCount }, ...mapped]);
         }
         return mapped;
       });
@@ -1523,7 +1546,7 @@ export default function CommunityFeedClient({
     ) : (
       <>
         <div className="space-y-4">
-          {posts.map((post) => (
+          {feedPosts.map((post) => (
             <PostCard
               key={post.id}
               post={post}
@@ -1557,7 +1580,7 @@ export default function CommunityFeedClient({
           </div>
         ) : null}
 
-        {!loading && posts.length === 0 ? (
+        {!loading && feedPosts.length === 0 ? (
           <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
             {(feedTab === "liked" || feedTab === "shared") && !canInteract ? (
               <>

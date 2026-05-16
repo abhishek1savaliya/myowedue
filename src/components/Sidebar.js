@@ -43,7 +43,7 @@ const baseLinks = [
 ];
 
 const navLink =
-  "group flex min-w-33 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition md:min-w-0 md:justify-start md:gap-3 md:py-3 md:text-sm";
+  "group flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition md:justify-start md:gap-3 md:py-3 md:text-sm";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -79,7 +79,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sticky top-0 z-30 w-full border-b border-zinc-200/80 bg-white/95 px-4 py-3 dark:border-white/10 dark:bg-slate-950/95 md:h-screen md:w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
+    <aside className="sticky top-0 z-30 w-full max-w-full shrink-0 overflow-x-clip border-b border-zinc-200/80 bg-white/95 px-4 py-3 dark:border-white/10 dark:bg-slate-950/95 md:h-screen md:w-72 md:max-w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
       <div className="mb-4 flex items-start justify-between gap-3 md:mb-8">
         <div className="inline-flex min-w-0 items-start gap-2.5 p-1">
           <Link href="/dashboard" aria-label="Go to dashboard" className="rounded-xl">
@@ -130,7 +130,7 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      <nav className="flex gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-1 md:overflow-visible md:pb-0">
+      <nav className="grid grid-cols-2 gap-2 pb-1 sm:grid-cols-3 md:grid md:grid-cols-1 md:pb-0">
         {links.map((item) => {
           const Icon = item.icon;
           const active = pathname.startsWith(item.href);
@@ -157,7 +157,7 @@ export default function Sidebar() {
         onClick={logout}
         className={cn(
           navLink,
-          "mt-2 w-full border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:border-white/12 hover:bg-white/[0.06] hover:text-zinc-100 md:mt-4"
+          "col-span-2 mt-2 w-full border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:border-white/12 hover:bg-white/[0.06] hover:text-zinc-100 sm:col-span-3 md:col-span-1 md:mt-4"
         )}
       >
         <LogOut size={16} className="shrink-0" aria-hidden />

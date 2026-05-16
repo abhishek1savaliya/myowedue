@@ -13,3 +13,7 @@ export const COMMUNITY_FEED_HEADER_SUB =
 
 export const COMMUNITY_BTN_SECONDARY =
   "inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-100 shadow-sm transition hover:border-white/25 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60";
+
+/** Primary CTA on dark community chrome — avoids theme-variant clashes (e.g. white-on-white). */
+export const COMMUNITY_BTN_PRIMARY =
+  "inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-sm font-semibold text-slate-950 shadow-[0_4px_20px_rgba(245,158,11,0.28)] transition hover:bg-amber-400 active:bg-amber-300";

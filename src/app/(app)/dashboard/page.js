@@ -43,7 +43,7 @@ export default function DashboardPage() {
   if (!data) return <Loader />;
 
   return (
-    <div className={`space-y-6 ${revalidating ? "opacity-[0.92]" : ""} transition-opacity`}>
+    <div className={`w-full max-w-full space-y-6 ${revalidating ? "opacity-[0.92]" : ""} transition-opacity`}>
       <header>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Overview of receivables, payables, trends and dues.</p>

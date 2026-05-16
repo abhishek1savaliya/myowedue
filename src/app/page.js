@@ -1,16 +1,24 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import LandingPage from "@/components/landing/LandingPage";
+import SeoJsonLd from "@/components/SeoJsonLd";
 import { getCmsPageContent } from "@/lib/cmsPublic";
+import { buildSiteGraphJsonLd, SITE_NAME } from "@/lib/site-seo";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://myowedue.vercel.app";
+const HOME_TITLE = `${SITE_NAME} | Financial Infrastructure to Track Dues & Receivables`;
+const HOME_DESCRIPTION =
+  "OWE DUE helps you track credits, debits, and due history in one workspace — people, transactions, reminders, reports, files, and a public community feed.";
 
 export const metadata = {
-  title: "Personal Credit & Debit Tracker",
-  description:
-    "Manage dues, reminders, events, and payment history in one premium workspace with OWE DUE.",
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
   alternates: {
     canonical: "/",
+  },
+  openGraph: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    url: "/",
   },
 };
 
@@ -32,50 +40,16 @@ export default async function Home() {
   const freePlanFeatures = Array.isArray(freePlan.features) ? freePlan.features : [];
   const paidPlanFeatures = Array.isArray(paidPlan.features) ? paidPlan.features : [];
 
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        "@id": `${siteUrl}/#organization`,
-        name: "OWE DUE",
-        url: siteUrl,
-        logo: `${siteUrl}/owedue-logo.svg`,
-      },
-      {
-        "@type": "WebSite",
-        "@id": `${siteUrl}/#website`,
-        url: siteUrl,
-        name: "OWE DUE",
-        publisher: { "@id": `${siteUrl}/#organization` },
-        inLanguage: "en",
-      },
-      {
-        "@type": "WebPage",
-        "@id": `${siteUrl}/#home`,
-        url: siteUrl,
-        name: "OWE DUE | Personal Credit & Debit Tracker",
-        description:
-          "Track credits, debits, reminders, and due history in one premium workspace.",
-        isPartOf: { "@id": `${siteUrl}/#website` },
-        about: { "@id": `${siteUrl}/#organization` },
-      },
-      {
-        "@type": "ItemList",
-        "@id": `${siteUrl}/#site-navigation`,
-        itemListElement: [
-          { "@type": "SiteNavigationElement", position: 1, name: "Login", url: `${siteUrl}/login` },
-          { "@type": "SiteNavigationElement", position: 2, name: "Sign up", url: `${siteUrl}/signup` },
-          { "@type": "SiteNavigationElement", position: 3, name: "Privacy Policy", url: `${siteUrl}/privacy-policy` },
-          { "@type": "SiteNavigationElement", position: 4, name: "Contact", url: `${siteUrl}/contact-us` },
-        ],
-      },
-    ],
-  };
+  const structuredData = buildSiteGraphJsonLd({
+    includeWebPage: true,
+    pageName: HOME_TITLE,
+    pageDescription: HOME_DESCRIPTION,
+    pagePath: "/",
+  });
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+      <SeoJsonLd data={structuredData} />
       <LandingPage
         content={content}
         features={features}

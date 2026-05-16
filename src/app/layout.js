@@ -14,6 +14,8 @@ import ThemeSync from "@/components/ThemeSync";
 import AppStoreBootstrap from "@/components/AppStoreBootstrap";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { AppAlertProvider } from "@/components/AppAlertProvider";
+import SeoJsonLd from "@/components/SeoJsonLd";
+import { buildSiteGraphJsonLd, DEFAULT_DESCRIPTION, SITE_NAME, SITE_TAGLINE, defaultOgImages } from "@/lib/site-seo";
 import { getUiPreferenceBootstrapScript } from "@/lib/cookie-preferences";
 import { getThemeBootstrapScript } from "@/lib/theme-client";
 import { DEFAULT_FONT_PRESET, DEFAULT_FONT_SIZE_PRESET, getFontPreset, getFontSizePreset } from "@/lib/appearance";
@@ -83,11 +85,10 @@ export const metadata = {
     apple: "/owedue-logo.svg",
   },
   title: {
-    default: "OWE DUE | Personal Credit & Debit Tracker",
-    template: "%s | OWE DUE",
+    default: `${SITE_NAME} | ${SITE_TAGLINE}`,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "Track credits, debits, reminders, and due history in one premium workspace. Import events, get smart notifications, and stay on top of every due.",
+  description: DEFAULT_DESCRIPTION,
   keywords: [
     "due tracker",
     "credit tracker",
@@ -102,23 +103,14 @@ export const metadata = {
     type: "website",
     url: "/",
     siteName: "OWE DUE",
-    title: "OWE DUE | Personal Credit & Debit Tracker",
-    description:
-      "Manage who owes you and what you owe with reminders, events, and detailed history.",
-    images: [
-      {
-        url: "/owedue-logo.svg",
-        width: 160,
-        height: 160,
-        alt: "OWE DUE logo",
-      },
-    ],
+    title: `${SITE_NAME} | ${SITE_TAGLINE}`,
+    description: DEFAULT_DESCRIPTION,
+    images: defaultOgImages(),
   },
   twitter: {
-    card: "summary",
-    title: "OWE DUE | Personal Credit & Debit Tracker",
-    description:
-      "Manage who owes you and what you owe with reminders, events, and detailed history.",
+    card: "summary_large_image",
+    title: `${SITE_NAME} | ${SITE_TAGLINE}`,
+    description: DEFAULT_DESCRIPTION,
     images: ["/owedue-logo.svg"],
   },
   robots: {
@@ -136,6 +128,7 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  const siteGraphJsonLd = buildSiteGraphJsonLd();
   const uiPreferenceBootstrapScript = getUiPreferenceBootstrapScript();
   const themeBootstrapScript = getThemeBootstrapScript();
   const defaultFont = getFontPreset(DEFAULT_FONT_PRESET);
@@ -163,7 +156,7 @@ export default function RootLayout({ children }) {
         "--ui-type-scale-desktop": String(defaultSize.scale),
       }}
     >
-      <body suppressHydrationWarning className="min-h-full flex flex-col">
+      <body suppressHydrationWarning className="flex min-h-full w-full max-w-full flex-col overflow-x-clip">
         <script
           id="myowedue-theme-boot"
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
@@ -172,6 +165,7 @@ export default function RootLayout({ children }) {
           id="myowedue-ui-pref-boot"
           dangerouslySetInnerHTML={{ __html: uiPreferenceBootstrapScript }}
         />
+        <SeoJsonLd data={siteGraphJsonLd} />
         <AppStoreBootstrap />
         <ThemeSync />
         <AppAlertProvider>

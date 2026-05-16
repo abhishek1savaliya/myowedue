@@ -158,12 +158,12 @@ export default function DashboardCurrencyConverter() {
       className="rounded-2xl border border-teal-200/90 bg-linear-to-br from-teal-50/70 via-white to-white p-4 shadow-sm"
       aria-label="Currency conversion"
     >
-      <div className="-mx-1 flex max-w-full flex-nowrap items-stretch gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:thin] sm:mx-0 sm:items-center sm:gap-4 sm:overflow-visible sm:px-0">
-        <div className="flex w-[min(11rem,78vw)] shrink-0 flex-col gap-2">
+      <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:gap-4">
+        <div className="flex min-w-0 flex-col gap-2">
           <label className="sr-only" htmlFor="convert-left-currency">
             Left currency
           </label>
-          <div className="relative w-full min-w-36">
+          <div className="relative w-full min-w-0">
             <select
               id="convert-left-currency"
               value={leftCode}
@@ -195,12 +195,15 @@ export default function DashboardCurrencyConverter() {
           />
         </div>
 
-        <div className="flex w-[min(16rem,82vw)] shrink-0 flex-col items-center justify-center gap-1.5 self-center px-1 sm:w-auto sm:max-w-xs sm:px-2">
+        <div className="flex max-w-[4.75rem] min-w-0 flex-col items-center justify-center gap-1 self-center px-0.5 sm:max-w-[8.5rem] sm:px-2">
           <ArrowRightLeft className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden />
-          <p className="text-center text-xs font-semibold leading-snug text-zinc-800" title={`${rateLine} · ${countryLine}`}>
+          <p
+            className="w-full text-center text-[10px] font-semibold leading-snug text-zinc-800 sm:text-xs"
+            title={`${rateLine} · ${countryLine}`}
+          >
             {rateLine}
           </p>
-          <p className="text-center text-[11px] leading-snug text-zinc-500">{countryLine}</p>
+          <p className="hidden w-full text-center text-[11px] leading-snug text-zinc-500 sm:block">{countryLine}</p>
           {ratesLoading ? (
             <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500" aria-live="polite">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -209,11 +212,11 @@ export default function DashboardCurrencyConverter() {
           ) : null}
         </div>
 
-        <div className="flex w-[min(11rem,78vw)] shrink-0 flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2">
           <label className="sr-only" htmlFor="convert-right-currency">
             Right currency
           </label>
-          <div className="relative w-full min-w-36">
+          <div className="relative w-full min-w-0">
             <select
               id="convert-right-currency"
               value={rightCode}
