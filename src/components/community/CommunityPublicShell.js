@@ -105,7 +105,8 @@ export default function CommunityPublicShell({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const loggedIn = Boolean(user);
-  const authChecked = status === "ready" || status === "error";
+  /** Cached session user counts as resolved — avoids header skeleton on refresh while /api/auth/me revalidates. */
+  const authChecked = status === "ready" || status === "error" || Boolean(user);
 
   const homeActive = pathname === "/community" || pathname.startsWith("/community/post/");
   const searchActive = pathname.startsWith("/community/search");

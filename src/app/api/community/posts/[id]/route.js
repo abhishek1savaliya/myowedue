@@ -4,6 +4,7 @@ import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames";
 import { isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { extractPostTopics } from "@/lib/post-topic-extraction";
+import { persistCommunityPostSeo, revalidateCommunityPostSeo } from "@/lib/community-post-seo";
 import { clearCommunityCaches } from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
@@ -200,6 +201,11 @@ export async function PATCH(request, { params }) {
   };
   const [verified] = await attachAuthorVerifiedToPosts([base]);
   const [post] = await attachAuthorUsernamesToPosts(supabase, [verified]);
+
+  void persistCommunityPostSeo(supabase, postId, fresh).then(() => {
+    revalidateCommunityPostSeo(postId);
+  });
+
   return ok({ post });
 }
 
@@ -245,5 +251,6 @@ export async function DELETE(request, { params }) {
   }
 
   await clearCommunityCaches();
+  revalidateCommunityPostSeo(postId);
   return ok({ ok: true });
 }

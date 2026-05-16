@@ -12,9 +12,10 @@ import { useUserStore } from "@/stores/useUserStore";
 export default function CommunitySidebarProfile({ loggedIn, authChecked = true }) {
   const me = useUserStore((s) => s.user);
   const status = useUserStore((s) => s.status);
-  const loaded = authChecked && (status === "ready" || status === "error" || !loggedIn);
+  const resolved = authChecked || Boolean(me);
+  const waitingForMe = loggedIn && !me && status === "loading";
 
-  if (!authChecked || (!loggedIn && !loaded)) {
+  if (!resolved || waitingForMe) {
     return (
       <div
         className="h-38 w-full animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-white/5"
@@ -34,15 +35,6 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
           Log in
         </Link>
       </div>
-    );
-  }
-
-  if (!loaded || !me) {
-    return (
-      <div
-        className="h-38 w-full animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-white/5"
-        aria-hidden
-      />
     );
   }
 

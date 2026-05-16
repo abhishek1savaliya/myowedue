@@ -1,13 +1,16 @@
 import CommunitySinglePostClient from "@/components/community/CommunitySinglePostClient";
+import SeoJsonLd from "@/components/SeoJsonLd";
 import {
   buildCommunityPostJsonLd,
+  communityPostMetadataFromRecord,
   excerptFromPostBody,
   fetchCommunityPostForSeo,
   getCommunitySiteUrl,
   isLikelyCommunityPostId,
-  lightKeywordsFromBody,
-  titleSnippetFromPost,
 } from "@/lib/community-seo";
+
+/** ISR: refresh post HTML / metadata for search engines after publish or edit. */
+export const revalidate = 60;
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
@@ -35,12 +38,7 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  const title = `${titleSnippetFromPost(post, 52)} | Community`;
-  const description = excerptFromPostBody(post.body, 160);
-  const keywords = [
-    "OWE DUE community",
-    ...lightKeywordsFromBody(post.body, 10),
-  ];
+  const { title, description, keywords } = communityPostMetadataFromRecord(post);
 
   return {
     title,
@@ -92,20 +90,42 @@ export default async function CommunityPostPage({ params }) {
   const post =
     isLikelyCommunityPostId(rawId) ? await fetchCommunityPostForSeo(rawId) : null;
   const jsonLd = post ? buildCommunityPostJsonLd(post, canonicalUrl) : null;
+  const { title: metaTitle } = post ? communityPostMetadataFromRecord(post) : null;
 
   return (
     <>
-      {jsonLd ? (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+      {jsonLd ? <SeoJsonLd data={jsonLd} /> : null}
+      {post ? (
+        <noscript>
+          <article
+            className="mx-auto max-w-xl px-4 py-6 text-zinc-900 dark:text-zinc-100"
+            itemScope
+            itemType="https://schema.org/DiscussionForumPosting"
+          >
+            <h1 className="text-xl font-bold tracking-tight" itemProp="headline">
+              {metaTitle?.replace(/\s*\|\s*OWE DUE Community$/i, "").trim() ||
+                excerptFromPostBody(post.body, 80)}
+            </h1>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400" itemProp="author">
+              {post.author_name}
+            </p>
+            <p className="mt-4 whitespace-pre-wrap text-base leading-relaxed" itemProp="articleBody">
+              {post.body}
+            </p>
+            <p className="mt-4 text-sm">
+              <a href={canonicalUrl} className="font-semibold text-amber-700 underline dark:text-amber-300">
+                Open full thread with replies
+              </a>
+            </p>
+          </article>
+        </noscript>
       ) : null}
       <CommunitySinglePostClient
         postId={rawId}
         loginNextPath="/community"
         backHref="/community"
         skin="default"
+        initialPost={post}
       />
     </>
   );

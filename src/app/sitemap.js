@@ -1,9 +1,12 @@
+import { backfillCommunityPostSeoBatch } from "@/lib/community-post-seo";
 import { fetchCommunityPostSitemapRows, getCommunitySiteUrl } from "@/lib/community-seo";
 import { PUBLIC_SITELINKS } from "@/lib/site-seo";
 
 export default async function sitemap() {
   const siteUrl = getCommunitySiteUrl();
   const now = new Date();
+
+  void backfillCommunityPostSeoBatch(40);
 
   const staticFromNav = PUBLIC_SITELINKS.map((link) => ({
     url: `${siteUrl}${link.path}`,
@@ -18,6 +21,12 @@ export default async function sitemap() {
       lastModified: now,
       changeFrequency: "weekly",
       priority: 1,
+    },
+    {
+      url: `${siteUrl}/community/posts.xml`,
+      lastModified: now,
+      changeFrequency: "hourly",
+      priority: 0.75,
     },
     ...staticFromNav.filter((e) => e.url !== `${siteUrl}/`),
   ];

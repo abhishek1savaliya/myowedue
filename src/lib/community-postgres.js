@@ -1,7 +1,7 @@
 /**
  * Community “Posts” live in Supabase Postgres (SQL). The rest of the app uses MongoDB.
  * If SUPABASE_DATABASE_URL is set, we can auto-create community tables from
- * supabase/migrations when they are missing (001–003 core feed; 004 comment likes;
+ * supabase/migrations when they are missing (001–003 core feed; 004 comment likes; 011 post SEO;
  * 005 usernames).
  *
  * Use Session mode (port 5432) or Direct connection — transaction pooler (6543) often cannot run DDL.
@@ -203,6 +203,15 @@ async function ensureLateCommunityMigrations(clientPool) {
     const sql010 = readFileSync(join(migrationsDir, "010_community_ai_phase2.sql"), "utf8");
     await runMigrationWithPool(clientPool, sql010);
     console.info("[community] Postgres AI phase2 tables ensured (010_community_ai_phase2.sql).");
+  }
+
+  const seoCol = await clientPool.query(
+    `SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'community_posts' AND column_name = 'seo_title' LIMIT 1`
+  );
+  if (seoCol.rows.length === 0) {
+    const sql011 = readFileSync(join(migrationsDir, "011_community_post_seo.sql"), "utf8");
+    await runMigrationWithPool(clientPool, sql011);
+    console.info("[community] Postgres community post SEO columns ensured (011_community_post_seo.sql).");
   }
 }
 

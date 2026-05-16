@@ -100,9 +100,9 @@ export const useUserStore = create(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state?.user) return;
-        // Subscription fields (isPremium, etc.) go stale in sessionStorage — refetch on load.
+        // Background refresh for premium/subscription fields — keep cached user in UI.
         state.fetchedAt = 0;
-        state.status = "loading";
+        state.status = "ready";
       },
     }
   )

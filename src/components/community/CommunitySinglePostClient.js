@@ -9,12 +9,13 @@ import SharePostModal from "@/components/community/SharePostModal";
 import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
 
 /**
- * @param {{ postId: string; loginNextPath: string; backHref: string; skin: "x" | "default" }} props
+ * @param {{ postId: string; loginNextPath: string; backHref: string; skin: "x" | "default"; initialPost?: object | null }} props
  */
-export default function CommunitySinglePostClient({ postId, loginNextPath, backHref, skin }) {
+export default function CommunitySinglePostClient({ postId, loginNextPath, backHref, skin, initialPost = null }) {
   const router = useRouter();
-  const [post, setPost] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const hasInitialPost = Boolean(initialPost && String(initialPost.id) === String(postId));
+  const [post, setPost] = useState(hasInitialPost ? initialPost : null);
+  const [loading, setLoading] = useState(!hasInitialPost);
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
   const [shareTarget, setShareTarget] = useState(null);
@@ -38,8 +39,9 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
   }, [postId]);
 
   useEffect(() => {
+    if (hasInitialPost) return;
     void loadPost();
-  }, [loadPost]);
+  }, [loadPost, hasInitialPost]);
 
   const canInteract = Boolean(currentUserId);
 

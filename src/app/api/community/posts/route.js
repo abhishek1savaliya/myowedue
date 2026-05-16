@@ -19,6 +19,7 @@ import { getSessionUser, requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 import { hasActivePremium } from "@/lib/subscription";
 import { enqueueCommunityJob } from "@/lib/queue/producers";
+import { persistCommunityPostSeo, revalidateCommunityPostSeo } from "@/lib/community-post-seo";
 
 const PAGE_SIZE = 10;
 const COMMUNITY_FEED_CACHE_TTL_SEC = 120;
@@ -628,6 +629,10 @@ export async function POST(request) {
   }
 
   await clearCommunityCaches();
+
+  void persistCommunityPostSeo(supabase, data.id, data).then(() => {
+    revalidateCommunityPostSeo(data.id);
+  });
 
   const basePost = { ...data, likeCount: 0, commentCount: 0, liked: false };
   const [verified] = await attachAuthorVerifiedToPosts([basePost]);

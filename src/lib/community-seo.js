@@ -36,9 +36,58 @@ export function titleSnippetFromPost(post, max = 55) {
 }
 
 /**
- * @param {string} [body]
- * @param {number} [limit]
+ * Derive SEO title, description, and keywords from post content.
+ * @param {{ body?: string; author_name?: string }} post
  */
+export function deriveCommunityPostSeoFields(post) {
+  const author = String(post.author_name ?? "").trim();
+  const snippet = titleSnippetFromPost(post, 52);
+  const description =
+    excerptFromPostBody(post.body, 160) ||
+    (author ? `Public community post by ${author} on OWE DUE.` : "Public community post on OWE DUE.");
+
+  const keywords = [
+    "OWE DUE community",
+    "community post",
+    author,
+    ...lightKeywordsFromBody(post.body, 12),
+  ]
+    .map((k) => String(k || "").trim())
+    .filter(Boolean);
+
+  const seen = new Set();
+  const seo_keywords = [];
+  for (const k of keywords) {
+    const key = k.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    seo_keywords.push(k);
+    if (seo_keywords.length >= 15) break;
+  }
+
+  return {
+    seo_title: snippet ? `${snippet} | OWE DUE Community` : "Community post | OWE DUE",
+    seo_description: description,
+    seo_keywords,
+  };
+}
+
+/**
+ * Metadata fields for Next.js `generateMetadata` (stored or derived).
+ * @param {{ body?: string; author_name?: string; seo_title?: string | null; seo_description?: string | null; seo_keywords?: string[] | null }} post
+ */
+export function communityPostMetadataFromRecord(post) {
+  const derived = deriveCommunityPostSeoFields(post);
+  const title = String(post.seo_title || "").trim() || derived.seo_title;
+  const description = String(post.seo_description || "").trim() || derived.seo_description;
+  const keywords =
+    Array.isArray(post.seo_keywords) && post.seo_keywords.length > 0
+      ? post.seo_keywords
+      : derived.seo_keywords;
+
+  return { title, description, keywords };
+}
+
 export function lightKeywordsFromBody(body, limit = 12) {
   const words = String(body ?? "")
     .toLowerCase()
@@ -66,7 +115,7 @@ export const fetchCommunityPostForSeo = cache(async (postId) => {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("community_posts")
-    .select("id, author_id, author_name, body, created_at, updated_at")
+    .select("id, author_id, author_name, body, created_at, updated_at, seo_title, seo_description, seo_keywords")
     .eq("id", postId.trim())
     .maybeSingle();
   if (error || !data) return null;
@@ -85,7 +134,7 @@ export const fetchCommunityFeedForSeo = cache(async (limit = 24) => {
   if (!supabase) return { posts: [] };
   const { data, error } = await supabase
     .from("community_posts")
-    .select("id, author_id, author_name, body, created_at, updated_at, share_count")
+    .select("id, author_id, author_name, body, created_at, updated_at, share_count, seo_title, seo_description, seo_keywords")
     .order("created_at", { ascending: false })
     .limit(n);
   if (error || !Array.isArray(data)) return { posts: [] };
@@ -114,11 +163,13 @@ export async function fetchCommunityPostSitemapRows(limit = 5000) {
  */
 export function buildCommunityPostJsonLd(post, canonicalUrl) {
   const site = getCommunitySiteUrl();
-  const headline = excerptFromPostBody(post.body, 110);
+  const { title: metaTitle, description: metaDescription } = communityPostMetadataFromRecord(post);
+  const headline = metaTitle.replace(/\s*\|\s*OWE DUE Community$/i, "").trim() || excerptFromPostBody(post.body, 110);
   return {
     "@context": "https://schema.org",
     "@type": "DiscussionForumPosting",
     headline: headline || `Post by ${post.author_name}`,
+    description: metaDescription,
     articleBody: post.body,
     author: {
       "@type": "Person",
@@ -158,7 +209,7 @@ export function buildCommunityFeedJsonLd(posts, siteBase) {
       position: i + 1,
       item: {
         "@type": "Article",
-        name: titleSnippetFromPost(p, 72),
+        name: p.seo_title?.replace(/\s*\|\s*OWE DUE Community$/i, "").trim() || titleSnippetFromPost(p, 72),
         url: `${site}/community/post/${p.id}`,
         datePublished: p.created_at,
       },
