@@ -1174,13 +1174,46 @@ main > * {
 }
 
 /* —— Community public shell —— */
+.community-shell {
+  background: var(--background);
+  color: var(--foreground);
+}
+
 .community-shell main {
   background: transparent;
-  color: #e4e4e7;
+  color: inherit;
 }
 
 .community-shell [data-community-rail] {
   background: transparent;
+}
+
+[data-theme="light"] .community-shell .community-glass-card {
+  border-color: rgb(228 228 231);
+  background-color: #ffffff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .community-shell .community-glass-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(2, 6, 23, 0.82);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+}
+
+[data-theme="light"] .community-shell .community-nav-item {
+  color: rgb(82 82 91);
+}
+
+[data-theme="light"] .community-shell .community-nav-item:hover {
+  color: rgb(24 24 27);
+  background-color: rgb(244 244 245);
+  border-color: rgb(228 228 231);
+}
+
+[data-theme="light"] .community-shell .community-nav-item.is-active {
+  color: rgb(120 53 15);
+  background-color: rgb(255 251 235);
+  border-color: rgb(251 191 36 / 0.45);
 }
 
 /* —— Premium landing page —— */
@@ -1227,9 +1260,70 @@ main > * {
   color: var(--landing-amber);
 }
 
+/* Landing: static gradients only — animated blur blobs destroy scroll FPS */
+.landing-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(245, 158, 11, 0.12), transparent 36%),
+    radial-gradient(circle at 90% 100%, rgba(16, 185, 129, 0.1), transparent 38%),
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.12), transparent);
+}
+
+.landing-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-page .landing-blob {
+  display: none !important;
+}
+
+.landing-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 520px;
+}
+
+.landing-nav-enter {
+  animation: landingNavIn 0.45s ease-out both;
+}
+
+.landing-hero-in {
+  animation: landingHeroIn 0.5s ease-out both;
+}
+
+.landing-hero-preview {
+  animation: landingHeroIn 0.55s ease-out 0.08s both;
+}
+
+@keyframes landingNavIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landingHeroIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .landing-blob {
-  filter: blur(80px);
-  animation: landingBlobDrift 18s ease-in-out infinite;
+  filter: none;
+  animation: none;
 }
 
 /* App + community: static ambient (animated blur blobs tank scroll FPS). */

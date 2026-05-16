@@ -147,7 +147,7 @@ export default async function CommunityPublicPage() {
       >
         <CommunityFeedClient
           variant="public"
-          skin="x"
+          skin="default"
           shareBasePath="/community"
           loginNextPath="/community"
           initialFeedPosts={initialForClient}

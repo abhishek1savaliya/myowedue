@@ -105,7 +105,7 @@ export default async function CommunityPostPage({ params }) {
         postId={rawId}
         loginNextPath="/community"
         backHref="/community"
-        skin="x"
+        skin="default"
       />
     </>
   );

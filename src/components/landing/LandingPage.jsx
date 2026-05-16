@@ -1,7 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import {
   ArrowRight,
   Bell,
@@ -19,7 +19,6 @@ import {
   Zap,
 } from "lucide-react";
 import PublicFooter from "@/components/PublicFooter";
-import HomeTrendingSection from "@/components/HomeTrendingSection";
 import LandingNavbar from "@/components/landing/LandingNavbar";
 import LandingHero from "@/components/landing/LandingHero";
 import SpotlightCard from "@/components/landing/SpotlightCard";
@@ -28,6 +27,13 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+
+const HomeTrendingSection = dynamic(() => import("@/components/HomeTrendingSection"), {
+  loading: () => (
+    <div className="min-h-[200px] animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02]" aria-hidden />
+  ),
+  ssr: false,
+});
 
 const DEFAULT_FEATURES = [
   {
@@ -120,7 +126,6 @@ function PricingCard({ plan, featured = false }) {
         "flex h-full flex-col p-7 md:p-8",
         featured && "border-amber-500/30 ring-1 ring-amber-500/20"
       )}
-      delay={featured ? 0.1 : 0}
     >
       {featured ? (
         <Badge className="mb-4 w-fit">Most popular</Badge>
@@ -201,16 +206,11 @@ export default function LandingPage({
 
   return (
     <div className="landing-page relative min-h-screen overflow-x-hidden bg-[#030712] text-zinc-100">
-      <div className="landing-blob landing-blob-a pointer-events-none absolute -left-32 top-20 h-[420px] w-[420px] rounded-full opacity-60" aria-hidden />
-      <div className="landing-blob landing-blob-b pointer-events-none absolute -right-24 top-[40%] h-[380px] w-[380px] rounded-full opacity-50" aria-hidden />
-      <div className="landing-blob landing-blob-c pointer-events-none absolute bottom-0 left-1/3 h-[320px] w-[320px] rounded-full opacity-40" aria-hidden />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(245,158,11,0.15),transparent)]" aria-hidden />
-
       <LandingNavbar />
 
       <LandingHero content={content} heroStats={heroStats} />
 
-      <section id="features" className="relative px-4 py-20 sm:px-6 md:py-28">
+      <section id="features" className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
           <SectionHeading
             eyebrow={content.featuresEyebrow || "Platform"}
@@ -221,7 +221,7 @@ export default function LandingPage({
             {featureList.map((feature, idx) => {
               const Icon = feature.icon || Layers;
               return (
-                <SpotlightCard key={feature.title} className={cn("h-full", feature.span)} delay={idx * 0.06}>
+                <SpotlightCard key={feature.title} className={cn("h-full", feature.span)}>
                   <Badge variant="emerald" className="mb-3 w-fit">
                     {feature.eyebrow}
                   </Badge>
@@ -237,15 +237,15 @@ export default function LandingPage({
 
       <Separator className="mx-auto max-w-6xl bg-white/10" />
 
-      <section className="relative px-4 py-20 sm:px-6 md:py-28">
+      <section className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
-          <div className="landing-trending-wrap rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 backdrop-blur-xl md:p-8">
+          <div className="landing-trending-wrap rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 md:p-8">
             <HomeTrendingSection variant="landing" />
           </div>
         </div>
       </section>
 
-      <section id="workflow" className="relative px-4 py-20 sm:px-6 md:py-28">
+      <section id="workflow" className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
             <div>
@@ -282,7 +282,7 @@ export default function LandingPage({
                   <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/10 text-xs font-bold text-amber-200">
                     {idx + 1}
                   </span>
-                  <SpotlightCard className="flex-1 p-5" delay={idx * 0.08}>
+                  <SpotlightCard className="flex-1 p-5">
                     <p className="text-sm font-medium leading-relaxed text-zinc-200">{step}</p>
                   </SpotlightCard>
                 </li>
@@ -292,7 +292,7 @@ export default function LandingPage({
         </div>
       </section>
 
-      <section id="security" className="relative px-4 py-20 sm:px-6 md:py-28">
+      <section id="security" className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
           <SectionHeading
             eyebrow={content.securityEyebrow || "Trust"}
@@ -302,7 +302,7 @@ export default function LandingPage({
             {security.map((item, idx) => {
               const Icon = item.icon || Shield;
               return (
-                <SpotlightCard key={item.title} delay={idx * 0.08}>
+                <SpotlightCard key={item.title}>
                   <div className="mb-4 inline-flex rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
                     <Icon className="h-6 w-6 text-emerald-400" />
                   </div>
@@ -315,7 +315,7 @@ export default function LandingPage({
         </div>
       </section>
 
-      <section id="pricing" className="relative px-4 py-20 sm:px-6 md:py-28">
+      <section id="pricing" className="landing-section relative px-4 py-20 sm:px-6 md:py-28">
         <div className="mx-auto max-w-6xl">
           <SectionHeading
             eyebrow={content.plansEyebrow || "Pricing"}
@@ -353,7 +353,7 @@ export default function LandingPage({
         </div>
       </section>
 
-      <section className="relative px-4 pb-8 sm:px-6">
+      <section className="landing-section relative px-4 pb-8 sm:px-6">
         <div className="mx-auto max-w-6xl">
           <SpotlightCard className="overflow-hidden p-8 md:flex md:items-center md:justify-between md:p-12">
             <div className="max-w-xl">
@@ -383,7 +383,7 @@ export default function LandingPage({
         </div>
       </section>
 
-      <section className="relative px-4 py-16 sm:px-6 md:py-20">
+      <section className="landing-section relative px-4 py-16 sm:px-6 md:py-20">
         <div className="mx-auto max-w-6xl">
           <SpotlightCard className="p-8 md:p-10">
             <div className="md:flex md:items-center md:justify-between md:gap-10">

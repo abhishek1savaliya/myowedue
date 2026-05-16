@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Loader2, TrendingUp } from "lucide-react";
 import { useCommunityTrendingStore } from "@/stores/useCommunityTrendingStore";
 
@@ -19,9 +19,28 @@ export default function HomeTrendingSection({ variant = "default" }) {
   const topics = useCommunityTrendingStore((s) => s.topics);
   const loading = useCommunityTrendingStore((s) => s.loading);
   const bootstrap = useCommunityTrendingStore((s) => s.bootstrap);
+  const sectionRef = useRef(null);
 
   useEffect(() => {
-    bootstrap();
+    const el = sectionRef.current;
+    if (!el) return undefined;
+
+    if (typeof IntersectionObserver === "undefined") {
+      bootstrap();
+      return undefined;
+    }
+
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        bootstrap();
+        obs.disconnect();
+      },
+      { rootMargin: "240px 0px", threshold: 0.01 }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
   }, [bootstrap]);
 
   const displayTopics = topics.slice(0, 5);
@@ -29,6 +48,7 @@ export default function HomeTrendingSection({ variant = "default" }) {
 
   return (
     <section
+      ref={sectionRef}
       className={
         isLanding
           ? "relative overflow-hidden rounded-xl border-0 bg-transparent p-0 shadow-none"

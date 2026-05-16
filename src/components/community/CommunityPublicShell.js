@@ -14,10 +14,10 @@ import { COMMUNITY_BTN_PRIMARY } from "@/lib/community-ui";
 import { useUserStore } from "@/stores/useUserStore";
 
 const navItem =
-  "group flex w-full min-w-0 items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[15px] font-medium text-zinc-400 transition hover:border-white/10 hover:bg-white/5 hover:text-zinc-100";
+  "community-nav-item group flex w-full min-w-0 items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[15px] font-medium text-zinc-600 transition hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-zinc-100";
 
 const navActive =
-  "border-amber-500/30 bg-amber-500/10 text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.1)]";
+  "is-active border-amber-500/40 bg-amber-500/15 text-amber-900 shadow-[0_0_20px_rgba(245,158,11,0.08)] dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100 dark:shadow-[0_0_20px_rgba(245,158,11,0.1)]";
 
 function SidebarContent({
   loggedIn,
@@ -80,10 +80,10 @@ function SidebarContent({
         </Link>
       </nav>
 
-      <div className="mt-4 w-full shrink-0 space-y-3 border-t border-white/8 pt-4">
+      <div className="mt-4 w-full shrink-0 space-y-3 border-t border-zinc-200/80 pt-4 dark:border-white/8">
         <div className="flex w-full items-center justify-between gap-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Display</p>
-          <PublicModeToggle tone="onDark" />
+          <PublicModeToggle />
         </div>
         <Link href={postHref} onClick={onNavigate} className={COMMUNITY_BTN_PRIMARY}>
           <PenSquare className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -91,7 +91,7 @@ function SidebarContent({
         </Link>
       </div>
 
-      <div className="mt-4 w-full shrink-0 border-t border-white/8 pt-4">
+      <div className="mt-4 w-full shrink-0 border-t border-zinc-200/80 pt-4 dark:border-white/8">
         <CommunitySidebarProfile loggedIn={loggedIn} authChecked={authChecked} />
       </div>
     </div>
@@ -138,20 +138,20 @@ export default function CommunityPublicShell({ children }) {
   const appHref = loggedIn ? "/dashboard" : "/login?next=/dashboard";
 
   return (
-    <div className="community-shell ui-v2-page landing-page relative min-h-screen bg-[#030712] text-zinc-100">
+    <div className="community-shell ui-v2-page relative min-h-screen bg-background text-foreground">
       <CommunityStoreBootstrap />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.08),transparent_36%),radial-gradient(circle_at_90%_100%,rgba(16,185,129,0.08),transparent_38%)]" />
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-white/[0.08] bg-slate-950/95 px-3 py-2.5 md:hidden">
+      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200/80 bg-background/95 px-3 py-2.5 backdrop-blur-md md:hidden dark:border-white/[0.08] dark:bg-slate-950/95">
         <div className="flex min-w-0 items-center gap-1.5">
-          <Link href="/community" className="inline-flex shrink-0 items-center gap-1.5 font-semibold tracking-tight text-zinc-50">
+          <Link href="/community" className="inline-flex shrink-0 items-center gap-1.5 font-semibold tracking-tight text-foreground">
             <Image src="/owedue-logo.svg" alt="OWE DUE" width={28} height={28} className="h-7 w-7 rounded-md" />
             <span className="text-sm">Community</span>
           </Link>
         </div>
         <div className="flex items-center gap-1.5">
-          <PublicModeToggle tone="onDark" />
+          <PublicModeToggle />
           {!authChecked ? (
             <div className="h-7 w-14 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-700" />
           ) : loggedIn ? (
@@ -188,12 +188,12 @@ export default function CommunityPublicShell({ children }) {
             onClick={closeDrawer}
             aria-hidden
           />
-          <aside className="absolute inset-y-0 left-0 flex w-[min(280px,85vw)] max-w-[85vw] flex-col overflow-x-clip overflow-y-auto border-r border-white/8 bg-slate-950 px-4 py-4 shadow-2xl">
+          <aside className="absolute inset-y-0 left-0 flex w-[min(280px,85vw)] max-w-[85vw] flex-col overflow-x-clip overflow-y-auto border-r border-zinc-200 bg-background px-4 py-4 shadow-2xl dark:border-white/8 dark:bg-slate-950">
             <div className="mb-4 flex items-center justify-between">
               <Link
                 href="/"
                 onClick={closeDrawer}
-                className="inline-flex items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-50"
+                className="inline-flex items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-foreground"
                 aria-label="OWE DUE home"
               >
                 <Image src="/owedue-logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
@@ -202,7 +202,7 @@ export default function CommunityPublicShell({ children }) {
               <button
                 type="button"
                 onClick={closeDrawer}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
                 aria-label="Close menu"
               >
                 <X className="h-5 w-5" strokeWidth={2} />
@@ -225,10 +225,10 @@ export default function CommunityPublicShell({ children }) {
 
       <div className="relative mx-auto flex min-h-[calc(100dvh-53px)] max-w-[1200px] md:min-h-screen">
         {/* Desktop left sidebar */}
-        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col overflow-x-clip border-r border-white/8 bg-slate-950/95 px-4 py-4 md:flex">
+        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col overflow-x-clip border-r border-zinc-200/80 bg-background px-4 py-4 md:flex dark:border-white/8 dark:bg-slate-950/95">
           <Link
             href="/"
-            className="mb-5 inline-flex shrink-0 items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-zinc-50"
+            className="mb-5 inline-flex shrink-0 items-center gap-2 rounded-lg px-1 font-semibold tracking-tight text-foreground"
             aria-label="OWE DUE home"
           >
             <Image src="/owedue-logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
@@ -247,13 +247,13 @@ export default function CommunityPublicShell({ children }) {
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
-          <main className="relative order-2 min-h-0 min-w-0 flex-1 border-white/[0.06] bg-transparent pb-20 md:border-x md:pb-0 lg:order-1">
+          <main className="relative order-2 min-h-0 min-w-0 flex-1 border-zinc-200/60 bg-transparent pb-20 md:border-x md:pb-0 lg:order-1 dark:border-white/[0.06]">
             {children}
           </main>
 
           <aside
             data-community-rail
-            className="order-1 hidden w-full shrink-0 flex-col gap-4 border-b border-white/[0.06] bg-transparent px-4 py-4 lg:sticky lg:top-0 lg:order-2 lg:flex lg:h-dvh lg:max-h-screen lg:w-[280px] lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-l lg:border-white/[0.06] lg:py-6 lg:pl-4 lg:pr-6"
+            className="order-1 hidden w-full shrink-0 flex-col gap-4 border-b border-zinc-200/60 bg-transparent px-4 py-4 lg:sticky lg:top-0 lg:order-2 lg:flex lg:h-dvh lg:max-h-screen lg:w-[280px] lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-l lg:border-zinc-200/60 lg:py-6 lg:pl-4 lg:pr-6 dark:border-white/[0.06]"
           >
             <div className="space-y-3 lg:shrink-0">
               {hideRightRailTrending ? null : (
@@ -266,9 +266,9 @@ export default function CommunityPublicShell({ children }) {
               )}
               <SuggestedCreatorsRail loggedIn={loggedIn} authChecked={authChecked} className="p-3" />
             </div>
-            <div className="hidden rounded-xl border border-white/10 bg-slate-950/80 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.22)] lg:block">
-              <h2 className="text-base font-semibold text-zinc-50">Use the full app</h2>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+            <div className="community-glass-card hidden rounded-xl border p-4 lg:block">
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Use the full app</h2>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                 Track dues, files, and reminders alongside this community feed.
               </p>
               {authChecked ? (
@@ -283,9 +283,9 @@ export default function CommunityPublicShell({ children }) {
               )}
             </div>
 
-            <p className="hidden text-xs text-zinc-500 lg:block">
+            <p className="hidden text-xs text-zinc-500 dark:text-zinc-500 lg:block">
               © {new Date().getFullYear()} OWE DUE ·{" "}
-              <Link href="/" className="font-medium text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline">
+              <Link href="/" className="font-medium text-zinc-600 underline-offset-2 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:underline">
                 Home
               </Link>
             </p>
@@ -294,31 +294,31 @@ export default function CommunityPublicShell({ children }) {
       </div>
 
       {/* Mobile bottom bar — quick access to key actions */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-white/[0.08] bg-slate-950/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:hidden" aria-label="Quick actions">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-zinc-200/80 bg-background/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md md:hidden dark:border-white/[0.08] dark:bg-slate-950/95" aria-label="Quick actions">
         <Link
           href="/community"
-          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${homeActive ? "text-amber-300" : "text-zinc-500"}`}
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${homeActive ? "text-amber-600 dark:text-amber-300" : "text-zinc-500"}`}
         >
           <Home className="h-5 w-5" strokeWidth={homeActive ? 2.5 : 2} />
           Home
         </Link>
         <Link
           href="/community/search"
-          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${searchActive ? "text-amber-300" : "text-zinc-500"}`}
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${searchActive ? "text-amber-600 dark:text-amber-300" : "text-zinc-500"}`}
         >
           <Search className="h-5 w-5" strokeWidth={searchActive ? 2.5 : 2} />
           Search
         </Link>
         <Link
           href="/community/trending"
-          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${trendingActive ? "text-amber-300" : "text-zinc-500"}`}
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${trendingActive ? "text-amber-600 dark:text-amber-300" : "text-zinc-500"}`}
         >
           <TrendingUp className="h-5 w-5" strokeWidth={trendingActive ? 2.5 : 2} />
           Trending
         </Link>
         <Link
           href="/community/notifications"
-          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${notificationsActive ? "text-amber-300" : "text-zinc-500"}`}
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition sm:text-[11px] ${notificationsActive ? "text-amber-600 dark:text-amber-300" : "text-zinc-500"}`}
         >
           <Bell className="h-5 w-5" strokeWidth={notificationsActive ? 2.5 : 2} />
           Alerts

@@ -17,7 +17,7 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
   if (!authChecked || (!loggedIn && !loaded)) {
     return (
       <div
-        className="h-38 w-full animate-pulse rounded-2xl border border-white/10 bg-white/5"
+        className="h-38 w-full animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-white/5"
         aria-hidden
       />
     );
@@ -40,7 +40,7 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
   if (!loaded || !me) {
     return (
       <div
-        className="h-38 w-full animate-pulse rounded-2xl border border-white/10 bg-white/5"
+        className="h-38 w-full animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-white/5"
         aria-hidden
       />
     );
@@ -62,7 +62,7 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
           {initial}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-zinc-50">{name}</p>
+          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{name}</p>
           <p className="mt-0.5 truncate text-xs text-zinc-400">
             {handle ? `@${handle}` : "Set @username →"}
           </p>
@@ -70,7 +70,7 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
       </Link>
       <Link
         href="/community/settings"
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-2.5 text-sm font-semibold text-zinc-100 transition hover:border-white/25 hover:bg-white/10"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-zinc-50 py-2.5 text-sm font-semibold text-zinc-800 transition hover:border-zinc-400 hover:bg-zinc-100 dark:border-white/15 dark:bg-white/5 dark:text-zinc-100 dark:hover:border-white/25 dark:hover:bg-white/10"
       >
         <Settings2 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
         Settings

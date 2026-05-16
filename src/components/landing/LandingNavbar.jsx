@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "framer-motion";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,29 +19,29 @@ export default function LandingNavbar() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
+    let raf = 0;
     function onScroll() {
-      setScrolled(window.scrollY > 12);
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setScrolled(window.scrollY > 12);
+      });
     }
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
   return (
-    <motion.header
-      initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className={cn(
-        "fixed inset-x-0 top-0 z-50 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6",
-        scrolled && "landing-nav-scrolled"
-      )}
-    >
+    <header className="landing-nav-enter fixed inset-x-0 top-0 z-50 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
       <nav
         className={cn(
-          "mx-auto flex max-w-6xl items-center justify-between gap-4 rounded-2xl border px-4 py-2.5 transition-all duration-300 sm:px-5",
+          "mx-auto flex max-w-6xl items-center justify-between gap-4 rounded-2xl border px-4 py-2.5 transition-[background-color,border-color,box-shadow] duration-200 sm:px-5",
           scrolled
-            ? "border-white/10 bg-slate-950/75 shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+            ? "border-white/10 bg-slate-950/92 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
             : "border-transparent bg-transparent"
         )}
         aria-label="Primary"
@@ -57,7 +56,7 @@ export default function LandingNavbar() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
             >
               {item.label}
             </Link>
@@ -74,6 +73,6 @@ export default function LandingNavbar() {
           </Button>
         </div>
       </nav>
-    </motion.header>
+    </header>
   );
 }

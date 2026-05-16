@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useInView } from "framer-motion";
 
 function parseStatValue(raw) {
   const text = String(raw || "0");
@@ -14,31 +13,47 @@ function parseStatValue(raw) {
 
 export default function AnimatedCounter({ value, className }) {
   const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: "-80px" });
   const { prefix, value: target, suffix, decimals } = parseStatValue(value);
-  const [display, setDisplay] = useState(0);
+  const [display, setDisplay] = useState(target);
+  const animatedRef = useRef(false);
 
   useEffect(() => {
-    if (!inView) return undefined;
-    const duration = 1400;
-    const start = performance.now();
-    let frame = 0;
+    const el = ref.current;
+    if (!el || animatedRef.current) return undefined;
 
-    function tick(now) {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - (1 - t) ** 3;
-      setDisplay(target * eased);
-      if (t < 1) frame = requestAnimationFrame(tick);
-    }
+    if (typeof IntersectionObserver === "undefined") return undefined;
 
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [inView, target]);
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting || animatedRef.current) return;
+        animatedRef.current = true;
+        obs.disconnect();
+
+        const duration = 900;
+        const start = performance.now();
+        let frame = 0;
+
+        function tick(now) {
+          const t = Math.min(1, (now - start) / duration);
+          const eased = 1 - (1 - t) ** 3;
+          setDisplay(target * eased);
+          if (t < 1) frame = requestAnimationFrame(tick);
+        }
+
+        frame = requestAnimationFrame(tick);
+      },
+      { rootMargin: "-40px", threshold: 0.2 }
+    );
+
+    obs.observe(el);
+    return () => {
+      obs.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [target]);
 
   const formatted =
-    decimals > 0
-      ? display.toFixed(decimals)
-      : Math.round(display).toLocaleString("en-US");
+    decimals > 0 ? display.toFixed(decimals) : Math.round(display).toLocaleString("en-US");
 
   return (
     <span ref={ref} className={className}>

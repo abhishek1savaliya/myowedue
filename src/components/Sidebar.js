@@ -43,7 +43,7 @@ const baseLinks = [
 ];
 
 const navLink =
-  "group flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition md:justify-start md:gap-3 md:py-3 md:text-sm";
+  "group flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition max-md:min-w-[8.25rem] max-md:shrink-0 md:justify-start md:gap-3 md:py-3 md:text-sm";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -79,8 +79,8 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sticky top-0 z-30 w-full max-w-full shrink-0 overflow-x-clip border-b border-zinc-200/80 bg-white/95 px-4 py-3 dark:border-white/10 dark:bg-slate-950/95 md:h-screen md:w-72 md:max-w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
-      <div className="mb-4 flex items-start justify-between gap-3 md:mb-8">
+    <aside className="sticky top-0 z-30 w-full max-w-full shrink-0 overflow-x-clip border-b border-zinc-200/80 bg-white/95 px-4 py-2.5 dark:border-white/10 dark:bg-slate-950/95 md:h-screen md:w-72 md:max-w-72 md:border-b-0 md:border-r md:px-5 md:py-6">
+      <div className="mb-3 flex items-start justify-between gap-3 md:mb-8">
         <div className="inline-flex min-w-0 items-start gap-2.5 p-1">
           <Link href="/dashboard" aria-label="Go to dashboard" className="rounded-xl">
             <Image
@@ -101,17 +101,17 @@ export default function Sidebar() {
             </Link>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               {!authChecked ? (
-                <span className="inline-flex h-5 w-12 animate-pulse rounded-md bg-white/10" />
+                <span className="inline-flex h-5 w-12 animate-pulse rounded-md bg-zinc-200 dark:bg-white/10" />
               ) : isPremium ? (
                 <Link
                   href="/my-subscription"
-                  className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200"
+                  className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
                 >
                   <Gem size={10} />
                   Pro
                 </Link>
               ) : (
-                <span className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+                <span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">
                   Free
                 </span>
               )}
@@ -121,7 +121,7 @@ export default function Sidebar() {
         <Link
           href="/notifications"
           aria-label="Open notifications"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 transition hover:border-white/20 hover:bg-white/10 md:h-10 md:w-10"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:shadow-none dark:hover:border-white/20 dark:hover:bg-white/10 md:h-10 md:w-10"
         >
           <Bell size={16} />
           <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-1 text-[10px] font-semibold leading-none text-slate-950">
@@ -130,7 +130,7 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      <nav className="grid grid-cols-2 gap-2 pb-1 sm:grid-cols-3 md:grid md:grid-cols-1 md:pb-0">
+      <nav className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:thin] md:grid md:grid-cols-1 md:overflow-visible md:pb-0">
         {links.map((item) => {
           const Icon = item.icon;
           const active = pathname.startsWith(item.href);
@@ -145,7 +145,7 @@ export default function Sidebar() {
                   : "border-zinc-200/80 bg-white/60 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400 dark:hover:border-white/15 dark:hover:bg-white/8 dark:hover:text-zinc-100"
               )}
             >
-              <Icon size={16} className={active ? "text-amber-300" : "text-zinc-500"} />
+              <Icon size={16} className={active ? "text-amber-600 dark:text-amber-300" : "text-zinc-500"} />
               <span className="min-w-0 wrap-break-word">{item.label}</span>
             </Link>
           );
@@ -157,7 +157,7 @@ export default function Sidebar() {
         onClick={logout}
         className={cn(
           navLink,
-          "col-span-2 mt-2 w-full border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:border-white/12 hover:bg-white/[0.06] hover:text-zinc-100 sm:col-span-3 md:col-span-1 md:mt-4"
+          "mt-2 w-full max-md:min-w-0 border-zinc-200/80 bg-zinc-50/80 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-zinc-400 dark:hover:border-white/12 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100 md:mt-4"
         )}
       >
         <LogOut size={16} className="shrink-0" aria-hidden />
