@@ -22,22 +22,23 @@ export default function OfflineBanner({ online, pending, syncing, lastSync, sync
 
   return (
     <div
-      className={`fixed bottom-4 left-1/2 z-200 flex max-w-[min(100vw-2rem,28rem)] -translate-x-1/2 items-center gap-3 rounded-2xl border px-4 py-3 text-sm shadow-lg backdrop-blur-md ${
+      className={`fixed bottom-4 left-1/2 z-200 flex w-[calc(100vw-1rem)] max-w-md -translate-x-1/2 flex-col gap-3 rounded-2xl border px-3 py-3 text-sm shadow-lg backdrop-blur-md sm:w-[calc(100vw-2rem)] sm:flex-row sm:items-center sm:px-4 ${
         showOffline
           ? "border-amber-500/40 bg-amber-950/90 text-amber-50"
           : "border-emerald-500/35 bg-emerald-950/90 text-emerald-50"
       }`}
       role="status"
     >
-      {showOffline ? (
-        <CloudOff className="h-5 w-5 shrink-0 text-amber-300" aria-hidden />
-      ) : syncing ? (
-        <RefreshCw className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
-      ) : (
-        <Wifi className="h-5 w-5 shrink-0 text-emerald-300" aria-hidden />
-      )}
+      <div className="flex min-w-0 w-full items-start gap-3">
+        {showOffline ? (
+          <CloudOff className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden />
+        ) : syncing ? (
+          <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 animate-spin" aria-hidden />
+        ) : (
+          <Wifi className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" aria-hidden />
+        )}
 
-      <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1">
         {showOffline ? (
           <>
             <p className="font-semibold">You&apos;re offline</p>
@@ -73,14 +74,15 @@ export default function OfflineBanner({ online, pending, syncing, lastSync, sync
             />
           </div>
         ) : null}
+        </div>
       </div>
 
       {online && (showPending || pending > 0) ? (
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
           <button
             type="button"
             onClick={onViewPending}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-semibold whitespace-nowrap hover:bg-white/25"
           >
             View
           </button>
@@ -88,7 +90,7 @@ export default function OfflineBanner({ online, pending, syncing, lastSync, sync
             type="button"
             onClick={onSyncNow}
             disabled={syncing}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25 disabled:opacity-50"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-semibold whitespace-nowrap hover:bg-white/25 disabled:opacity-50"
           >
             <CloudUpload className="h-3.5 w-3.5" />
             Sync

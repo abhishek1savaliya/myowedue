@@ -25,6 +25,7 @@ export async function syncPendingMutations() {
  * @returns {Promise<{ synced: number; failed: number; remaining: number; total: number; processed: number }>}
  */
 export async function syncPendingMutationsForUser(userId) {
+  let total = 0;
   if (!isOnline() || syncing) {
     const remaining = await listPendingMutations(userId).then((r) => r.length);
     return { synced: 0, failed: 0, remaining, total: remaining, processed: 0 };
@@ -37,7 +38,7 @@ export async function syncPendingMutationsForUser(userId) {
 
   try {
     const queue = await listPendingMutations(userId);
-    const total = queue.length;
+    total = queue.length;
     emitSyncProgress({ total, processed, synced, failed, phase: "start" });
     const communityIdMaps = { posts: new Map(), comments: new Map() };
     const communityOffline = await import("@/lib/offline/community-pending");
@@ -92,7 +93,6 @@ export async function syncPendingMutationsForUser(userId) {
   }
 
   const remaining = (await listPendingMutations(userId)).length;
-  const total = synced + failed + remaining;
   emitSyncProgress({ total, processed, synced, failed, remaining, phase: "done" });
   return { synced, failed, remaining, total, processed };
 }
