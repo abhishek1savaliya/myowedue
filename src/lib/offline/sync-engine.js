@@ -77,7 +77,12 @@ export async function syncPendingMutationsForUser(userId, options = {}) {
           }
           synced += 1;
         } else {
-          await markMutationFailed(item.id, data?.message || `HTTP ${res.status}`);
+          const message = String(data?.message || `HTTP ${res.status}`);
+          if (shouldDiscardMutation(item, resolved.url, res.status, message)) {
+            await removeMutation(item.id);
+          } else {
+            await markMutationFailed(item.id, message);
+          }
           failed += 1;
         }
         processed += 1;
@@ -176,4 +181,24 @@ function recordPersonSyncIds(item, resolvedBody, data, offlineIdMaps) {
   } catch {
     // ignore parse issues
   }
+}
+
+function shouldDiscardMutation(item, resolvedUrl, status, message) {
+  const method = String(item?.method || "").toUpperCase();
+  const url = String(resolvedUrl || item?.url || "");
+  const lowerMessage = String(message || "").toLowerCase();
+
+  const hasOfflineRefInUrl = /\/offline-[^/?]+/.test(url);
+  if (hasOfflineRefInUrl && method !== "POST") return true;
+
+  if (lowerMessage.includes("invalid input syntax for type uuid") && lowerMessage.includes("offline-")) {
+    return true;
+  }
+
+  // Client-side validation/resource errors are typically permanent for queued payloads.
+  if (status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 409 && status !== 429) {
+    return true;
+  }
+
+  return false;
 }

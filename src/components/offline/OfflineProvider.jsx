@@ -21,16 +21,22 @@ export default function OfflineProvider({ children }) {
   const persistTimerRef = useRef(null);
   const bootstrappedRef = useRef(false);
   const userId = useUserStore((s) => s.user?._id || null);
+  const isAuthenticated = Boolean(userId);
 
   const refreshPending = useCallback(async () => {
+    if (!isAuthenticated) {
+      setPending(0);
+      setQueueItems([]);
+      return;
+    }
     const count = await pendingMutationCount(userId);
     setPending(count);
     const rows = await listPendingMutations(userId);
     setQueueItems(rows);
-  }, [userId]);
+  }, [isAuthenticated, userId]);
 
   const runSync = useCallback(async (manual = false) => {
-    if (!isOnline()) return;
+    if (!isAuthenticated || !isOnline()) return;
     setSyncing(true);
     setSyncProgress(null);
     try {
@@ -41,7 +47,7 @@ export default function OfflineProvider({ children }) {
     } finally {
       setSyncing(false);
     }
-  }, [refreshPending, userId]);
+  }, [isAuthenticated, refreshPending, userId]);
 
   useEffect(() => {
     if (!bootstrappedRef.current) {
@@ -109,7 +115,7 @@ export default function OfflineProvider({ children }) {
     window.addEventListener("owedue-offline-sync-progress", onSyncProgress);
 
     void refreshPending();
-    if (onlineNow) {
+    if (onlineNow && isAuthenticated) {
       void runSync(false);
     }
 
@@ -121,27 +127,42 @@ export default function OfflineProvider({ children }) {
       window.removeEventListener("owedue-offline-sync-progress", onSyncProgress);
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
-  }, [runSync, refreshPending, userId]);
+  }, [runSync, refreshPending, userId, isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setSyncModalOpen(false);
+      setSyncing(false);
+      setPending(0);
+      setQueueItems([]);
+      setSyncProgress(null);
+      setLastSync(null);
+    }
+  }, [isAuthenticated]);
 
   return (
     <>
-      <OfflineBanner
-        online={online}
-        pending={pending}
-        syncing={syncing}
-        lastSync={lastSync}
-        syncProgress={syncProgress}
-        onSyncNow={() => void runSync(true)}
-        onViewPending={() => setSyncModalOpen(true)}
-      />
-      <PendingSyncModal
-        open={syncModalOpen}
-        items={queueItems}
-        progress={syncProgress}
-        syncing={syncing}
-        onClose={() => setSyncModalOpen(false)}
-        onSyncNow={() => void runSync(true)}
-      />
+      {isAuthenticated ? (
+        <>
+          <OfflineBanner
+            online={online}
+            pending={pending}
+            syncing={syncing}
+            lastSync={lastSync}
+            syncProgress={syncProgress}
+            onSyncNow={() => void runSync(true)}
+            onViewPending={() => setSyncModalOpen(true)}
+          />
+          <PendingSyncModal
+            open={syncModalOpen}
+            items={queueItems}
+            progress={syncProgress}
+            syncing={syncing}
+            onClose={() => setSyncModalOpen(false)}
+            onSyncNow={() => void runSync(true)}
+          />
+        </>
+      ) : null}
       {children}
     </>
   );
