@@ -1,7 +1,7 @@
 import { getOfflineDb } from "@/lib/offline/db";
 
 /**
- * @param {{ url: string; method: string; body?: string | null; headers?: Record<string, string> }} payload
+ * @param {{ url: string; method: string; body?: string | null; headers?: Record<string, string>; userId?: string | null }} payload
  */
 export async function enqueueMutation(payload) {
   const db = getOfflineDb();
@@ -12,6 +12,7 @@ export async function enqueueMutation(payload) {
     method: payload.method.toUpperCase(),
     body: payload.body ?? null,
     headers: payload.headers || {},
+    userId: payload.userId || null,
     createdAt: Date.now(),
     retries: 0,
   });
@@ -19,10 +20,15 @@ export async function enqueueMutation(payload) {
   return { id, ...payload };
 }
 
-export async function listPendingMutations() {
+/**
+ * @param {string | null | undefined} [userId]
+ */
+export async function listPendingMutations(userId) {
   const db = getOfflineDb();
   if (!db) return [];
-  return db.mutationQueue.orderBy("createdAt").toArray();
+  const queue = await db.mutationQueue.orderBy("createdAt").toArray();
+  if (!userId) return queue;
+  return queue.filter((item) => !item?.userId || String(item.userId) === String(userId));
 }
 
 /**
@@ -49,8 +55,13 @@ export async function markMutationFailed(id, lastError) {
   });
 }
 
-export async function pendingMutationCount() {
+/**
+ * @param {string | null | undefined} [userId]
+ */
+export async function pendingMutationCount(userId) {
   const db = getOfflineDb();
   if (!db) return 0;
-  return db.mutationQueue.count();
+  if (!userId) return db.mutationQueue.count();
+  const queue = await db.mutationQueue.toArray();
+  return queue.filter((item) => !item?.userId || String(item.userId) === String(userId)).length;
 }

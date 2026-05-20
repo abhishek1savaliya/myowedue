@@ -3,36 +3,45 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { hydrateApiCacheFromIndexedDB, persistApiCacheEntries } from "@/lib/offline/api-cache-persist";
 import { onNetworkStatusChange, isOnline } from "@/lib/offline/network";
-import { pendingMutationCount } from "@/lib/offline/mutation-queue";
+import { listPendingMutations, pendingMutationCount } from "@/lib/offline/mutation-queue";
 import { whenApiCacheHydrated } from "@/lib/api-cache-hydration";
 import { useApiCacheStore } from "@/stores/useApiCacheStore";
+import { useUserStore } from "@/stores/useUserStore";
 import OfflineBanner from "@/components/offline/OfflineBanner";
+import PendingSyncModal from "@/components/offline/PendingSyncModal";
 
 export default function OfflineProvider({ children }) {
   const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
+  const [queueItems, setQueueItems] = useState([]);
+  const [syncProgress, setSyncProgress] = useState(null);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
   const persistTimerRef = useRef(null);
   const bootstrappedRef = useRef(false);
+  const userId = useUserStore((s) => s.user?._id || null);
 
   const refreshPending = useCallback(async () => {
-    const count = await pendingMutationCount();
+    const count = await pendingMutationCount(userId);
     setPending(count);
-  }, []);
+    const rows = await listPendingMutations(userId);
+    setQueueItems(rows);
+  }, [userId]);
 
   const runSync = useCallback(async () => {
     if (!isOnline()) return;
     setSyncing(true);
+    setSyncProgress(null);
     try {
       const { syncOfflineQueue } = await import("@/lib/offline/offline-bootstrap");
-      const result = await syncOfflineQueue();
+      const result = await syncOfflineQueue(userId);
       setLastSync(result);
       await refreshPending();
     } finally {
       setSyncing(false);
     }
-  }, [refreshPending]);
+  }, [refreshPending, userId]);
 
   useEffect(() => {
     if (!bootstrappedRef.current) {
@@ -40,7 +49,8 @@ export default function OfflineProvider({ children }) {
       void import("@/lib/offline/offline-bootstrap").then((m) => m.bootstrapOfflineRuntime());
     }
 
-    setOnline(isOnline());
+    const onlineNow = isOnline();
+    setOnline(onlineNow);
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
@@ -84,14 +94,34 @@ export default function OfflineProvider({ children }) {
     };
     window.addEventListener("owedue-offline-queue-changed", onQueueChanged);
 
+    const onSyncProgress = (event) => {
+      const detail = event?.detail || {};
+      setSyncProgress({
+        processed: Number(detail.processed || 0),
+        total: Number(detail.total || 0),
+        synced: Number(detail.synced || 0),
+        failed: Number(detail.failed || 0),
+      });
+      if (detail.phase === "done") {
+        void refreshPending();
+      }
+    };
+    window.addEventListener("owedue-offline-sync-progress", onSyncProgress);
+
+    void refreshPending();
+    if (onlineNow) {
+      void runSync();
+    }
+
     return () => {
       unsubNetwork();
       unsubStore();
       unsubHydrate();
       window.removeEventListener("owedue-offline-queue-changed", onQueueChanged);
+      window.removeEventListener("owedue-offline-sync-progress", onSyncProgress);
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
-  }, [runSync, refreshPending]);
+  }, [runSync, refreshPending, userId]);
 
   return (
     <>
@@ -100,6 +130,16 @@ export default function OfflineProvider({ children }) {
         pending={pending}
         syncing={syncing}
         lastSync={lastSync}
+        syncProgress={syncProgress}
+        onSyncNow={() => void runSync()}
+        onViewPending={() => setSyncModalOpen(true)}
+      />
+      <PendingSyncModal
+        open={syncModalOpen}
+        items={queueItems}
+        progress={syncProgress}
+        syncing={syncing}
+        onClose={() => setSyncModalOpen(false)}
         onSyncNow={() => void runSync()}
       />
       {children}

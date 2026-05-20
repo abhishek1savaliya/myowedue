@@ -17,16 +17,28 @@ let syncing = false;
  * @returns {Promise<{ synced: number; failed: number; remaining: number }>}
  */
 export async function syncPendingMutations() {
+  return syncPendingMutationsForUser();
+}
+
+/**
+ * @param {string | null | undefined} userId
+ * @returns {Promise<{ synced: number; failed: number; remaining: number; total: number; processed: number }>}
+ */
+export async function syncPendingMutationsForUser(userId) {
   if (!isOnline() || syncing) {
-    return { synced: 0, failed: 0, remaining: await listPendingMutations().then((r) => r.length) };
+    const remaining = await listPendingMutations(userId).then((r) => r.length);
+    return { synced: 0, failed: 0, remaining, total: remaining, processed: 0 };
   }
 
   syncing = true;
   let synced = 0;
   let failed = 0;
+  let processed = 0;
 
   try {
-    const queue = await listPendingMutations();
+    const queue = await listPendingMutations(userId);
+    const total = queue.length;
+    emitSyncProgress({ total, processed, synced, failed, phase: "start" });
     const communityIdMaps = { posts: new Map(), comments: new Map() };
     const communityOffline = await import("@/lib/offline/community-pending");
 
@@ -61,9 +73,13 @@ export async function syncPendingMutations() {
           await markMutationFailed(item.id, data?.message || `HTTP ${res.status}`);
           failed += 1;
         }
+        processed += 1;
+        emitSyncProgress({ total, processed, synced, failed, current: item, phase: "progress" });
       } catch (err) {
         await markMutationFailed(item.id, err?.message || "Network error");
         failed += 1;
+        processed += 1;
+        emitSyncProgress({ total, processed, synced, failed, current: item, phase: "error" });
         break;
       }
     }
@@ -75,8 +91,10 @@ export async function syncPendingMutations() {
     syncing = false;
   }
 
-  const remaining = (await listPendingMutations()).length;
-  return { synced, failed, remaining };
+  const remaining = (await listPendingMutations(userId)).length;
+  const total = synced + failed + remaining;
+  emitSyncProgress({ total, processed, synced, failed, remaining, phase: "done" });
+  return { synced, failed, remaining, total, processed };
 }
 
 /** Re-fetch cached API data after sync so UI matches server. */
@@ -102,4 +120,9 @@ async function refreshStaleApiCaches() {
 
 export function isSyncInProgress() {
   return syncing;
+}
+
+function emitSyncProgress(detail) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("owedue-offline-sync-progress", { detail }));
 }

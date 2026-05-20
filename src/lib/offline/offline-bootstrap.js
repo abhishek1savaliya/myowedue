@@ -5,7 +5,7 @@ export async function bootstrapOfflineRuntime() {
   await import("@/lib/offline/install-fetch-patch");
 }
 
-export async function syncOfflineQueue() {
-  const { syncPendingMutations } = await import("@/lib/offline/sync-engine");
-  return syncPendingMutations();
+export async function syncOfflineQueue(userId) {
+  const { syncPendingMutationsForUser } = await import("@/lib/offline/sync-engine");
+  return syncPendingMutationsForUser(userId);
 }

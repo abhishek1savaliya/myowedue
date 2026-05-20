@@ -3,6 +3,7 @@
 import { enqueueMutation } from "@/lib/offline/mutation-queue";
 import { isOnline } from "@/lib/offline/network";
 import { applyOptimisticMutation, notifyOfflineQueueChanged } from "@/lib/offline/optimistic-cache";
+import { useUserStore } from "@/stores/useUserStore";
 
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -63,11 +64,13 @@ function isApiUrl(url) {
 }
 
 async function queueMutationAndRespond(url, method, body, headers) {
+  const userId = useUserStore.getState().user?._id || null;
   await enqueueMutation({
     url,
     method,
     body,
     headers,
+    userId,
   });
   applyOptimisticMutation(url, method, body);
   notifyOfflineQueueChanged();

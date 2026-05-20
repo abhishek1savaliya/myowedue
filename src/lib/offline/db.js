@@ -12,6 +12,12 @@ export class OweDueOfflineDB extends Dexie {
       mutationQueue: "++id, createdAt, url",
       meta: "key",
     });
+
+    this.version(2).stores({
+      apiCache: "key, fetchedAt",
+      mutationQueue: "++id, createdAt, url, userId",
+      meta: "key",
+    });
   }
 }
 
