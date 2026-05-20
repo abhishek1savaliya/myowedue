@@ -77,7 +77,7 @@ function applyPersonMutation(path, method, body) {
   if (!payload && method !== "DELETE") return;
 
   if (method === "POST") {
-    const id = tempId();
+    const id = payload?.offlineClientId || tempId();
     updatePeopleList((people) => [
       {
         _id: id,

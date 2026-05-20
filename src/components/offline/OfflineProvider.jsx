@@ -29,13 +29,13 @@ export default function OfflineProvider({ children }) {
     setQueueItems(rows);
   }, [userId]);
 
-  const runSync = useCallback(async () => {
+  const runSync = useCallback(async (manual = false) => {
     if (!isOnline()) return;
     setSyncing(true);
     setSyncProgress(null);
     try {
       const { syncOfflineQueue } = await import("@/lib/offline/offline-bootstrap");
-      const result = await syncOfflineQueue(userId);
+      const result = await syncOfflineQueue(userId, { manual });
       setLastSync(result);
       await refreshPending();
     } finally {
@@ -60,7 +60,7 @@ export default function OfflineProvider({ children }) {
 
     const unsubNetwork = onNetworkStatusChange((nextOnline) => {
       setOnline(nextOnline);
-      if (nextOnline) void runSync();
+      if (nextOnline) void runSync(false);
     });
 
     const unsubStore = useApiCacheStore.subscribe((state) => {
@@ -86,7 +86,7 @@ export default function OfflineProvider({ children }) {
 
     const unsubHydrate = whenApiCacheHydrated(() => {
       hydrateFromIndexedDB();
-      if (isOnline()) void runSync();
+      if (isOnline()) void runSync(false);
     });
 
     const onQueueChanged = () => {
@@ -110,7 +110,7 @@ export default function OfflineProvider({ children }) {
 
     void refreshPending();
     if (onlineNow) {
-      void runSync();
+      void runSync(false);
     }
 
     return () => {
@@ -131,7 +131,7 @@ export default function OfflineProvider({ children }) {
         syncing={syncing}
         lastSync={lastSync}
         syncProgress={syncProgress}
-        onSyncNow={() => void runSync()}
+        onSyncNow={() => void runSync(true)}
         onViewPending={() => setSyncModalOpen(true)}
       />
       <PendingSyncModal
@@ -140,7 +140,7 @@ export default function OfflineProvider({ children }) {
         progress={syncProgress}
         syncing={syncing}
         onClose={() => setSyncModalOpen(false)}
-        onSyncNow={() => void runSync()}
+        onSyncNow={() => void runSync(true)}
       />
       {children}
     </>

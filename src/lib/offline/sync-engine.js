@@ -22,9 +22,12 @@ export async function syncPendingMutations() {
 
 /**
  * @param {string | null | undefined} userId
+ * @param {{ manual?: boolean }} [options]
  * @returns {Promise<{ synced: number; failed: number; remaining: number; total: number; processed: number }>}
  */
-export async function syncPendingMutationsForUser(userId) {
+export async function syncPendingMutationsForUser(userId, options = {}) {
+  const manual = Boolean(options?.manual);
+  const MAX_AUTO_RETRIES = 3;
   let total = 0;
   if (!isOnline() || syncing) {
     const remaining = await listPendingMutations(userId).then((r) => r.length);
@@ -37,9 +40,11 @@ export async function syncPendingMutationsForUser(userId) {
   let processed = 0;
 
   try {
-    const queue = await listPendingMutations(userId);
+    const queueAll = await listPendingMutations(userId);
+    const queue = manual ? queueAll : queueAll.filter((item) => Number(item?.retries || 0) < MAX_AUTO_RETRIES);
     total = queue.length;
     emitSyncProgress({ total, processed, synced, failed, phase: "start" });
+    const offlineIdMaps = { persons: new Map(), legacyCreatedPersonIds: [], posts: new Map(), comments: new Map() };
     const communityIdMaps = { posts: new Map(), comments: new Map() };
     const communityOffline = await import("@/lib/offline/community-pending");
 
@@ -47,7 +52,7 @@ export async function syncPendingMutationsForUser(userId) {
       if (!item?.id) continue;
 
       try {
-        const resolved = communityOffline.resolveCommunityOfflineMutation(item, communityIdMaps);
+        const resolved = resolveOfflineMutation(item, offlineIdMaps, communityOffline, communityIdMaps);
         const nf = getNativeFetch() || fetch.bind(globalThis);
         const res = await nf(resolved.url, {
           method: item.method,
@@ -62,6 +67,7 @@ export async function syncPendingMutationsForUser(userId) {
         const data = await res.json().catch(() => ({}));
 
         if (res.ok) {
+          recordPersonSyncIds(item, resolved.body, data, offlineIdMaps);
           communityOffline.recordCommunitySyncIds(item, data, communityIdMaps);
           await removeMutation(item.id);
           const { invalidateCachesForUrl } = await import("@/lib/offline/invalidate-from-url");
@@ -125,4 +131,49 @@ export function isSyncInProgress() {
 function emitSyncProgress(detail) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("owedue-offline-sync-progress", { detail }));
+}
+
+function resolveOfflineMutation(item, offlineIdMaps, communityOffline, communityIdMaps) {
+  const resolvedCommunity = communityOffline.resolveCommunityOfflineMutation(item, communityIdMaps);
+  let body = resolvedCommunity.body;
+  if (body) {
+    try {
+      const json = JSON.parse(body);
+      if (json?.personId && offlineIdMaps.persons.has(String(json.personId))) {
+        json.personId = offlineIdMaps.persons.get(String(json.personId));
+      } else if (
+        json?.personId &&
+        String(json.personId).startsWith("offline-") &&
+        offlineIdMaps.legacyCreatedPersonIds.length === 1
+      ) {
+        // Legacy fallback for old queued items created before offlineClientId existed.
+        json.personId = offlineIdMaps.legacyCreatedPersonIds[0];
+      }
+      body = JSON.stringify(json);
+    } catch {
+      // keep original body
+    }
+  }
+  return { url: resolvedCommunity.url, body };
+}
+
+function recordPersonSyncIds(item, resolvedBody, data, offlineIdMaps) {
+  const path = String(item?.url || "").split("?")[0];
+  if (String(item?.method || "").toUpperCase() !== "POST" || !/\/api\/person\/?$/.test(path)) return;
+  if (!resolvedBody) return;
+  try {
+    const body = JSON.parse(resolvedBody);
+    const offlineClientId = body?.offlineClientId;
+    const realPersonId = data?.person?._id || data?.person?.id;
+    if (realPersonId) {
+      const real = String(realPersonId);
+      if (offlineClientId) {
+        offlineIdMaps.persons.set(String(offlineClientId), real);
+      } else {
+        offlineIdMaps.legacyCreatedPersonIds.push(real);
+      }
+    }
+  } catch {
+    // ignore parse issues
+  }
 }

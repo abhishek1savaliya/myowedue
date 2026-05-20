@@ -63,16 +63,33 @@ function isApiUrl(url) {
   return url.startsWith("/api/") || (url.startsWith("http") && url.includes("/api/"));
 }
 
+function withOfflineClientIdForPersonCreate(url, method, body) {
+  const path = String(url || "").split("?")[0];
+  if (method !== "POST" || !/\/api\/person\/?$/.test(path) || !body) return body;
+  try {
+    const json = JSON.parse(body);
+    if (!json || typeof json !== "object" || json.offlineClientId) return body;
+    const offlineClientId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? `offline-${crypto.randomUUID()}`
+        : `offline-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    return JSON.stringify({ ...json, offlineClientId });
+  } catch {
+    return body;
+  }
+}
+
 async function queueMutationAndRespond(url, method, body, headers) {
+  const queueBody = withOfflineClientIdForPersonCreate(url, method, body);
   const userId = useUserStore.getState().user?._id || null;
   await enqueueMutation({
     url,
     method,
-    body,
+    body: queueBody,
     headers,
     userId,
   });
-  applyOptimisticMutation(url, method, body);
+  applyOptimisticMutation(url, method, queueBody);
   notifyOfflineQueueChanged();
 
   return new Response(
