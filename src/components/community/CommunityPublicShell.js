@@ -133,10 +133,32 @@ export default function CommunityPublicShell({ children, initialUser = null }) {
   const postHref = loggedIn ? "/posts" : "/login?next=/posts";
   const appHref = loggedIn ? "/dashboard" : "/login?next=/dashboard";
 
+  const shellBackdrop = (
+    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.08),transparent_36%),radial-gradient(circle_at_90%_100%,rgba(16,185,129,0.08),transparent_38%)]" />
+  );
+
+  if (!authChecked) {
+    return (
+      <div className="community-shell ui-v2-page relative flex min-h-screen w-full max-w-full flex-col overflow-x-clip bg-background text-foreground">
+        <CommunityStoreBootstrap />
+        {shellBackdrop}
+        <div
+          className="relative z-10 flex min-h-screen flex-1 flex-col items-center justify-center gap-2 px-4 text-zinc-600 dark:text-zinc-400"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
+          <span className="text-sm font-medium">Checking session…</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="community-shell ui-v2-page relative min-h-screen w-full max-w-full overflow-x-clip bg-background text-foreground">
       <CommunityStoreBootstrap />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.08),transparent_36%),radial-gradient(circle_at_90%_100%,rgba(16,185,129,0.08),transparent_38%)]" />
+      {shellBackdrop}
 
       {/* Mobile top bar */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200/80 bg-background/95 px-3 py-2.5 backdrop-blur-md md:hidden dark:border-white/[0.08] dark:bg-slate-950/95">
@@ -148,9 +170,7 @@ export default function CommunityPublicShell({ children, initialUser = null }) {
         </div>
         <div className="flex items-center gap-1.5">
           <PublicModeToggle />
-          {!authChecked ? (
-            <div className="h-7 w-14 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-700" />
-          ) : loggedIn ? (
+          {loggedIn ? (
             <Link
               href="/dashboard"
               className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
@@ -244,14 +264,7 @@ export default function CommunityPublicShell({ children, initialUser = null }) {
 
         <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col lg:flex-row">
           <main className="relative order-2 min-h-0 min-w-0 w-full flex-1 overflow-x-clip border-zinc-200/60 bg-transparent pb-20 md:border-x md:pb-0 lg:order-1 dark:border-white/[0.06]">
-            {authChecked ? (
-              children
-            ) : (
-              <div className="mx-auto flex min-h-[40vh] w-full max-w-xl flex-col items-center justify-center gap-2 px-4 py-12 text-zinc-600 dark:text-zinc-400">
-                <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
-                <span className="text-sm">Checking session…</span>
-              </div>
-            )}
+            {children}
           </main>
 
           <aside
@@ -274,16 +287,12 @@ export default function CommunityPublicShell({ children, initialUser = null }) {
               <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                 Track dues, files, and reminders alongside this community feed.
               </p>
-              {authChecked ? (
-                <Link
-                  href={appHref}
-                  className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-amber-500 py-2.5 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-amber-400"
-                >
-                  {loggedIn ? "Open dashboard" : "Sign in"}
-                </Link>
-              ) : (
-                <div className="mt-4 h-10 w-full animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-700" />
-              )}
+              <Link
+                href={appHref}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-amber-500 py-2.5 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-amber-400"
+              >
+                {loggedIn ? "Open dashboard" : "Sign in"}
+              </Link>
             </div>
 
             <p className="hidden text-xs text-zinc-500 dark:text-zinc-500 lg:block">
