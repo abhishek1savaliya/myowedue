@@ -69,6 +69,16 @@ async function startWorkers() {
   }
 
   console.log(`[worker] Started ${workers.length} workers: ${workers.map((w) => w.name).join(", ")}`);
+
+  if (process.env.ENABLE_CRON === "true") {
+    try {
+      const { startReminderCron } = await import("./src/lib/cron.js");
+      startReminderCron();
+      console.log("[worker] Reminder cron schedules active");
+    } catch (err) {
+      console.error("[worker] Reminder cron failed to start:", err?.message || err);
+    }
+  }
 }
 
 async function shutdown() {

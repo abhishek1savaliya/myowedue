@@ -1162,8 +1162,18 @@ export default function CommunityFeedClient({
 
   const isX = !isPortal && skin === "x";
   const portalMineHome = isPortal;
-  const canInteract = Boolean(currentUserId);
+  const sessionUserId = useUserStore((s) => s.user?.id || "");
+  /** Feed API can omit currentUserId on seeded/cached responses; trust session when signed in. */
+  const viewerUserId = currentUserId || sessionUserId;
+  const canInteract = Boolean(viewerUserId);
   const viewerIsPremium = Boolean(useUserStore((s) => s.user?.isPremium));
+
+  useEffect(() => {
+    if (!isPortal && sessionUserId) {
+      if (sessionUserId !== currentUserId) setCurrentUserId(sessionUserId);
+      setAuthResolved(true);
+    }
+  }, [isPortal, sessionUserId, currentUserId]);
   const feedPosts = useMemo(() => dedupePostsById(posts), [posts]);
 
   const nextCursorRef = useRef(null);
@@ -1197,8 +1207,8 @@ export default function CommunityFeedClient({
 
   /** Refetch liked/shared when session becomes available; ignore user id changes on "all" to avoid double fetch. */
   const tabAuthKey = useMemo(
-    () => (feedTab === "liked" || feedTab === "shared" ? currentUserId || "__guest__" : "__all__"),
-    [feedTab, currentUserId]
+    () => (feedTab === "liked" || feedTab === "shared" ? viewerUserId || "__guest__" : "__all__"),
+    [feedTab, viewerUserId]
   );
 
   const loadFeed = useCallback(
@@ -1206,7 +1216,9 @@ export default function CommunityFeedClient({
       const epoch = feedEpochRef.current + 1;
       feedEpochRef.current = epoch;
 
-      if ((feedTab === "liked" || feedTab === "shared") && !currentUserId) {
+      const activeUserId = currentUserId || useUserStore.getState().user?.id || "";
+
+      if ((feedTab === "liked" || feedTab === "shared") && !activeUserId) {
         setPosts([]);
         setNextCursor(null);
         nextCursorRef.current = null;
@@ -1226,6 +1238,7 @@ export default function CommunityFeedClient({
           const base = prev.length > 0 ? prev : hasSeed ? seedList : [];
           return mergePostsWithPending(base, pending);
         });
+        setCurrentUserId(user?.id || "");
         setLoading(false);
         setAuthResolved(true);
         return;
@@ -1265,6 +1278,7 @@ export default function CommunityFeedClient({
           }
           if (hasSeed) {
             setAuthResolved(true);
+            setCurrentUserId(useUserStore.getState().user?.id || "");
             setError(msg);
             return;
           }
@@ -1274,7 +1288,7 @@ export default function CommunityFeedClient({
         setConfigError(false);
         setPosts(dedupePostsById(data.posts || []));
         setNextCursor(data.nextCursor || null);
-        setCurrentUserId(data.currentUserId || "");
+        setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
         setAuthResolved(true);
         feedHydratedRef.current = true;
       } catch (e) {
@@ -1293,7 +1307,7 @@ export default function CommunityFeedClient({
         }
       }
     },
-    [feedTab, currentUserId, isPortal, portalMineHome, seedList.length, topicFilter]
+    [feedTab, currentUserId, sessionUserId, isPortal, portalMineHome, seedList.length, topicFilter]
   );
 
   useEffect(() => {
@@ -1331,7 +1345,8 @@ export default function CommunityFeedClient({
   const loadMore = useCallback(async () => {
     const cursor = nextCursorRef.current;
     if (!cursor || loadingMoreRef.current) return;
-    if ((feedTab === "liked" || feedTab === "shared") && !currentUserId) return;
+    const activeUserId = currentUserId || useUserStore.getState().user?.id || "";
+    if ((feedTab === "liked" || feedTab === "shared") && !activeUserId) return;
 
     const epoch = feedEpochRef.current;
     loadingMoreRef.current = true;
@@ -1346,14 +1361,14 @@ export default function CommunityFeedClient({
       if (epoch !== feedEpochRef.current) return;
       setPosts((prev) => dedupePostsById([...prev, ...(data.posts || [])]));
       setNextCursor(data.nextCursor || null);
-      setCurrentUserId(data.currentUserId || "");
+      setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
     } catch (e) {
       reportActionError(e.message || "Failed to load more");
     } finally {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [feedTab, currentUserId, reportActionError, portalMineHome, topicFilter]);
+  }, [feedTab, currentUserId, sessionUserId, reportActionError, portalMineHome, topicFilter]);
 
   useEffect(() => {
     const el = loadMoreSentinelRef.current;
@@ -1509,7 +1524,7 @@ export default function CommunityFeedClient({
     );
   }
 
-  if (!authResolved && !isPortal) {
+  if (!authResolved && !isPortal && !sessionUserId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center gap-2 text-zinc-600 dark:text-zinc-400">
         <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
@@ -1567,7 +1582,9 @@ export default function CommunityFeedClient({
     ? "This page shows only your posts. Open Community to read and join the full public feed."
     : topicFilter
       ? "Posts that match this trending topic, newest first. Open the full feed anytime from the link below."
-      : "Anyone can read and share posts. Sign in to publish, like, or comment.";
+      : canInteract
+        ? "You're signed in — post, like, and comment on the public feed."
+        : "Anyone can read and share posts. Sign in to publish, like, or comment.";
 
   const showComposer = authResolved && canInteract;
 
@@ -1701,7 +1718,7 @@ export default function CommunityFeedClient({
             <PostCard
               key={post.id}
               post={post}
-              currentUserId={currentUserId}
+              currentUserId={viewerUserId}
               onLikeToggle={onLikeToggle}
               onRequestShare={setShareTarget}
               onCommentCountChange={bumpCommentCount}

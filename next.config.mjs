@@ -14,7 +14,20 @@ const nextConfig = {
       ...(config.resolve.alias || {}),
       canvas: false,
     };
-    if (!isServer) {
+    if (isServer) {
+      const pkgExternals = ["bullmq", "ioredis", "node-cron"];
+      const prev = config.externals;
+      config.externals = [
+        ...(Array.isArray(prev) ? prev : prev ? [prev] : []),
+        ...pkgExternals,
+        ({ request }, callback) => {
+          if (request && (pkgExternals.includes(request) || request.startsWith("bullmq/"))) {
+            return callback(null, `commonjs ${request}`);
+          }
+          callback();
+        },
+      ];
+    } else {
       const stub = false;
       config.resolve.alias = {
         ...config.resolve.alias,

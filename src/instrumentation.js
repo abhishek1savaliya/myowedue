@@ -1,6 +1,7 @@
-export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-
-  const { startReminderCron } = await import("@/lib/cron");
-  startReminderCron();
-}
+/**
+ * Keep this hook free of mongoose, bullmq, and node-cron so Next can compile
+ * instrumentation for all runtimes.
+ *
+ * Scheduled jobs run in the BullMQ worker when ENABLE_CRON=true (`npm run worker`).
+ */
+export async function register() {}

@@ -11,9 +11,17 @@ import { activeQuery } from "@/lib/bin";
 import { refreshExchangeRatesIfNeeded } from "@/lib/exchangeRates";
 import { generateDailyNotificationsForUser } from "@/lib/notifications";
 import { publishNotificationEvent } from "@/lib/redis";
-import { enqueueCronJob } from "@/lib/queue/producers";
-
 let started = false;
+
+/** Lazy import so instrumentation → cron does not pull bullmq into the Next bundle. */
+async function enqueueCronJob(jobName, data) {
+  try {
+    const { enqueueCronJob: enqueue } = await import("@/lib/queue/producers");
+    return enqueue(jobName, data);
+  } catch {
+    return false;
+  }
+}
 
 export function startReminderCron() {
   if (started || process.env.ENABLE_CRON !== "true") return;
