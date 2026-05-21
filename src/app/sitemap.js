@@ -6,7 +6,7 @@ export default async function sitemap() {
   const siteUrl = getCommunitySiteUrl();
   const now = new Date();
 
-  void backfillCommunityPostSeoBatch(40);
+  await backfillCommunityPostSeoBatch(40).catch(() => {});
 
   const staticFromNav = PUBLIC_SITELINKS.map((link) => ({
     url: `${siteUrl}${link.path}`,
