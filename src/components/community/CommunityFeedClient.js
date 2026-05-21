@@ -1143,8 +1143,15 @@ export default function CommunityFeedClient({
   const [loading, setLoading] = useState(() => seedList.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
-  const [currentUserId, setCurrentUserId] = useState("");
-  const [authResolved, setAuthResolved] = useState(() => !isPortal);
+  const [currentUserId, setCurrentUserId] = useState(() => {
+    if (isPortal) return "";
+    return useUserStore.getState().user?.id || "";
+  });
+  const [authResolved, setAuthResolved] = useState(() => {
+    if (isPortal) return true;
+    const { status } = useUserStore.getState();
+    return status === "ready" || status === "error";
+  });
   const [composer, setComposer] = useState("");
   const [posting, setPosting] = useState(false);
   const [configError, setConfigError] = useState(false);
@@ -1502,6 +1509,15 @@ export default function CommunityFeedClient({
     );
   }
 
+  if (!authResolved && !isPortal) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center gap-2 text-zinc-600 dark:text-zinc-400">
+        <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+        <span className="text-sm">Loading community…</span>
+      </div>
+    );
+  }
+
   if (loading && !feedHydratedRef.current && !(isX && !isPortal)) {
     if (isX) {
       return (
@@ -1553,7 +1569,7 @@ export default function CommunityFeedClient({
       ? "Posts that match this trending topic, newest first. Open the full feed anytime from the link below."
       : "Anyone can read and share posts. Sign in to publish, like, or comment.";
 
-  const showComposer = isPortal ? authResolved : true;
+  const showComposer = authResolved && canInteract;
 
   const tabBar = (
     <div

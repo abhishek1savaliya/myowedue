@@ -1,4 +1,5 @@
 import CommunityPublicShell from "@/components/community/CommunityPublicShell";
+import { getCommunitySessionUser } from "@/lib/community-session-user";
 
 export const metadata = {
   alternates: {
@@ -12,6 +13,7 @@ export const metadata = {
  * Keeps the public community chrome mounted when moving between the feed and a post
  * so Trending, Settings, and auth state are not torn down and refetched on every navigation.
  */
-export default function CommunityLayout({ children }) {
-  return <CommunityPublicShell>{children}</CommunityPublicShell>;
+export default async function CommunityLayout({ children }) {
+  const initialUser = await getCommunitySessionUser();
+  return <CommunityPublicShell initialUser={initialUser}>{children}</CommunityPublicShell>;
 }

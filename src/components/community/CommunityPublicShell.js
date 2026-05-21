@@ -4,14 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Bell, Home, Menu, PenSquare, Search, Settings2, TrendingUp, X } from "lucide-react";
+import { Bell, Home, Loader2, Menu, PenSquare, Search, Settings2, TrendingUp, X } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
 import CommunitySidebarProfile from "@/components/community/CommunitySidebarProfile";
 import SuggestedCreatorsRail from "@/components/community/SuggestedCreatorsRail";
 import TrendingTopicsFromApi from "@/components/community/TrendingTopicsFromApi";
 import CommunityStoreBootstrap from "@/components/community/CommunityStoreBootstrap";
 import { COMMUNITY_BTN_PRIMARY } from "@/lib/community-ui";
-import { useUserStore } from "@/stores/useUserStore";
+import { useCommunityAuth } from "@/hooks/useCommunityAuth";
 
 const navItem =
   "community-nav-item group flex w-full min-w-0 items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[15px] font-medium text-zinc-600 transition hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-zinc-100";
@@ -98,15 +98,10 @@ function SidebarContent({
   );
 }
 
-export default function CommunityPublicShell({ children }) {
+export default function CommunityPublicShell({ children, initialUser = null }) {
   const pathname = usePathname();
-  const user = useUserStore((s) => s.user);
-  const status = useUserStore((s) => s.status);
+  const { authChecked, loggedIn } = useCommunityAuth(initialUser);
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const loggedIn = Boolean(user);
-  /** Cached session user counts as resolved — avoids header skeleton on refresh while /api/auth/me revalidates. */
-  const authChecked = status === "ready" || status === "error" || Boolean(user);
 
   const homeActive = pathname === "/community" || pathname.startsWith("/community/post/");
   const searchActive = pathname.startsWith("/community/search");
@@ -249,7 +244,14 @@ export default function CommunityPublicShell({ children }) {
 
         <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col lg:flex-row">
           <main className="relative order-2 min-h-0 min-w-0 w-full flex-1 overflow-x-clip border-zinc-200/60 bg-transparent pb-20 md:border-x md:pb-0 lg:order-1 dark:border-white/[0.06]">
-            {children}
+            {authChecked ? (
+              children
+            ) : (
+              <div className="mx-auto flex min-h-[40vh] w-full max-w-xl flex-col items-center justify-center gap-2 px-4 py-12 text-zinc-600 dark:text-zinc-400">
+                <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                <span className="text-sm">Checking session…</span>
+              </div>
+            )}
           </main>
 
           <aside
