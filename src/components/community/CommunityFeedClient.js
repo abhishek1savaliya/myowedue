@@ -1172,11 +1172,11 @@ export default function CommunityFeedClient({
   const viewerIsPremium = Boolean(useUserStore((s) => s.user?.isPremium));
 
   useEffect(() => {
-    if (!isPortal && sessionUserId) {
-      if (sessionUserId !== currentUserId) setCurrentUserId(sessionUserId);
+    if (!isPortal && sessionUserId && !authResolved) {
+      setCurrentUserId(sessionUserId);
       setAuthResolved(true);
     }
-  }, [isPortal, sessionUserId, currentUserId]);
+  }, [isPortal, sessionUserId, authResolved]);
   const feedPosts = useMemo(() => dedupePostsById(posts), [posts]);
 
   const nextCursorRef = useRef(null);
@@ -1310,7 +1310,7 @@ export default function CommunityFeedClient({
         }
       }
     },
-    [feedTab, currentUserId, sessionUserId, isPortal, portalMineHome, seedList.length, topicFilter]
+    [feedTab, viewerUserId, isPortal, portalMineHome, seedList.length, topicFilter]
   );
 
   useEffect(() => {
@@ -1375,7 +1375,7 @@ export default function CommunityFeedClient({
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [feedTab, currentUserId, sessionUserId, reportActionError, portalMineHome, topicFilter]);
+  }, [feedTab, viewerUserId, reportActionError, portalMineHome, topicFilter]);
 
   useEffect(() => {
     const el = loadMoreSentinelRef.current;
