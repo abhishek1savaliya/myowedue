@@ -363,6 +363,10 @@ export default function CommunityProfileClient({ username: usernameParam }) {
                       >
                         {followingCount} following
                       </Link>
+                      <span className="mx-2 text-zinc-300 dark:text-zinc-600">·</span>
+                      <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                        {profilePosts.length} {profilePosts.length === 1 ? "post" : "posts"}
+                      </span>
                     </p>
                     {joinedLabel ? (
                       <p className="mt-4 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
