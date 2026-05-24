@@ -17,7 +17,8 @@ function isPublicPath(pathname) {
     pathname.startsWith("/contact-us") ||
     pathname.startsWith("/privacy-policy") ||
     pathname.startsWith("/login") ||
-    pathname.startsWith("/signup")
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/community")
   );
 }
 
