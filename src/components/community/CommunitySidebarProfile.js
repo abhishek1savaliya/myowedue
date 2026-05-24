@@ -46,7 +46,10 @@ export default function CommunitySidebarProfile({ loggedIn, authChecked = true }
 
   return (
     <div className={`${COMMUNITY_GLASS_CARD} w-full p-4`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Your profile</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Your profile</p>
+        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{name}</p>
+      </div>
       <Link
         href={profileHref}
         className="mt-3 flex w-full min-w-0 items-center gap-3 rounded-xl p-1 transition hover:bg-white/5"
