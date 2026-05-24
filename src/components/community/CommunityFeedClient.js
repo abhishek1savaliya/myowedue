@@ -1247,6 +1247,13 @@ export default function CommunityFeedClient({
         return;
       }
 
+      if (hasSeed && !force) {
+        setLoading(false);
+        setAuthResolved(true);
+        feedHydratedRef.current = true;
+        return;
+      }
+
       if (!hasSeed) {
         setLoading(true);
         setError("");
