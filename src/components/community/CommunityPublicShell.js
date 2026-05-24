@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { Children, cloneElement, isValidElement, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Bell, Home, Loader2, Menu, PenSquare, Search, Settings2, TrendingUp, X } from "lucide-react";
 import PublicModeToggle from "@/components/PublicModeToggle";
