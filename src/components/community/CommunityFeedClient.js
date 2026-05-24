@@ -1251,6 +1251,15 @@ export default function CommunityFeedClient({
         setLoading(false);
         setAuthResolved(true);
         feedHydratedRef.current = true;
+        const res = await fetch(buildPostsQuery(feedTab, null, portalMineHome, topicFilter), {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          setNextCursor(data.nextCursor || null);
+          nextCursorRef.current = data.nextCursor || null;
+        }
         return;
       }
 
