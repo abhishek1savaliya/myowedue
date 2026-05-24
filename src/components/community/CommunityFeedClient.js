@@ -1114,7 +1114,7 @@ function dedupePostsById(posts) {
 }
 
 /**
- * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x"; containerClassName?: string; initialFeedPosts?: Array<object> | null }} props
+ * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x"; containerClassName?: string; initialFeedPosts?: Array<object> | null; initialUser?: object | null }} props
  */
 export default function CommunityFeedClient({
   variant = "portal",
@@ -1123,6 +1123,7 @@ export default function CommunityFeedClient({
   skin = "default",
   containerClassName = "",
   initialFeedPosts = null,
+  initialUser = null,
 }) {
   const isPortal = variant === "portal";
   const router = useRouter();
@@ -1145,10 +1146,11 @@ export default function CommunityFeedClient({
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState(() => {
     if (isPortal) return "";
-    return useUserStore.getState().user?.id || "";
+    return initialUser?.id || useUserStore.getState().user?.id || "";
   });
   const [authResolved, setAuthResolved] = useState(() => {
     if (isPortal) return true;
+    if (initialUser) return true;
     const { status } = useUserStore.getState();
     return status === "ready" || status === "error";
   });
@@ -1159,6 +1161,7 @@ export default function CommunityFeedClient({
   const [feedTab, setFeedTab] = useState("all");
   const [shareTarget, setShareTarget] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const skipNextCommunityMutateRef = useRef(false);
 
   const isX = !isPortal && skin === "x";
   const portalMineHome = isPortal;
@@ -1321,6 +1324,10 @@ export default function CommunityFeedClient({
   useEffect(() => {
     const onQueueOrCommunitySync = () => {
       void mergePendingIntoPosts();
+      if (skipNextCommunityMutateRef.current) {
+        skipNextCommunityMutateRef.current = false;
+        return;
+      }
       if (isOnline()) void loadFeed({ force: true, isCancelled: () => false });
     };
     window.addEventListener("owedue-offline-queue-changed", onQueueOrCommunitySync);
@@ -1431,6 +1438,7 @@ export default function CommunityFeedClient({
           const optimistic = buildOptimisticCommunityPost({ body: t, user });
           setPosts((prev) => dedupePostsById([optimistic, ...prev]));
         }
+        skipNextCommunityMutateRef.current = true;
         dispatchCommunityMutate();
         return;
       }
@@ -1454,6 +1462,7 @@ export default function CommunityFeedClient({
           setPosts((prev) => dedupePostsById([data.post, ...prev]));
         }
       }
+      skipNextCommunityMutateRef.current = true;
       dispatchCommunityMutate();
     } catch (err) {
       reportActionError(err.message || "Failed to post");
@@ -1479,6 +1488,7 @@ export default function CommunityFeedClient({
         }
         return;
       }
+      skipNextCommunityMutateRef.current = true;
       dispatchCommunityMutate();
       const liked = data.liked;
       if (feedTab === "liked" && !liked) {
@@ -1513,6 +1523,7 @@ export default function CommunityFeedClient({
         }
         return mapped;
       });
+      skipNextCommunityMutateRef.current = true;
       dispatchCommunityMutate();
     },
     [feedTab, canInteract]

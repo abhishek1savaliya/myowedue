@@ -133,6 +133,16 @@ export default function CommunityPublicShell({ children, initialUser = null }) {
   const postHref = loggedIn ? "/posts" : "/login?next=/posts";
   const appHref = loggedIn ? "/dashboard" : "/login?next=/dashboard";
 
+  const childrenWithInitialUser = useMemo(
+    () =>
+      !initialUser
+        ? children
+        : Children.map(children, (child) =>
+            isValidElement(child) ? cloneElement(child, { initialUser }) : child
+          ),
+    [children, initialUser]
+  );
+
   const shellBackdrop = (
     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.08),transparent_36%),radial-gradient(circle_at_90%_100%,rgba(16,185,129,0.08),transparent_38%)]" />
   );
@@ -264,7 +274,7 @@ export default function CommunityPublicShell({ children, initialUser = null }) {
 
         <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col lg:flex-row">
           <main className="relative order-2 min-h-0 min-w-0 w-full flex-1 overflow-x-clip border-zinc-200/60 bg-transparent pb-20 md:border-x md:pb-0 lg:order-1 dark:border-white/[0.06]">
-            {children}
+            {childrenWithInitialUser}
           </main>
 
           <aside
