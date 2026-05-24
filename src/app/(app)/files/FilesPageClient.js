@@ -11,6 +11,7 @@ import {
   FolderPlus,
   Globe,
   Grid2x2,
+  Camera,
   LayoutGrid,
   List,
   LoaderCircle,
@@ -262,6 +263,8 @@ export default function FilesPageClient() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState({ open: false, fileIds: [] });
 
   const loadMoreFilesRef = useRef(null);
+  const uploadFileInputRef = useRef(null);
+  const capturePhotoInputRef = useRef(null);
 
   // Memos
   const usageRatio = useMemo(() => {
@@ -479,8 +482,7 @@ export default function FilesPageClient() {
   }, [filesHasMore, loadMoreFiles, loading, loadingMoreFiles]);
 
   // File upload
-  function handleFilePick(event) {
-    const pickedFiles = Array.from(event.target.files || []);
+  function selectUploadFiles(pickedFiles) {
     const nextFiles = pickedFiles.slice(0, MAX_UPLOAD_FILES);
     setSelectedUploadFiles(nextFiles);
     setUploadProgress(initialUploadProgress);
@@ -496,17 +498,31 @@ export default function FilesPageClient() {
     } else if (nextFiles.length > 1) {
       setUploadState((prev) => ({ ...prev, title: "" }));
     }
+    return nextFiles;
   }
 
-  async function handleUpload(event) {
-    event.preventDefault();
-    if (selectedUploadFiles.length === 0 || uploading) return;
+  function handleFilePick(event) {
+    selectUploadFiles(Array.from(event.target.files || []));
+  }
+
+  async function handleCameraPick(event) {
+    const nextFiles = selectUploadFiles(Array.from(event.target.files || []));
+    if (nextFiles.length === 0) return;
+    await uploadFiles(nextFiles);
+  }
+
+  async function uploadFiles(filesToUpload) {
+    if (filesToUpload.length === 0 || uploading) return;
 
     setUploading(true);
+    const totalBytes = filesToUpload.reduce((total, file) => total + Number(file.size || 0), 0);
+    const uploadTitle = filesToUpload.length === 1
+      ? uploadState.title || String(filesToUpload[0].name || "").replace(/\.[^.]+$/, "")
+      : "";
     setUploadProgress({
       percent: 0,
       loaded: 0,
-      total: selectedUploadTotalBytes,
+      total: totalBytes,
       remainingSeconds: null,
       status: "preparing",
     });
@@ -517,15 +533,15 @@ export default function FilesPageClient() {
       let completedBytes = 0;
       const startedAt = Date.now();
 
-      for (let index = 0; index < selectedUploadFiles.length; index += 1) {
-        const uploadFile = selectedUploadFiles[index];
+      for (let index = 0; index < filesToUpload.length; index += 1) {
+        const uploadFile = filesToUpload[index];
 
         setUploadProgress((prev) => ({
           ...prev,
           status: "preparing",
           currentFileName: uploadFile.name,
           currentFileIndex: index + 1,
-          fileCount: selectedUploadFiles.length,
+          fileCount: filesToUpload.length,
         }));
 
         const signatureResponse = await fetch("/api/files/upload-signature", {
@@ -556,17 +572,17 @@ export default function FilesPageClient() {
           const totalLoaded = completedBytes + loaded;
           const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.1);
           const bytesPerSecond = totalLoaded / elapsedSeconds;
-          const remainingSeconds = bytesPerSecond > 0 ? (selectedUploadTotalBytes - totalLoaded) / bytesPerSecond : null;
+          const remainingSeconds = bytesPerSecond > 0 ? (totalBytes - totalLoaded) / bytesPerSecond : null;
 
           setUploadProgress({
-            percent: Math.min(99, Math.round((totalLoaded / selectedUploadTotalBytes) * 100)),
+            percent: Math.min(99, Math.round((totalLoaded / totalBytes) * 100)),
             loaded: totalLoaded,
-            total: selectedUploadTotalBytes,
+            total: totalBytes,
             remainingSeconds,
             status: progress.status === "saving" ? "saving" : "uploading",
             currentFileName: uploadFile.name,
             currentFileIndex: index + 1,
-            fileCount: selectedUploadFiles.length,
+            fileCount: filesToUpload.length,
           });
         });
 
@@ -574,7 +590,7 @@ export default function FilesPageClient() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            title: selectedUploadFiles.length === 1 ? uploadState.title : "",
+            title: uploadTitle,
             isPublic: uploadState.isPublic,
             originalName: uploadFile.name,
             mimeType: uploadFile.type,
@@ -601,14 +617,16 @@ export default function FilesPageClient() {
 
       setSelectedUploadFiles([]);
       setUploadState(initialUploadState);
-      setUploadProgress((prev) => ({ ...prev, percent: 100, loaded: selectedUploadTotalBytes, remainingSeconds: 0, status: "complete" }));
+      setUploadProgress((prev) => ({ ...prev, percent: 100, loaded: totalBytes, remainingSeconds: 0, status: "complete" }));
       setFiles((prev) => [...uploadedFiles.reverse(), ...prev]);
-      setUsageBytes((prev) => prev + selectedUploadTotalBytes);
-      setMessage(selectedUploadFiles.length === 1 ? "File uploaded successfully." : `${selectedUploadFiles.length} files uploaded successfully.`);
+      setUsageBytes((prev) => prev + totalBytes);
+      setMessage(filesToUpload.length === 1 ? "File uploaded successfully." : `${filesToUpload.length} files uploaded successfully.`);
       setUploadModalOpen(false);
 
       const fileInput = document.getElementById("vault-file-input");
       if (fileInput) fileInput.value = "";
+      const cameraInput = document.getElementById("vault-camera-input");
+      if (cameraInput) cameraInput.value = "";
       loadFiles();
     } catch (caughtError) {
       setUploadProgress((prev) => ({ ...prev, status: "error" }));
@@ -616,6 +634,11 @@ export default function FilesPageClient() {
     } finally {
       setUploading(false);
     }
+  }
+
+  async function handleUpload(event) {
+    event.preventDefault();
+    await uploadFiles(selectedUploadFiles);
   }
 
   // Folder operations
@@ -1534,7 +1557,7 @@ export default function FilesPageClient() {
                 </button>
               </div>
 
-              <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center">
+              <div className="mt-5 flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center">
                 <Upload className="h-7 w-7 text-zinc-500" />
                 <span className="mt-3 text-sm font-medium text-zinc-700">
                   {selectedUploadFiles.length === 1
@@ -1548,8 +1571,46 @@ export default function FilesPageClient() {
                     ? `${formatBytes(selectedUploadTotalBytes)} selected`
                     : `You can upload up to ${MAX_UPLOAD_FILES} files at once.`}
                 </span>
-                <input id="vault-file-input" type="file" multiple onChange={handleFilePick} disabled={uploading} className="hidden" />
-              </label>
+                <div className="mt-5 grid w-full gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => uploadFileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 disabled:opacity-60"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Choose files
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => capturePhotoInputRef.current?.click()}
+                    disabled={uploading}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    <Camera className="h-4 w-4" />
+                    Take photo & upload
+                  </button>
+                </div>
+                <input
+                  id="vault-file-input"
+                  ref={uploadFileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFilePick}
+                  disabled={uploading}
+                  className="hidden"
+                />
+                <input
+                  id="vault-camera-input"
+                  ref={capturePhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleCameraPick}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </div>
 
               <div className="mt-4 space-y-4">
                 <input
