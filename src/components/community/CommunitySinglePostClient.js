@@ -7,6 +7,7 @@ import BackButton from "@/components/BackButton";
 import { PostCard } from "@/components/community/CommunityFeedClient";
 import SharePostModal from "@/components/community/SharePostModal";
 import { dispatchCommunityMutate } from "@/lib/community-mutate-event";
+import { useUserStore } from "@/stores/useUserStore";
 
 /**
  * @param {{ postId: string; loginNextPath: string; backHref: string; skin: "x" | "default"; initialPost?: object | null }} props
@@ -20,6 +21,8 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
   const [currentUserId, setCurrentUserId] = useState("");
   const [shareTarget, setShareTarget] = useState(null);
   const isX = skin === "x";
+  const sessionUserId = useUserStore((s) => s.user?.id || "");
+  const viewerUserId = currentUserId || sessionUserId;
 
   const loadPost = useCallback(async () => {
     setLoading(true);
@@ -29,7 +32,7 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Failed to load post");
       setPost(data.post || null);
-      setCurrentUserId(data.currentUserId || "");
+      setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
     } catch (e) {
       setError(e.message || "Failed to load");
       setPost(null);
@@ -43,7 +46,7 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
     void loadPost();
   }, [loadPost, hasInitialPost]);
 
-  const canInteract = Boolean(currentUserId);
+  const canInteract = Boolean(viewerUserId);
 
   const onLikeToggle = useCallback(
     async (p) => {
@@ -111,7 +114,7 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
       <PostCard
         post={post}
         mode="detail"
-        currentUserId={currentUserId}
+        currentUserId={viewerUserId}
         onLikeToggle={onLikeToggle}
         onRequestShare={setShareTarget}
         onCommentCountChange={bumpCommentCount}

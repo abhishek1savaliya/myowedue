@@ -244,6 +244,8 @@ export default function FilesPageClient() {
   const [uploadState, setUploadState] = useState(initialUploadState);
   const [uploadProgress, setUploadProgress] = useState(initialUploadProgress);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [webcamOpen, setWebcamOpen] = useState(false);
+  const [webcamStarting, setWebcamStarting] = useState(false);
   const [message, setMessage] = useState("");
 
   // File menu states
@@ -265,6 +267,9 @@ export default function FilesPageClient() {
   const loadMoreFilesRef = useRef(null);
   const uploadFileInputRef = useRef(null);
   const capturePhotoInputRef = useRef(null);
+  const webcamVideoRef = useRef(null);
+  const webcamCanvasRef = useRef(null);
+  const webcamStreamRef = useRef(null);
 
   // Memos
   const usageRatio = useMemo(() => {
@@ -481,6 +486,18 @@ export default function FilesPageClient() {
     return () => observer.disconnect();
   }, [filesHasMore, loadMoreFiles, loading, loadingMoreFiles]);
 
+  useEffect(() => {
+    const video = webcamVideoRef.current;
+    if (!video || !webcamStreamRef.current) return;
+    video.srcObject = webcamStreamRef.current;
+  }, [webcamOpen]);
+
+  useEffect(() => {
+    if (uploadModalOpen) return undefined;
+    stopWebcamCapture();
+    return undefined;
+  }, [uploadModalOpen]);
+
   // File upload
   function selectUploadFiles(pickedFiles) {
     const nextFiles = pickedFiles.slice(0, MAX_UPLOAD_FILES);
@@ -509,6 +526,72 @@ export default function FilesPageClient() {
     const nextFiles = selectUploadFiles(Array.from(event.target.files || []));
     if (nextFiles.length === 0) return;
     await uploadFiles(nextFiles);
+  }
+
+  function stopWebcamCapture() {
+    if (webcamStreamRef.current) {
+      webcamStreamRef.current.getTracks().forEach((track) => track.stop());
+      webcamStreamRef.current = null;
+    }
+    if (webcamVideoRef.current) webcamVideoRef.current.srcObject = null;
+    setWebcamOpen(false);
+    setWebcamStarting(false);
+  }
+
+  async function openWebcamCapture() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      capturePhotoInputRef.current?.click();
+      return;
+    }
+
+    setMessage("");
+    setWebcamStarting(true);
+    try {
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+      webcamStreamRef.current = stream;
+      setWebcamOpen(true);
+      window.setTimeout(() => {
+        if (webcamVideoRef.current) webcamVideoRef.current.srcObject = stream;
+      }, 0);
+    } catch (caughtError) {
+      setMessage(caughtError?.message || "Camera access was blocked or no camera was found.");
+    } finally {
+      setWebcamStarting(false);
+    }
+  }
+
+  async function captureWebcamPhoto() {
+    const video = webcamVideoRef.current;
+    const canvas = webcamCanvasRef.current;
+    if (!video || !canvas) return;
+
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    context.drawImage(video, 0, 0, width, height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) {
+      setMessage("Could not capture a photo from the camera.");
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const photoFile = new File([blob], `camera-photo-${timestamp}.jpg`, { type: "image/jpeg" });
+    stopWebcamCapture();
+    selectUploadFiles([photoFile]);
+    await uploadFiles([photoFile]);
   }
 
   async function uploadFiles(filesToUpload) {
@@ -1583,14 +1666,45 @@ export default function FilesPageClient() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => capturePhotoInputRef.current?.click()}
-                    disabled={uploading}
+                    onClick={openWebcamCapture}
+                    disabled={uploading || webcamStarting}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    <Camera className="h-4 w-4" />
-                    Take photo & upload
+                    {webcamStarting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                    {webcamStarting ? "Opening camera..." : "Take photo & upload"}
                   </button>
                 </div>
+                {webcamOpen && (
+                  <div className="mt-4 w-full rounded-2xl border border-zinc-200 bg-white p-3 text-left">
+                    <video
+                      ref={webcamVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="aspect-video w-full rounded-xl bg-black object-cover"
+                    />
+                    <canvas ref={webcamCanvasRef} className="hidden" />
+                    <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={stopWebcamCapture}
+                        disabled={uploading}
+                        className="inline-flex items-center justify-center rounded-xl border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-700 disabled:opacity-60"
+                      >
+                        Close camera
+                      </button>
+                      <button
+                        type="button"
+                        onClick={captureWebcamPhoto}
+                        disabled={uploading}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        {uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                        Capture & upload
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <input
                   id="vault-file-input"
                   ref={uploadFileInputRef}
