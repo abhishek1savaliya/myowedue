@@ -131,7 +131,6 @@ function CommentBranch({
   postId,
   depth,
   onRefresh,
-  onThreadMutate,
   onOptimisticReply,
   currentUserId,
   canInteract,
@@ -177,7 +176,6 @@ function CommentBranch({
       if (!res.ok) throw new Error(data.message || "Failed");
       if (typeof data.commentLikeCount === "number") setCommentLikeCount(data.commentLikeCount);
       if (typeof data.liked === "boolean") setCommentLiked(data.liked);
-      onThreadMutate?.();
     } catch (err) {
       setCommentLiked(prevLiked);
       setCommentLikeCount(prevCount);
@@ -218,7 +216,6 @@ function CommentBranch({
         onOptimisticReply?.(optimistic);
         onNotifyError?.(data.message || "Reply saved offline. It will sync when you're back online.");
       } else {
-        onThreadMutate?.();
         onRefresh();
       }
     } catch (err) {
@@ -342,7 +339,6 @@ function CommentBranch({
               postId={postId}
               depth={depth + 1}
               onRefresh={onRefresh}
-              onThreadMutate={onThreadMutate}
               onOptimisticReply={onOptimisticReply}
               currentUserId={currentUserId}
               canInteract={canInteract}
@@ -641,7 +637,6 @@ export function PostCard({
         await loadComments(isDetail ? false : undefined);
         onCommentCountChange(post.id, 1);
       }
-      onCommunityMutate?.();
     } catch (err) {
       onNotifyError?.(err.message || "Failed to comment");
     } finally {
@@ -915,7 +910,6 @@ export function PostCard({
                         void loadComments(isDetail ? false : undefined);
                         onCommentCountChange(post.id, 1);
                       }}
-                      onThreadMutate={onCommunityMutate}
                       onOptimisticReply={handleOptimisticComment}
                       currentUserId={currentUserId}
                       canInteract={canInteract}
@@ -1038,7 +1032,6 @@ export function PostCard({
                     void loadComments(isDetail ? false : undefined);
                     onCommentCountChange(post.id, 1);
                   }}
-                  onThreadMutate={onCommunityMutate}
                   onOptimisticReply={handleOptimisticComment}
                   currentUserId={currentUserId}
                   canInteract={canInteract}
