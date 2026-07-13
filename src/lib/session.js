@@ -30,25 +30,30 @@ export async function getSessionUser(request) {
   const decoded = verifyToken(token);
   if (!decoded?.userId) return null;
 
-  await connectDB();
-  if (decoded?.sessionId) {
-    const session = await UserSession.findOne({
-      userId: decoded.userId,
-      sessionId: String(decoded.sessionId),
-      status: "active",
-    }).select("_id");
-    if (!session) return null;
+  try {
+    await connectDB();
+    if (decoded?.sessionId) {
+      const session = await UserSession.findOne({
+        userId: decoded.userId,
+        sessionId: String(decoded.sessionId),
+        status: "active",
+      }).select("_id");
+      if (!session) return null;
 
-    UserSession.updateOne(
-      { userId: decoded.userId, sessionId: String(decoded.sessionId), status: "active" },
-      { $set: { lastSeenAt: new Date() } }
-    ).catch(() => {});
+      UserSession.updateOne(
+        { userId: decoded.userId, sessionId: String(decoded.sessionId), status: "active" },
+        { $set: { lastSeenAt: new Date() } }
+      ).catch(() => {});
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) return null;
+
+    return user;
+  } catch (error) {
+    console.error("[session] database unavailable:", error?.message || error);
+    return null;
   }
-
-  const user = await User.findById(decoded.userId);
-  if (!user) return null;
-
-  return user;
 }
 
 export async function requireUser(request) {
