@@ -8,12 +8,17 @@ import { persistCommunityPostSeo, revalidateCommunityPostSeo } from "@/lib/commu
 import { clearCommunityCaches } from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { hasActivePremium } from "@/lib/subscription";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
 import {
+  deletePost,
+  deletePostTopics,
   fetchCommentCountsForPosts,
   fetchPostById,
+  fetchPostByIdFull,
   fetchPostLikesForPosts,
+  insertPostTopics,
   isCommunityDbConfigured,
+  updatePostBody,
 } from "@/lib/community-db";
 import {
   aggregateEngagementWithPrivateLikes,
@@ -24,15 +29,12 @@ import {
 export async function GET(request, { params }) {
   const user = await getSessionUser(request);
 
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return fail("Community database is not configured.", 503);
   }
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return fail("Community database is not configured.", 503);
 
   const { id: postId } = await params;
   if (!postId) return fail("Missing post id", 400);
@@ -66,7 +68,7 @@ export async function GET(request, { params }) {
       liked: likedByMe.has(row.id),
     };
     const [verified] = await attachAuthorVerifiedToPosts([base]);
-    const [post] = await attachPrivacyAwareAuthorLabels(supabase, [verified], currentUserId);
+    const [post] = await attachPrivacyAwareAuthorLabels([verified], currentUserId);
 
     return ok({ post, currentUserId, viewer: communityViewerPayload(user) });
   } catch (err) {
@@ -81,15 +83,16 @@ export async function PATCH(request, { params }) {
   const { user, error } = await requireUser(request);
   if (error) return error;
 
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return fail("Community database is not configured.", 503);
   }
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return fail("Community database is not configured.", 503);
+  if (!isCommunityDbConfigured()) {
+    return fail("Community database is not configured.", 503);
+  }
 
   const { id: postId } = await params;
   if (!postId) return fail("Missing post id", 400);
@@ -106,16 +109,14 @@ export async function PATCH(request, { params }) {
     return fail("Post must be 1–280 characters.", 422);
   }
 
-  const { data: row, error: qErr } = await supabase
-    .from("community_posts")
-    .select("id, author_id, created_at")
-    .eq("id", postId)
-    .maybeSingle();
-
-  if (qErr) {
-    const mapped = mapCommunitySupabaseError(qErr.message, setup);
+  let row;
+  try {
+    row = await fetchPostByIdFull(postId);
+  } catch (qErr) {
+    const message = qErr instanceof Error ? qErr.message : String(qErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(qErr.message || "Failed to load post", 500);
+    return fail(message || "Failed to load post", 500);
   }
   if (!row) return fail("Post not found", 404);
 
@@ -131,73 +132,55 @@ export async function PATCH(request, { params }) {
     return fail("You can only edit a post within 5 minutes of posting.", 403);
   }
 
-  const updatedAt = new Date().toISOString();
-  const { error: updErr } = await supabase
-    .from("community_posts")
-    .update({ body, updated_at: updatedAt })
-    .eq("id", postId);
-
-  if (updErr) {
-    const mapped = mapCommunitySupabaseError(updErr.message, setup);
+  try {
+    await updatePostBody(postId, body);
+  } catch (updErr) {
+    const message = updErr instanceof Error ? updErr.message : String(updErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(updErr.message || "Failed to update post", 500);
+    return fail(message || "Failed to update post", 500);
   }
 
-  const { error: delTopicsErr } = await supabase.from("post_topics").delete().eq("post_id", postId);
-  if (delTopicsErr) {
-    const msg = String(delTopicsErr.message || "").toLowerCase();
+  try {
+    await deletePostTopics(postId);
+  } catch (delTopicsErr) {
+    const msg = String(delTopicsErr?.message || "").toLowerCase();
     const missing = msg.includes("post_topics") && (msg.includes("does not exist") || msg.includes("schema"));
-    if (!missing) console.warn("[community] post_topics delete:", delTopicsErr.message);
+    if (!missing) console.warn("[community] post_topics delete:", delTopicsErr?.message);
   }
 
   const topics = extractPostTopics(body);
   if (topics.length > 0) {
     const topicRows = topics.map((topic) => ({ post_id: postId, topic }));
-    const { error: topicErr } = await supabase.from("post_topics").insert(topicRows);
-    if (topicErr) {
-      const msg = String(topicErr.message || "").toLowerCase();
+    try {
+      await insertPostTopics(topicRows);
+    } catch (topicErr) {
+      const msg = String(topicErr?.message || "").toLowerCase();
       const missing = msg.includes("post_topics") && (msg.includes("does not exist") || msg.includes("schema"));
-      if (!missing) console.warn("[community] post_topics insert:", topicErr.message);
+      if (!missing) console.warn("[community] post_topics insert:", topicErr?.message);
     }
   }
 
   await clearCommunityCaches();
 
   const currentUserId = String(user._id);
-  const { data: fresh, error: freshErr } = await supabase
-    .from("community_posts")
-    .select("id, author_id, author_name, body, share_count, created_at, updated_at")
-    .eq("id", postId)
-    .maybeSingle();
-
-  if (freshErr || !fresh) {
+  let fresh;
+  try {
+    fresh = await fetchPostByIdFull(postId);
+  } catch {
     return fail("Post updated but could not reload.", 500);
   }
+  if (!fresh) return fail("Post updated but could not reload.", 500);
 
-  const [likesRes, commentsRes] = await Promise.all([
-    isCommunityDbConfigured()
-      ? fetchPostLikesForPosts([postId]).then((data) => ({ data, error: null }))
-      : supabase.from("community_post_likes").select("post_id, user_id").eq("post_id", postId),
-    isCommunityDbConfigured()
-      ? fetchCommentCountsForPosts([postId]).then((data) => ({ data, error: null }))
-      : supabase.from("community_comments").select("post_id").eq("post_id", postId),
+  const [likesData, commentsData] = await Promise.all([
+    fetchPostLikesForPosts([postId]),
+    fetchCommentCountsForPosts([postId]),
   ]);
 
-  if (likesRes.error) {
-    const mapped = mapCommunitySupabaseError(likesRes.error.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(likesRes.error.message, 500);
-  }
-  if (commentsRes.error) {
-    const mapped = mapCommunitySupabaseError(commentsRes.error.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(commentsRes.error.message, 500);
-  }
-
-  const privateLikerIds = await getPrivateLikeUserIdSet((likesRes.data || []).map((r) => r.user_id));
+  const privateLikerIds = await getPrivateLikeUserIdSet((likesData || []).map((r) => r.user_id));
   const { likeCount, commentCount, likedByMe } = aggregateEngagementWithPrivateLikes(
-    likesRes.data,
-    commentsRes.data,
+    likesData,
+    commentsData,
     currentUserId,
     privateLikerIds
   );
@@ -208,9 +191,9 @@ export async function PATCH(request, { params }) {
     liked: likedByMe.has(fresh.id),
   };
   const [verified] = await attachAuthorVerifiedToPosts([base]);
-  const [post] = await attachPrivacyAwareAuthorLabels(supabase, [verified], currentUserId);
+  const [post] = await attachPrivacyAwareAuthorLabels([verified], currentUserId);
 
-  void persistCommunityPostSeo(supabase, postId, fresh).then(() => {
+  void persistCommunityPostSeo(postId, fresh).then(() => {
     revalidateCommunityPostSeo(postId);
   });
 
@@ -221,29 +204,28 @@ export async function DELETE(request, { params }) {
   const { user, error } = await requireUser(request);
   if (error) return error;
 
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return fail("Community database is not configured.", 503);
   }
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return fail("Community database is not configured.", 503);
+  if (!isCommunityDbConfigured()) {
+    return fail("Community database is not configured.", 503);
+  }
 
   const { id: postId } = await params;
   if (!postId) return fail("Missing post id", 400);
 
-  const { data: row, error: qErr } = await supabase
-    .from("community_posts")
-    .select("id, author_id")
-    .eq("id", postId)
-    .maybeSingle();
-
-  if (qErr) {
-    const mapped = mapCommunitySupabaseError(qErr.message, setup);
+  let row;
+  try {
+    row = await fetchPostByIdFull(postId);
+  } catch (qErr) {
+    const message = qErr instanceof Error ? qErr.message : String(qErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(qErr.message || "Failed to load post", 500);
+    return fail(message || "Failed to load post", 500);
   }
   if (!row) return fail("Post not found", 404);
 
@@ -251,11 +233,13 @@ export async function DELETE(request, { params }) {
     return fail("You can only delete your own posts.", 403);
   }
 
-  const { error: delErr } = await supabase.from("community_posts").delete().eq("id", postId);
-  if (delErr) {
-    const mapped = mapCommunitySupabaseError(delErr.message, setup);
+  try {
+    await deletePost(postId);
+  } catch (delErr) {
+    const message = delErr instanceof Error ? delErr.message : String(delErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(delErr.message || "Failed to delete post", 500);
+    return fail(message || "Failed to delete post", 500);
   }
 
   await clearCommunityCaches();

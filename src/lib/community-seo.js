@@ -1,5 +1,10 @@
 import { cache } from "react";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import {
+  fetchPostByIdFull,
+  listPostSitemapRows,
+  listPostsForSeo,
+} from "@/lib/community-db";
+import { isCommunityConfigured } from "@/lib/community-server";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -110,16 +115,12 @@ export function lightKeywordsFromBody(body, limit = 12) {
  */
 export const fetchCommunityPostForSeo = cache(async (postId) => {
   if (!isLikelyCommunityPostId(postId)) return null;
-  if (!isSupabaseCommunityConfigured()) return null;
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from("community_posts")
-    .select("id, author_id, author_name, body, created_at, updated_at, seo_title, seo_description, seo_keywords")
-    .eq("id", postId.trim())
-    .maybeSingle();
-  if (error || !data) return null;
-  return data;
+  if (!isCommunityConfigured()) return null;
+  try {
+    return (await fetchPostByIdFull(postId.trim())) || null;
+  } catch {
+    return null;
+  }
 });
 
 /**
@@ -129,32 +130,26 @@ export const fetchCommunityPostForSeo = cache(async (postId) => {
  */
 export const fetchCommunityFeedForSeo = cache(async (limit = 24) => {
   const n = Math.min(Math.max(Number(limit) || 24, 1), 50);
-  if (!isSupabaseCommunityConfigured()) return { posts: [] };
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return { posts: [] };
-  const { data, error } = await supabase
-    .from("community_posts")
-    .select("id, author_id, author_name, body, created_at, updated_at, share_count, seo_title, seo_description, seo_keywords")
-    .order("created_at", { ascending: false })
-    .limit(n);
-  if (error || !Array.isArray(data)) return { posts: [] };
-  return { posts: data };
+  if (!isCommunityConfigured()) return { posts: [] };
+  try {
+    const posts = await listPostsForSeo(n);
+    return { posts: Array.isArray(posts) ? posts : [] };
+  } catch {
+    return { posts: [] };
+  }
 });
 
 /**
  * @returns {Promise<Array<{ id: string; updated_at: string }>>}
  */
 export async function fetchCommunityPostSitemapRows(limit = 5000) {
-  if (!isSupabaseCommunityConfigured()) return [];
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("community_posts")
-    .select("id, updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(limit);
-  if (error || !Array.isArray(data)) return [];
-  return data;
+  if (!isCommunityConfigured()) return [];
+  try {
+    const rows = await listPostSitemapRows(limit);
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
 }
 
 /**

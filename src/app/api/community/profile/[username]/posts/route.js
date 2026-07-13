@@ -4,17 +4,18 @@ import User from "@/models/User";
 import { normalizeSavedUsernameHandle, tryNormalizeCommunityUsername } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { getSessionUser } from "@/lib/session";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
 import {
   fetchCommentCountsForPosts,
   fetchPostLikesByUser,
   fetchPostLikesForPosts,
   fetchPostsByIds,
+  fetchSharesByUser,
+  findUsernameByHandle,
   isCommunityDbConfigured,
   listPosts,
 } from "@/lib/community-db";
 import { hasActivePremium } from "@/lib/subscription";
-import { COMMUNITY_POST_LIST_SELECT } from "@/lib/community-post-edit-window";
 import { buildPublicLikesMap, getPrivateLikeUserIdSet } from "@/lib/community-private-likes";
 
 /**
@@ -29,36 +30,23 @@ export async function GET(request, { params }) {
   const parsed = tryNormalizeCommunityUsername(normalized);
   if (!parsed.ok) return fail("Profile not found.", 404);
 
-  if (!isSupabaseCommunityConfigured()) return fail("Community unavailable.", 503);
+  if (!isCommunityConfigured()) return fail("Community unavailable.", 503);
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return fail("Community unavailable.", 503);
+  if (!isCommunityDbConfigured()) return fail("Community unavailable.", 503);
 
-  const { data: rowExact, error: qErr } = await supabase
-    .from("community_usernames")
-    .select("user_id")
-    .eq("username", parsed.normalized)
-    .maybeSingle();
-  if (qErr) {
-    const mapped = mapCommunitySupabaseError(qErr.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(qErr.message || "Lookup failed", 500);
-  }
-  let row = rowExact;
-  if (!row?.user_id) {
-    const { data: rowInsensitive, error: iErr } = await supabase
-      .from("community_usernames")
-      .select("user_id")
-      .ilike("username", parsed.normalized)
-      .maybeSingle();
-    if (iErr) {
-      const mapped = mapCommunitySupabaseError(iErr.message, setup);
-      if (mapped) return fail(mapped, 503);
-      return fail(iErr.message || "Lookup failed", 500);
+  let row;
+  try {
+    row = await findUsernameByHandle(parsed.normalized);
+    if (!row?.user_id) {
+      row = await findUsernameByHandle(parsed.normalized, { ilike: true });
     }
-    row = rowInsensitive;
+  } catch (qErr) {
+    const message = qErr instanceof Error ? qErr.message : String(qErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
+    if (mapped) return fail(mapped, 503);
+    return fail(message || "Lookup failed", 500);
   }
   if (!row?.user_id) return fail("Profile not found.", 404);
 
@@ -80,10 +68,8 @@ export async function GET(request, { params }) {
   }
 
   let posts = [];
-  let postsErr = null;
-  if (filter === "liked") {
-    try {
-      if (!isCommunityDbConfigured()) return fail("Community unavailable.", 503);
+  try {
+    if (filter === "liked") {
       const mapRows = await fetchPostLikesByUser(profileUserId, { limit: 120 });
       const ids = mapRows.map((r) => r.post_id);
       if (ids.length > 0) {
@@ -91,45 +77,19 @@ export async function GET(request, { params }) {
         const byId = new Map((relatedPosts || []).map((p) => [p.id, p]));
         posts = ids.map((id) => byId.get(id)).filter(Boolean);
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      const mapped = mapCommunitySupabaseError(message, setup);
-      if (mapped) return fail(mapped, 503);
-      return fail(message || "Failed to load liked", 500);
-    }
-  } else if (filter === "shared") {
-    const table = "community_post_shares";
-    const { data: mapRows, error: mapErr } = await supabase
-      .from(table)
-      .select("post_id, created_at")
-      .eq("user_id", profileUserId)
-      .order("created_at", { ascending: false })
-      .limit(120);
-    if (mapErr) {
-      const mapped = mapCommunitySupabaseError(mapErr.message, setup);
-      if (mapped) return fail(mapped, 503);
-      return fail(mapErr.message || `Failed to load ${filter}`, 500);
-    }
-    const ids = (mapRows || []).map((r) => r.post_id);
-    if (ids.length > 0) {
-      const relatedPosts = isCommunityDbConfigured()
-        ? await fetchPostsByIds(ids)
-        : (
-            await supabase.from("community_posts").select(COMMUNITY_POST_LIST_SELECT).in("id", ids)
-          ).data;
-      const byId = new Map((relatedPosts || []).map((p) => [p.id, p]));
-      posts = ids.map((id) => byId.get(id)).filter(Boolean);
-    }
-  } else {
-    try {
-      if (!isCommunityDbConfigured()) return fail("Community unavailable.", 503);
+    } else if (filter === "shared") {
+      const mapRows = await fetchSharesByUser(profileUserId, { limit: 120 });
+      const ids = (mapRows || []).map((r) => r.post_id);
+      if (ids.length > 0) {
+        const relatedPosts = await fetchPostsByIds(ids);
+        const byId = new Map((relatedPosts || []).map((p) => [p.id, p]));
+        posts = ids.map((id) => byId.get(id)).filter(Boolean);
+      }
+    } else {
       posts = await listPosts({ limit: 100, authorId: profileUserId });
-    } catch (err) {
-      postsErr = err;
     }
-  }
-  if (postsErr) {
-    const message = postsErr instanceof Error ? postsErr.message : String(postsErr?.message || postsErr);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
     return fail(message || "Failed to load posts", 500);
@@ -140,7 +100,6 @@ export async function GET(request, { params }) {
   let comments = [];
   if (postIds.length > 0) {
     try {
-      if (!isCommunityDbConfigured()) return fail("Community unavailable.", 503);
       [likes, comments] = await Promise.all([
         fetchPostLikesForPosts(postIds),
         fetchCommentCountsForPosts(postIds),
@@ -169,4 +128,3 @@ export async function GET(request, { params }) {
 
   return ok({ posts: payload, currentUserId: viewerId, hidden: false, filter });
 }
-

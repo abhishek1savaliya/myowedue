@@ -1,9 +1,10 @@
 import { connectDB } from "@/lib/db";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
+import { findUsernameByUserId } from "@/lib/community-db";
 import { prepareCommunityApi } from "@/lib/community-api-setup";
+import { isCommunityConfigured } from "@/lib/community-server";
 import { communityPostNotificationsCacheKey, delRedisKey, notificationsCacheKey, publishNotificationEvent } from "@/lib/redis";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 
 const RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -15,18 +16,15 @@ export async function maybeSendCommunityUsernamePrompt(user) {
   if (!user?._id) return;
   if (user.notificationsEnabled === false) return;
 
-  if (!isSupabaseCommunityConfigured()) return;
+  if (!isCommunityConfigured()) return;
 
   const { fail503 } = await prepareCommunityApi();
   if (fail503) return;
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return;
-
   const uid = String(user._id);
 
   try {
-    const { data: row } = await supabase.from("community_usernames").select("user_id").eq("user_id", uid).maybeSingle();
+    const row = await findUsernameByUserId(uid);
     if (row?.user_id) {
       await connectDB();
       await User.updateOne(

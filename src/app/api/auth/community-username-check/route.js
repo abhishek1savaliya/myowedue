@@ -6,14 +6,15 @@ import {
   RESERVED_COMMUNITY_USERNAMES,
 } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
+import { findUsernameByHandle } from "@/lib/community-db";
 
 /**
  * GET ?q= — public availability check for sign-up (no session).
  * If a row exists for the username, it is taken (no "yours" branch).
  */
 export async function GET(request) {
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return ok({
       configured: false,
       status: "unconfigured",
@@ -25,17 +26,6 @@ export async function GET(request) {
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return ok({
-      configured: false,
-      status: "unconfigured",
-      available: null,
-      min: COMMUNITY_USERNAME_MIN,
-      max: COMMUNITY_USERNAME_MAX,
-    });
-  }
 
   const { searchParams } = new URL(request.url);
   const raw = searchParams.get("q") ?? searchParams.get("username") ?? "";
@@ -82,21 +72,16 @@ export async function GET(request) {
     return ok({ ...baseMeta, status: "taken", available: false, normalized: s });
   }
 
-  const { data: row, error: qErr } = await supabase
-    .from("community_usernames")
-    .select("user_id")
-    .eq("username", s)
-    .maybeSingle();
-
-  if (qErr) {
-    const mapped = mapCommunitySupabaseError(qErr.message, setup);
+  try {
+    const row = await findUsernameByHandle(s);
+    if (!row) {
+      return ok({ ...baseMeta, status: "available", available: true, normalized: s });
+    }
+    return ok({ ...baseMeta, status: "taken", available: false, normalized: s });
+  } catch (qErr) {
+    const message = qErr instanceof Error ? qErr.message : String(qErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(qErr.message || "Lookup failed", 500);
+    return fail(message || "Lookup failed", 500);
   }
-
-  if (!row) {
-    return ok({ ...baseMeta, status: "available", available: true, normalized: s });
-  }
-
-  return ok({ ...baseMeta, status: "taken", available: false, normalized: s });
 }

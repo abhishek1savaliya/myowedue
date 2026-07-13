@@ -1,10 +1,12 @@
 import { revalidatePath } from "next/cache";
 import { deriveCommunityPostSeoFields } from "@/lib/community-seo";
 import {
-  ensureCommunityPostgresSchema,
-  getSupabaseAdmin,
-  isSupabaseCommunityConfigured,
-} from "@/lib/supabase-server";
+  hasSeoColumns,
+  listPostsMissingSeo,
+  updatePostSeo,
+  updatePostSeoWithoutKeywords,
+} from "@/lib/community-db";
+import { ensureCommunityPostgresSchema, isCommunityConfigured } from "@/lib/community-server";
 
 export { deriveCommunityPostSeoFields };
 
@@ -12,7 +14,6 @@ let seoColumnsReady = null;
 
 function isSeoPersistSkippableError(error) {
   const msg = String(error?.message || error || "").toLowerCase();
-  const code = String(error?.code || "").toLowerCase();
   return (
     msg.includes("seo_title") ||
     msg.includes("seo_description") ||
@@ -20,9 +21,7 @@ function isSeoPersistSkippableError(error) {
     msg.includes("does not exist") ||
     msg.includes("schema cache") ||
     msg.includes("empty or invalid json") ||
-    msg.includes("invalid json") ||
-    code === "pgrst102" ||
-    code === "pgrst204"
+    msg.includes("invalid json")
   );
 }
 
@@ -37,55 +36,54 @@ function buildSeoUpdatePayload(post) {
   return { seo_title, seo_description, seo_keywords };
 }
 
-/** Ensure migration 011 SEO columns exist (needs SUPABASE_DATABASE_URL for auto-DDL). */
+/** Ensure migration 011 SEO columns exist (needs COMMUNITY_DATABASE_URL for auto-DDL). */
 export async function ensureCommunityPostSeoReady() {
   if (seoColumnsReady !== null) return seoColumnsReady;
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     seoColumnsReady = false;
     return false;
   }
 
   await ensureCommunityPostgresSchema().catch(() => {});
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
+  try {
+    seoColumnsReady = await hasSeoColumns();
+  } catch {
     seoColumnsReady = false;
-    return false;
   }
-
-  const { error } = await supabase.from("community_posts").select("seo_title").limit(1);
-  if (error) {
-    seoColumnsReady = false;
-    return false;
-  }
-
-  seoColumnsReady = true;
-  return true;
+  return seoColumnsReady;
 }
 
 /**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} postId
  * @param {{ body?: string; author_name?: string }} post
  */
-export async function persistCommunityPostSeo(supabase, postId, post) {
-  if (!supabase || !postId || !post) return { ok: false, skipped: true };
+export async function persistCommunityPostSeo(postId, post) {
+  if (!postId || !post) return { ok: false, skipped: true };
   if (!(await ensureCommunityPostSeoReady())) return { ok: false, skipped: true };
 
   const payload = buildSeoUpdatePayload(post);
 
-  let { error } = await supabase.from("community_posts").update(payload).eq("id", postId);
-  if (error && payload.seo_keywords.length > 0 && isSeoPersistSkippableError(error)) {
-    const { seo_keywords: _kw, ...withoutKeywords } = payload;
-    ({ error } = await supabase.from("community_posts").update(withoutKeywords).eq("id", postId));
-  }
-
-  if (error) {
-    if (isSeoPersistSkippableError(error)) {
+  try {
+    await updatePostSeo(postId, payload);
+  } catch (error) {
+    if (payload.seo_keywords.length > 0 && isSeoPersistSkippableError(error)) {
+      const { seo_keywords: _kw, ...withoutKeywords } = payload;
+      try {
+        await updatePostSeoWithoutKeywords(postId, withoutKeywords);
+      } catch (retryErr) {
+        if (isSeoPersistSkippableError(retryErr)) {
+          return { ok: false, skipped: true };
+        }
+        console.warn("[community-seo] persist failed:", retryErr?.message);
+        return { ok: false, error: retryErr?.message };
+      }
+    } else if (isSeoPersistSkippableError(error)) {
       return { ok: false, skipped: true };
+    } else {
+      console.warn("[community-seo] persist failed:", error?.message);
+      return { ok: false, error: error?.message };
     }
-    console.warn("[community-seo] persist failed:", error.message);
-    return { ok: false, error: error.message };
   }
   return { ok: true, fields: payload };
 }
@@ -108,21 +106,15 @@ export function revalidateCommunityPostSeo(postId) {
  * @param {number} [limit]
  */
 export async function backfillCommunityPostSeoBatch(limit = 30) {
-  if (!isSupabaseCommunityConfigured()) return { updated: 0 };
+  if (!isCommunityConfigured()) return { updated: 0 };
   if (!(await ensureCommunityPostSeoReady())) return { updated: 0, skipped: true };
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return { updated: 0 };
 
-  const { data, error } = await supabase
-    .from("community_posts")
-    .select("id, author_name, body, seo_title")
-    .is("seo_title", null)
-    .order("created_at", { ascending: false })
-    .limit(Math.min(Math.max(limit, 1), 100));
-
-  if (error) {
+  let data;
+  try {
+    data = await listPostsMissingSeo(Math.min(Math.max(limit, 1), 100));
+  } catch (error) {
     if (isSeoPersistSkippableError(error)) return { updated: 0, skipped: true };
-    console.warn("[community-seo] backfill query failed:", error.message);
+    console.warn("[community-seo] backfill query failed:", error?.message);
     return { updated: 0 };
   }
   if (!Array.isArray(data) || data.length === 0) {
@@ -131,7 +123,7 @@ export async function backfillCommunityPostSeoBatch(limit = 30) {
 
   let updated = 0;
   for (const row of data) {
-    const result = await persistCommunityPostSeo(supabase, row.id, row);
+    const result = await persistCommunityPostSeo(row.id, row);
     if (result.ok) updated += 1;
     else if (result.skipped) break;
   }

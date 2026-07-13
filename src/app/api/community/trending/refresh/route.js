@@ -3,7 +3,7 @@ import { fail, ok } from "@/lib/api";
 import { reindexAllCommunityPostTopics } from "@/lib/community-reindex-topics";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityTrendingCache } from "@/lib/redis";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
 import { enqueueCommunityJob } from "@/lib/queue/producers";
 
 export const runtime = "nodejs";
@@ -36,15 +36,12 @@ export async function POST(request) {
     return fail("Unauthorized", 401);
   }
 
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return fail("Community database is not configured.", 503);
   }
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return fail("Community database is not configured.", 503);
 
   let reindex = false;
   let maxPosts = 10_000;
@@ -81,7 +78,7 @@ export async function POST(request) {
     }
 
     try {
-      const result = await reindexAllCommunityPostTopics(supabase, {
+      const result = await reindexAllCommunityPostTopics({
         maxPosts: Number.isFinite(maxPosts) ? maxPosts : 10_000,
         afterId,
       });

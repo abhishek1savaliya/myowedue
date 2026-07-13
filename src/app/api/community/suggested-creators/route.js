@@ -3,7 +3,15 @@ import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-
 import { fetchUsernameMapByUserIds } from "@/lib/community-usernames";
 import { communitySuggestedCreatorsCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
 import { getSessionUser } from "@/lib/session";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
+import {
+  fetchCommentCountsForPosts,
+  fetchFollowsByFollowingIds,
+  fetchFollowingAmong,
+  fetchPostLikesForPosts,
+  isCommunityDbConfigured,
+  listPostsSince,
+} from "@/lib/community-db";
 
 const WINDOW_DAYS = 30;
 const POST_SAMPLE = 650;
@@ -37,15 +45,16 @@ function scoreAuthor({ posts, likes, comments, followers }) {
 }
 
 export async function GET(request) {
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return fail("Community database is not configured.", 503);
   }
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return fail("Community database is not configured.", 503);
+  if (!isCommunityDbConfigured()) {
+    return fail("Community database is not configured.", 503);
+  }
 
   const user = await getSessionUser(request);
   const viewerId = user ? String(user._id) : "";
@@ -57,27 +66,23 @@ export async function GET(request) {
   const cached = await getRedisJSON(cacheKey);
   if (cached && typeof cached === "object" && Array.isArray(cached.creators)) {
     const sliced = filterCreatorsForViewer(cached.creators, viewerId, limit);
-    const creators = await hydrateViewerFollowing(supabase, viewerId, sliced);
+    const creators = await hydrateViewerFollowing(viewerId, sliced);
     return ok({ creators, windowDays: WINDOW_DAYS });
   }
 
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: posts, error: pErr } = await supabase
-    .from("community_posts")
-    .select("id, author_id, author_name, created_at")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(POST_SAMPLE);
-
-  if (pErr) {
-    const mapped = mapCommunitySupabaseError(pErr.message, setup);
+  let postList;
+  try {
+    postList = await listPostsSince(since, { limit: POST_SAMPLE });
+  } catch (pErr) {
+    const message = pErr instanceof Error ? pErr.message : String(pErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(pErr.message || "Failed to load posts", 500);
+    return fail(message || "Failed to load posts", 500);
   }
 
-  const postList = posts || [];
-  if (postList.length === 0) {
+  if (!postList?.length) {
     const empty = { creators: [], windowDays: WINDOW_DAYS };
     void setRedisJSON(cacheKey, empty, CACHE_TTL_SEC);
     return ok(empty);
@@ -106,22 +111,19 @@ export async function GET(request) {
   const commentRows = [];
   for (const part of chunkIds(postIds)) {
     if (part.length === 0) continue;
-    const [lr, cr] = await Promise.all([
-      supabase.from("community_post_likes").select("post_id").in("post_id", part),
-      supabase.from("community_comments").select("post_id").in("post_id", part),
-    ]);
-    if (lr.error) {
-      const mapped = mapCommunitySupabaseError(lr.error.message, setup);
+    try {
+      const [lr, cr] = await Promise.all([
+        fetchPostLikesForPosts(part),
+        fetchCommentCountsForPosts(part),
+      ]);
+      likeRows.push(...(lr || []));
+      commentRows.push(...(cr || []));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const mapped = mapCommunitySupabaseError(message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(lr.error.message || "Failed to load likes", 500);
+      return fail(message || "Failed to load engagement", 500);
     }
-    if (cr.error) {
-      const mapped = mapCommunitySupabaseError(cr.error.message, setup);
-      if (mapped) return fail(mapped, 503);
-      return fail(cr.error.message || "Failed to load comments", 500);
-    }
-    likeRows.push(...(lr.data || []));
-    commentRows.push(...(cr.data || []));
   }
 
   const likesByPost = {};
@@ -161,22 +163,21 @@ export async function GET(request) {
 
   const followerCounts = new Map();
   if (candidateIds.length > 0) {
-    const { data: followRows, error: fErr } = await supabase
-      .from("community_follows")
-      .select("following_id")
-      .in("following_id", candidateIds);
-    if (fErr) {
-      const mapped = mapCommunitySupabaseError(fErr.message, setup);
+    try {
+      const followRows = await fetchFollowsByFollowingIds(candidateIds);
+      for (const r of followRows || []) {
+        const fid = String(r.following_id);
+        followerCounts.set(fid, (followerCounts.get(fid) || 0) + 1);
+      }
+    } catch (fErr) {
+      const message = fErr instanceof Error ? fErr.message : String(fErr);
+      const mapped = mapCommunitySupabaseError(message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(fErr.message || "Failed to load follows", 500);
-    }
-    for (const r of followRows || []) {
-      const fid = String(r.following_id);
-      followerCounts.set(fid, (followerCounts.get(fid) || 0) + 1);
+      return fail(message || "Failed to load follows", 500);
     }
   }
 
-  const usernameMap = await fetchUsernameMapByUserIds(supabase, candidateIds);
+  const usernameMap = await fetchUsernameMapByUserIds(candidateIds);
 
   const ranked = [];
   for (const row of prelim) {
@@ -207,16 +208,15 @@ export async function GET(request) {
   void setRedisJSON(cacheKey, { creators: creatorsPayload, windowDays: WINDOW_DAYS }, CACHE_TTL_SEC);
 
   const sliced = filterCreatorsForViewer(creatorsPayload, viewerId, limit);
-  const creators = await hydrateViewerFollowing(supabase, viewerId, sliced);
+  const creators = await hydrateViewerFollowing(viewerId, sliced);
   return ok({ creators, windowDays: WINDOW_DAYS });
 }
 
 /**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} viewerId
  * @param {object[]} slice
  */
-async function hydrateViewerFollowing(supabase, viewerId, slice) {
+async function hydrateViewerFollowing(viewerId, slice) {
   if (!viewerId || slice.length === 0) {
     return slice.map((c) => {
       const { score: _s, ...rest } = c;
@@ -224,20 +224,17 @@ async function hydrateViewerFollowing(supabase, viewerId, slice) {
     });
   }
   const ids = slice.map((c) => c.user_id);
-  const { data: rows, error } = await supabase
-    .from("community_follows")
-    .select("following_id")
-    .eq("follower_id", viewerId)
-    .in("following_id", ids);
-  if (error) {
+  try {
+    const rows = await fetchFollowingAmong(viewerId, ids);
+    const following = new Set((rows || []).map((r) => String(r.following_id)));
+    return slice.map((c) => {
+      const { score: _s, ...rest } = c;
+      return { ...rest, viewer_follows: following.has(String(c.user_id)) };
+    });
+  } catch {
     return slice.map((c) => {
       const { score: _s, ...rest } = c;
       return { ...rest, viewer_follows: false };
     });
   }
-  const following = new Set((rows || []).map((r) => String(r.following_id)));
-  return slice.map((c) => {
-    const { score: _s, ...rest } = c;
-    return { ...rest, viewer_follows: following.has(String(c.user_id)) };
-  });
 }

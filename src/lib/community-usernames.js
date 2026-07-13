@@ -1,3 +1,5 @@
+import { fetchUsernameMapByUserIds as fetchUsernameMapFromDb } from "@/lib/community-db";
+
 /** Allowed length for new usernames (must match DB check when migration applied). */
 export const COMMUNITY_USERNAME_MIN = 6;
 export const COMMUNITY_USERNAME_MAX = 21;
@@ -82,33 +84,22 @@ export function communityProfilePathByUsername(raw) {
 }
 
 /**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
- * @param {string[]} userIds
- * @returns {Promise<Map<string, string>>} user_id -> username
+ * @param {string[]} userIds — or legacy (supabase, userIds) signature
  */
-export async function fetchUsernameMapByUserIds(supabase, userIds) {
-  const uniq = [...new Set((userIds || []).map((id) => String(id).trim()).filter(Boolean))];
-  if (uniq.length === 0) return new Map();
-
-  const { data, error } = await supabase.from("community_usernames").select("user_id, username").in("user_id", uniq);
-
-  if (error || !data?.length) return new Map();
-
-  const m = new Map();
-  for (const row of data) {
-    m.set(String(row.user_id), String(row.username));
-  }
-  return m;
+export async function fetchUsernameMapByUserIds(supabaseOrUserIds, maybeUserIds) {
+  const userIds = Array.isArray(supabaseOrUserIds) ? supabaseOrUserIds : maybeUserIds;
+  return fetchUsernameMapFromDb(userIds);
 }
 
 /**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
- * @param {object[]} posts
+ * @param {object[] | null} supabaseOrPosts
+ * @param {object[]} [maybePosts]
  */
-export async function attachAuthorUsernamesToPosts(supabase, posts) {
-  if (!posts?.length) return posts;
+export async function attachAuthorUsernamesToPosts(supabaseOrPosts, maybePosts) {
+  const posts = Array.isArray(supabaseOrPosts) ? supabaseOrPosts : maybePosts;
+  if (!posts?.length) return posts || [];
   const ids = [...new Set(posts.map((p) => String(p.author_id || "").trim()).filter(Boolean))];
-  const map = await fetchUsernameMapByUserIds(supabase, ids);
+  const map = await fetchUsernameMapByUserIds(ids);
   return posts.map((p) => ({
     ...p,
     author_username: map.get(String(p.author_id)) || null,
@@ -124,12 +115,13 @@ function collectCommentAuthorIds(nodes, out = []) {
 }
 
 /**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
- * @param {object[]} tree
+ * @param {object[] | null} supabaseOrTree
+ * @param {object[]} [maybeTree]
  */
-export async function attachAuthorUsernamesToCommentTree(supabase, tree) {
+export async function attachAuthorUsernamesToCommentTree(supabaseOrTree, maybeTree) {
+  const tree = Array.isArray(supabaseOrTree) ? supabaseOrTree : maybeTree;
   const ids = [...new Set(collectCommentAuthorIds(tree))];
-  const map = await fetchUsernameMapByUserIds(supabase, ids);
+  const map = await fetchUsernameMapByUserIds(ids);
 
   function walk(nodes) {
     return (nodes || []).map((n) => ({

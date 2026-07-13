@@ -1,5 +1,5 @@
 /**
- * Supabase PostgREST errors when tables are missing or schema cache is stale.
+ * Postgres errors when community tables are missing.
  */
 export function isCommunitySchemaOrTableError(message) {
   const m = String(message || "").toLowerCase();
@@ -14,47 +14,32 @@ export function isCommunitySchemaOrTableError(message) {
 }
 
 /**
- * User-facing message when PostgREST cannot read/write community tables.
- * @param {string|undefined} supabaseMsg
- * @param {{ skipped?: boolean; ok?: boolean; error?: string; existed?: boolean; created?: boolean }} bootstrap - from ensureCommunityPostgresSchema / prepareCommunityPostgresSchema
- * @param {boolean} hasDirectPostgresUrl - SUPABASE_DATABASE_URL is set
+ * User-facing message when Postgres cannot read/write community tables.
+ * @param {string|undefined} dbMsg
+ * @param {{ skipped?: boolean; ok?: boolean; error?: string; existed?: boolean; created?: boolean }} bootstrap
+ * @param {boolean} hasDirectPostgresUrl - NEON_DATABASE_URL / COMMUNITY_DATABASE_URL is set
  */
-export function communitySupabaseFailMessage(supabaseMsg, bootstrap, hasDirectPostgresUrl) {
-  if (!isCommunitySchemaOrTableError(supabaseMsg)) return null;
+export function communitySupabaseFailMessage(dbMsg, bootstrap, hasDirectPostgresUrl) {
+  if (!isCommunitySchemaOrTableError(dbMsg)) return null;
 
   if (bootstrap?.ok === false && bootstrap?.error) {
     const err = String(bootstrap.error);
-    const el = err.toLowerCase();
-    const poolerHint =
-      hasDirectPostgresUrl && (err.includes("6543") || el.includes("prepared statement"))
-        ? " Use Session mode on port 5432 (or the “Direct connection” host from Supabase → Database), not the transaction pooler on 6543, for running migrations."
-        : hasDirectPostgresUrl && el.includes("pooler")
-          ? " Try the Session pooler (port 5432) or direct db.<project>.supabase.co:5432 connection string."
-          : "";
-
     const timeoutHint =
       hasDirectPostgresUrl && /timeout|etimedout|econnrefused|enotfound|connection terminated/i.test(err)
-        ? " Confirm SUPABASE_DATABASE_URL is the Postgres URI (starts with postgres://) from Supabase → Database → Connection string, not the https:// API URL. Use Session (5432) or Direct; allow outbound TCP 5432 (VPN/firewall). Or run 001_community.sql in the SQL Editor instead."
+        ? " Confirm NEON_DATABASE_URL or COMMUNITY_DATABASE_URL is a valid Postgres URI from Neon. Use the direct (non-pooler) host for DDL if migrations fail."
         : "";
 
-    return `Could not create community tables via Postgres: ${err}.${poolerHint}${timeoutHint} You can instead open Supabase → SQL Editor and run supabase/migrations/001_community.sql manually.`;
+    return `Could not create community tables via Postgres: ${err}.${timeoutHint} You can run supabase/migrations/001_community.sql through 011 on your Neon database instead.`;
   }
 
   if (bootstrap?.skipped && !hasDirectPostgresUrl) {
     return (
-      "Community tables are missing for this Supabase project (Posts use Postgres; the rest of the app uses MongoDB). " +
-      "Open Supabase Dashboard → SQL → New query, paste the full contents of supabase/migrations/001_community.sql from your repo, click Run, then refresh this page. " +
-      "Optional: add SUPABASE_DATABASE_URL (Session mode, port 5432, from Database → Connection string) to .env.local so tables can be created automatically on first request."
-    );
-  }
-
-  if (hasDirectPostgresUrl && (bootstrap?.created || bootstrap?.existed || bootstrap?.ok)) {
-    return (
-      "Supabase API has not picked up the community tables yet. Wait 30–60 seconds, refresh, or run in the SQL Editor: NOTIFY pgrst, 'reload schema';"
+      "Community tables are missing (Posts use Neon Postgres; the rest of the app uses MongoDB). " +
+      "Add NEON_DATABASE_URL to .env.local, or run supabase/migrations/001_community.sql through 011 on your Neon database."
     );
   }
 
   return (
-    "Community data is not available. Run supabase/migrations/001_community.sql in the Supabase SQL Editor for the same project as NEXT_PUBLIC_SUPABASE_URL, then refresh."
+    "Community data is not available. Add NEON_DATABASE_URL to .env.local or run supabase/migrations on your Neon database, then refresh."
   );
 }

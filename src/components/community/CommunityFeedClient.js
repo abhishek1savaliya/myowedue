@@ -36,7 +36,7 @@ import {
 } from "@/lib/community-ui";
 
 const COMMUNITY_SETUP_MESSAGE =
-  "Posts use Supabase Postgres (SQL); the rest of the app uses MongoDB. Either add SUPABASE_DATABASE_URL (direct Postgres URI from Supabase → Database → Connection string) so tables can be created automatically, or open SQL Editor and run supabase/migrations/001_community.sql through 007_community_username_max_21.sql for the same project as NEXT_PUBLIC_SUPABASE_URL. Ensure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (optional for future client use) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) match that project.";
+  "Posts use Neon Postgres (SQL); the rest of the app uses MongoDB. Add NEON_DATABASE_URL to .env.local, or run supabase/migrations/001_community.sql through 011 on your Neon database.";
 
 function isMissingCommunityTables(message) {
   const m = String(message || "").toLowerCase();
@@ -1574,7 +1574,8 @@ export default function CommunityFeedClient({
     const setupIncluded =
       typeof error === "string" &&
       (error.includes("001_community.sql") ||
-        error.includes("SUPABASE_DATABASE_URL") ||
+        error.includes("NEON_DATABASE_URL") ||
+        error.includes("COMMUNITY_DATABASE_URL") ||
         error.includes("MongoDB"));
     return (
       <div
@@ -1588,9 +1589,9 @@ export default function CommunityFeedClient({
         <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{error}</p>
         {!setupIncluded ? (
           <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            Add <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
-            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">SUPABASE_SERVICE_ROLE_KEY</code> (or <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">SUPABASE_SECRET_KEY</code>) from Supabase Dashboard → Settings → API,
-            and run the SQL in <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">supabase/migrations/001_community.sql</code>.
+            Add <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">NEON_DATABASE_URL</code> to{" "}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">.env.local</code>,
+            or run migrations in <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">supabase/migrations/</code> on Neon.
           </p>
         ) : null}
       </div>

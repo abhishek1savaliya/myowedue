@@ -1,9 +1,9 @@
 import { communitySupabaseFailMessage } from "@/lib/community-errors";
-import { getSupabaseDatabaseUrl } from "@/lib/supabase-env";
-import { ensureCommunityPostgresSchema } from "@/lib/supabase-server";
+import { getCommunityDatabaseUrl } from "@/lib/community-env";
+import { ensureCommunityPostgresSchema } from "@/lib/community-server";
 
 export function hasDirectPostgresUrl() {
-  return Boolean(getSupabaseDatabaseUrl());
+  return Boolean(getCommunityDatabaseUrl());
 }
 
 /**

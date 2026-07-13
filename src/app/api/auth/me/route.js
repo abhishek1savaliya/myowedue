@@ -16,7 +16,8 @@ import {
 import { assertCommunityHandleAvailable } from "@/lib/community-handle-availability";
 import { validateCommunityPrivacyPayload } from "@/lib/community-profile-privacy";
 import { hasActivePremium } from "@/lib/subscription";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
+import { findUsernameByUserId } from "@/lib/community-db";
 
 export async function GET(request) {
   const { user, error } = await requireUser(request);
@@ -24,11 +25,12 @@ export async function GET(request) {
 
   const base = safeUser(user);
   let communityUsername = null;
-  if (isSupabaseCommunityConfigured()) {
-    const supabase = getSupabaseAdmin();
-    if (supabase) {
-      const { data } = await supabase.from("community_usernames").select("username").eq("user_id", String(user._id)).maybeSingle();
-      communityUsername = data?.username ?? null;
+  if (isCommunityConfigured()) {
+    try {
+      const row = await findUsernameByUserId(String(user._id));
+      communityUsername = row?.username ?? null;
+    } catch {
+      // ignore lookup errors
     }
   }
 
@@ -137,10 +139,7 @@ export async function PATCH(request) {
       Object.assign(updates, validated.updates);
 
       if (updates.communityPublicUsername) {
-        const supabase = isSupabaseCommunityConfigured() ? getSupabaseAdmin() : null;
-        const conflict = await assertCommunityHandleAvailable(updates.communityPublicUsername, user._id, {
-          supabase,
-        });
+        const conflict = await assertCommunityHandleAvailable(updates.communityPublicUsername, user._id);
         if (conflict) return fail(conflict, 409);
       }
     }

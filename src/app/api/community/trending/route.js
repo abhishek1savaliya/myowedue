@@ -2,7 +2,14 @@ import { fail, ok } from "@/lib/api";
 import { computeTrendingTopics } from "@/lib/community-trending";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { COMMUNITY_TRENDING_AGGREGATE_CAP, communityTrendingCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
+import {
+  fetchCommentCountsForPosts,
+  fetchPostLikesForPosts,
+  fetchTopicsForPosts,
+  isCommunityDbConfigured,
+  listPostsForTrending,
+} from "@/lib/community-db";
 
 const WINDOW_HOURS = 24;
 const CACHE_TTL_SEC = 300;
@@ -16,15 +23,16 @@ function isMissingPostTopics(msg) {
 }
 
 export async function GET(request) {
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return fail("Community database is not configured.", 503);
   }
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return fail("Community database is not configured.", 503);
+  if (!isCommunityDbConfigured()) {
+    return fail("Community database is not configured.", 503);
+  }
 
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 10, 1), 50);
@@ -40,21 +48,17 @@ export async function GET(request) {
 
   const since = new Date(Date.now() - WINDOW_HOURS * 60 * 60 * 1000).toISOString();
 
-  const { data: posts, error: pErr } = await supabase
-    .from("community_posts")
-    .select("id, share_count, created_at")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(500);
-
-  if (pErr) {
-    const mapped = mapCommunitySupabaseError(pErr.message, setup);
+  let postList;
+  try {
+    postList = await listPostsForTrending(since, 500);
+  } catch (pErr) {
+    const message = pErr instanceof Error ? pErr.message : String(pErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(pErr.message || "Failed to load posts", 500);
+    return fail(message || "Failed to load posts", 500);
   }
 
-  const postList = posts || [];
-  if (postList.length === 0) {
+  if (!postList?.length) {
     const empty = { topics: [], windowHours: WINDOW_HOURS };
     void setRedisJSON(cacheKey, empty, CACHE_TTL_SEC);
     return ok(empty);
@@ -62,34 +66,28 @@ export async function GET(request) {
 
   const postIds = postList.map((p) => p.id);
 
-  const [topicRes, likesRes, commentsRes] = await Promise.all([
-    supabase.from("post_topics").select("post_id, topic").in("post_id", postIds),
-    supabase.from("community_post_likes").select("post_id").in("post_id", postIds),
-    supabase.from("community_comments").select("post_id").in("post_id", postIds),
-  ]);
-
-  if (topicRes.error) {
-    if (isMissingPostTopics(topicRes.error.message)) {
+  let topicData = [];
+  let likesData = [];
+  let commentsData = [];
+  try {
+    [topicData, likesData, commentsData] = await Promise.all([
+      fetchTopicsForPosts(postIds),
+      fetchPostLikesForPosts(postIds),
+      fetchCommentCountsForPosts(postIds),
+    ]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (isMissingPostTopics(message)) {
       const empty = { topics: [], windowHours: WINDOW_HOURS };
       void setRedisJSON(cacheKey, empty, CACHE_TTL_SEC);
       return ok(empty);
     }
-    const mapped = mapCommunitySupabaseError(topicRes.error.message, setup);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(topicRes.error.message || "Failed to load topics", 500);
-  }
-  if (likesRes.error) {
-    const mapped = mapCommunitySupabaseError(likesRes.error.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(likesRes.error.message, 500);
-  }
-  if (commentsRes.error) {
-    const mapped = mapCommunitySupabaseError(commentsRes.error.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(commentsRes.error.message, 500);
+    return fail(message || "Failed to load topics", 500);
   }
 
-  const topicsFull = computeTrendingTopics(postList, topicRes.data || [], likesRes.data || [], commentsRes.data || [], {
+  const topicsFull = computeTrendingTopics(postList, topicData || [], likesData || [], commentsData || [], {
     limit: COMMUNITY_TRENDING_AGGREGATE_CAP,
   });
 

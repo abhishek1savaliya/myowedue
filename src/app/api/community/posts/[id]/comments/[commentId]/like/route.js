@@ -4,7 +4,7 @@ import { formatUserDisplayName } from "@/lib/format-user-display-name";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityCaches } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
-import { isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
 import {
   countCommentLikes,
   deleteCommentLike,
@@ -18,7 +18,7 @@ export async function POST(request, { params }) {
   const { user, error } = await requireUser(request);
   if (error) return error;
 
-  if (!isSupabaseCommunityConfigured() || !isCommunityDbConfigured()) {
+  if (!isCommunityConfigured() || !isCommunityDbConfigured()) {
     return fail("Community database is not configured.", 503);
   }
 

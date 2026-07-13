@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import { lookupCommunityUsernameInAlgolia } from "@/lib/community-algolia";
+import { findUsernameByHandle, isCommunityDbConfigured } from "@/lib/community-db";
 import {
   COMMUNITY_USERNAME_MAX,
   COMMUNITY_USERNAME_MIN,
@@ -52,11 +53,12 @@ export async function isCommunityPublicUsernameTaken(normalized, excludeUserId) 
  * Live availability for canonical handles and public aliases (same namespace).
  * @param {string} normalized — already normalized lowercase handle
  * @param {string} excludeUserId — current user id
- * @param {{ supabase: import("@supabase/supabase-js").SupabaseClient | null }} opts
+ * @param {{ supabase?: unknown }} [opts] — legacy; ignored
  */
-export async function checkCommunityHandleAvailability(normalized, excludeUserId, { supabase }) {
+export async function checkCommunityHandleAvailability(normalized, excludeUserId, opts = {}) {
+  const configured = isCommunityDbConfigured();
   const baseMeta = {
-    configured: Boolean(supabase),
+    configured,
     min: COMMUNITY_USERNAME_MIN,
     max: COMMUNITY_USERNAME_MAX,
     normalized,
@@ -71,7 +73,7 @@ export async function checkCommunityHandleAvailability(normalized, excludeUserId
     return { ...baseMeta, status: "taken", available: false };
   }
 
-  if (!supabase) {
+  if (!configured) {
     return { ...baseMeta, configured: false, status: "unconfigured", available: null };
   }
 
@@ -83,33 +85,31 @@ export async function checkCommunityHandleAvailability(normalized, excludeUserId
     return { ...baseMeta, status: "taken", available: false };
   }
 
-  const { data: row, error: qErr } = await supabase
-    .from("community_usernames")
-    .select("user_id, username")
-    .eq("username", normalized)
-    .maybeSingle();
-
-  if (qErr) {
-    return { ...baseMeta, status: "error", available: null, error: qErr.message || "Lookup failed" };
+  try {
+    const row = await findUsernameByHandle(normalized);
+    if (!row) {
+      return { ...baseMeta, status: "available", available: true };
+    }
+    if (String(row.user_id) === uid) {
+      return { ...baseMeta, status: "yours", available: true };
+    }
+    return { ...baseMeta, status: "taken", available: false };
+  } catch (e) {
+    return {
+      ...baseMeta,
+      status: "error",
+      available: null,
+      error: e instanceof Error ? e.message : "Lookup failed",
+    };
   }
-
-  if (!row) {
-    return { ...baseMeta, status: "available", available: true };
-  }
-
-  if (String(row.user_id) === uid) {
-    return { ...baseMeta, status: "yours", available: true };
-  }
-
-  return { ...baseMeta, status: "taken", available: false };
 }
 
 /**
  * @returns {Promise<string | null>} Error message when unavailable, else null.
  */
-export async function assertCommunityHandleAvailable(normalized, excludeUserId, { supabase }) {
+export async function assertCommunityHandleAvailable(normalized, excludeUserId, opts = {}) {
   if (!normalized) return null;
-  const result = await checkCommunityHandleAvailability(normalized, excludeUserId, { supabase });
+  const result = await checkCommunityHandleAvailability(normalized, excludeUserId, opts);
   if (result.status === "taken") {
     return "That @username is already taken.";
   }

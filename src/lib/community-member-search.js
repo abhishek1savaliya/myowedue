@@ -1,11 +1,17 @@
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import {
+  fetchAllUsernames,
+  findUsernameByHandle,
+  findUsernameByUserId,
+  suggestUsernames,
+} from "@/lib/community-db";
+import {
   getDiscoverableUsernames,
   resolvePublicDisplayName,
 } from "@/lib/community-profile-privacy";
 import { normalizeSavedUsernameHandle } from "@/lib/community-usernames";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
 
 /**
  * @param {string} query
@@ -20,14 +26,17 @@ export async function searchCommunityMembers(query, limit = 12) {
   const prefix = normalizeSavedUsernameHandle(q).replace(/[^a-z0-9_]/g, "");
   const qLower = q.toLowerCase();
 
-  if (!isSupabaseCommunityConfigured()) return [];
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return [];
+  if (!isCommunityConfigured()) return [];
 
   await connectDB();
 
-  const { data: allHandles } = await supabase.from("community_usernames").select("user_id, username");
+  let allHandles = [];
+  try {
+    allHandles = await fetchAllUsernames();
+  } catch {
+    return [];
+  }
+
   const handleByUserId = new Map((allHandles || []).map((r) => [String(r.user_id), r.username]));
   const userIdByHandle = new Map((allHandles || []).map((r) => [r.username, String(r.user_id)]));
 
@@ -45,7 +54,12 @@ export async function searchCommunityMembers(query, limit = 12) {
   }
 
   if (prefix.length >= 1) {
-    const { data: rpcRows } = await supabase.rpc("community_username_suggest", { prefix, lim: lim * 2 });
+    let rpcRows = [];
+    try {
+      rpcRows = await suggestUsernames(prefix, lim * 2);
+    } catch {
+      rpcRows = [];
+    }
     for (const row of rpcRows || []) {
       if (results.length >= lim) break;
       const uname = row?.username;
@@ -122,18 +136,17 @@ export async function resolveCommunityProfileSegment(segment) {
   const normalized = normalizeSavedUsernameHandle(segment);
   if (!normalized) return null;
 
-  if (!isSupabaseCommunityConfigured()) return null;
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return null;
+  if (!isCommunityConfigured()) return null;
 
   const userSelect =
     "name firstName lastName communityPublicName communityPublicNameEnabled communityPublicUsername communityPublicUsernameEnabled communityProfileVisibility showVerifiedBadge subscriptionEndDate isPremium subscriptionPlan createdAt";
 
-  const { data: rowExact } = await supabase
-    .from("community_usernames")
-    .select("user_id, username")
-    .eq("username", normalized)
-    .maybeSingle();
+  let rowExact = null;
+  try {
+    rowExact = await findUsernameByHandle(normalized);
+  } catch {
+    return null;
+  }
 
   if (rowExact?.user_id) {
     await connectDB();
@@ -147,11 +160,12 @@ export async function resolveCommunityProfileSegment(segment) {
   if (!byAlias) return null;
 
   const userId = String(byAlias._id);
-  const { data: handleRow } = await supabase
-    .from("community_usernames")
-    .select("username")
-    .eq("user_id", userId)
-    .maybeSingle();
+  let handleRow = null;
+  try {
+    handleRow = await findUsernameByUserId(userId);
+  } catch {
+    return null;
+  }
   const realHandle = handleRow?.username;
   if (!realHandle) return null;
 

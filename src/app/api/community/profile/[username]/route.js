@@ -7,7 +7,8 @@ import {
 import { normalizeSavedUsernameHandle, tryNormalizeCommunityUsername } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { getSessionUser } from "@/lib/session";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
+import { countFollowers, countFollowing, findFollow, isCommunityDbConfigured } from "@/lib/community-db";
 import { hasActivePremium } from "@/lib/subscription";
 
 /**
@@ -27,15 +28,14 @@ export async function GET(request, { params }) {
     return fail("Profile not found.", 404);
   }
 
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return fail("Community unavailable.", 503);
   }
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
+  if (!isCommunityDbConfigured()) {
     return fail("Community unavailable.", 503);
   }
 
@@ -47,20 +47,18 @@ export async function GET(request, { params }) {
   const { realHandle, user } = resolved;
   const profileUserId = String(user._id);
 
-  const [{ count: followersCount, error: fcErr }, { count: followingCount, error: fgErr }] = await Promise.all([
-    supabase.from("community_follows").select("*", { count: "exact", head: true }).eq("following_id", profileUserId),
-    supabase.from("community_follows").select("*", { count: "exact", head: true }).eq("follower_id", profileUserId),
-  ]);
-
-  if (fcErr) {
-    const mapped = mapCommunitySupabaseError(fcErr.message, setup);
+  let followersCount = 0;
+  let followingCount = 0;
+  try {
+    [followersCount, followingCount] = await Promise.all([
+      countFollowers(profileUserId),
+      countFollowing(profileUserId),
+    ]);
+  } catch (fcErr) {
+    const message = fcErr instanceof Error ? fcErr.message : String(fcErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(fcErr.message || "Followers count failed", 500);
-  }
-  if (fgErr) {
-    const mapped = mapCommunitySupabaseError(fgErr.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(fgErr.message || "Following count failed", 500);
+    return fail(message || "Follow count failed", 500);
   }
 
   const viewer = await getSessionUser(request);
@@ -70,13 +68,12 @@ export async function GET(request, { params }) {
     const isSelf = viewerId === profileUserId;
     let isFollowing = false;
     if (!isSelf) {
-      const { data: followRow } = await supabase
-        .from("community_follows")
-        .select("follower_id")
-        .eq("follower_id", viewerId)
-        .eq("following_id", profileUserId)
-        .maybeSingle();
-      isFollowing = Boolean(followRow);
+      try {
+        const followRow = await findFollow(viewerId, profileUserId);
+        isFollowing = Boolean(followRow);
+      } catch {
+        isFollowing = false;
+      }
     }
     viewerState = { isSelf, isFollowing };
   }

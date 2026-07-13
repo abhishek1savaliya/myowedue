@@ -5,6 +5,10 @@ function getMongoUri() {
   return process.env.MONGODB_URI || process.env.DATABASE_URL;
 }
 
+function isLocalMongoUri(uri) {
+  return /^(mongodb(\+srv)?:\/\/)(localhost|127\.0\.0\.1)/i.test(String(uri || ""));
+}
+
 let cached = global.mongoose;
 
 if (!cached) {
@@ -14,7 +18,15 @@ if (!cached) {
 export async function connectDB() {
   const mongoUri = getMongoUri();
   if (!mongoUri) {
-    throw new Error("Missing MongoDB connection string. Set MONGODB_URI (or DATABASE_URL) in .env.local");
+    throw new Error(
+      "Missing MongoDB connection string. Set MONGODB_URI (or DATABASE_URL) in your environment."
+    );
+  }
+
+  if (process.env.NODE_ENV === "production" && isLocalMongoUri(mongoUri)) {
+    throw new Error(
+      "MONGODB_URI points to localhost in production. Set MONGODB_URI to your MongoDB Atlas (mongodb+srv://…) connection string in Vercel → Project → Settings → Environment Variables."
+    );
   }
 
   if (cached.conn) {

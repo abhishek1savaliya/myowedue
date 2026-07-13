@@ -1,6 +1,14 @@
 import ContactMessage from "@/models/ContactMessage";
 import AdminUser from "@/models/AdminUser";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import {
+  countCommunityTable,
+  countPostsBetween,
+  countPostsSince,
+  fetchCommentCountsForPosts,
+  fetchPostLikesForPosts,
+  listRecentPostsForAnalytics,
+} from "@/lib/community-db";
+import { isCommunityConfigured } from "@/lib/community-server";
 
 function statusMapFromAggregate(rows) {
   const map = {
@@ -29,35 +37,18 @@ async function fetchCommunityPostAnalytics(now) {
     topPosts: [],
   };
 
-  if (!isSupabaseCommunityConfigured()) return empty;
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return empty;
+  if (!isCommunityConfigured()) return empty;
 
   try {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const [
-      postsRes,
-      postsMonthRes,
-      likesRes,
-      commentsRes,
-      sharesRes,
-    ] = await Promise.all([
-      supabase.from("community_posts").select("*", { count: "exact", head: true }),
-      supabase
-        .from("community_posts")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", monthStart),
-      supabase.from("community_post_likes").select("*", { count: "exact", head: true }),
-      supabase.from("community_comments").select("*", { count: "exact", head: true }),
-      supabase.from("community_post_shares").select("*", { count: "exact", head: true }),
+    const [totalPosts, postsThisMonth, totalLikes, totalComments, totalShares] = await Promise.all([
+      countCommunityTable("community_posts"),
+      countPostsSince(monthStart),
+      countCommunityTable("community_post_likes"),
+      countCommunityTable("community_comments"),
+      countCommunityTable("community_post_shares"),
     ]);
-
-    if (postsRes.error) return { ...empty, configured: true, error: postsRes.error.message };
-
-    let totalShares = 0;
-    if (!sharesRes.error) totalShares = sharesRes.count || 0;
 
     const dayRanges = [];
     for (let i = 6; i >= 0; i--) {
@@ -69,40 +60,30 @@ async function fetchCommunityPostAnalytics(now) {
       dayRanges.push({ d, next });
     }
     const dayCounts = await Promise.all(
-      dayRanges.map(({ d, next }) =>
-        supabase
-          .from("community_posts")
-          .select("*", { count: "exact", head: true })
-          .gte("created_at", d.toISOString())
-          .lt("created_at", next.toISOString())
-      )
+      dayRanges.map(({ d, next }) => countPostsBetween(d.toISOString(), next.toISOString()))
     );
     const postsLast7Days = dayRanges.map(({ d }, i) => ({
       date: d.toISOString().slice(0, 10),
       shortLabel: d.toLocaleDateString(undefined, { weekday: "short" }),
-      posts: dayCounts[i].error ? 0 : dayCounts[i].count || 0,
+      posts: dayCounts[i] || 0,
     }));
 
-    const { data: recentPosts, error: recentErr } = await supabase
-      .from("community_posts")
-      .select("id, author_name, body, share_count, created_at")
-      .order("created_at", { ascending: false })
-      .limit(40);
+    const recentPosts = await listRecentPostsForAnalytics(40);
 
     let topPosts = [];
-    if (!recentErr && recentPosts?.length) {
+    if (recentPosts?.length) {
       const scored = [...recentPosts].sort((a, b) => (b.share_count || 0) - (a.share_count || 0)).slice(0, 5);
       const ids = scored.map((p) => p.id);
       const [likesIn, commentsIn] = await Promise.all([
-        supabase.from("community_post_likes").select("post_id").in("post_id", ids),
-        supabase.from("community_comments").select("post_id").in("post_id", ids),
+        fetchPostLikesForPosts(ids),
+        fetchCommentCountsForPosts(ids),
       ]);
       const likeByPost = new Map();
       const commentByPost = new Map();
-      for (const row of likesIn.data || []) {
+      for (const row of likesIn || []) {
         likeByPost.set(row.post_id, (likeByPost.get(row.post_id) || 0) + 1);
       }
-      for (const row of commentsIn.data || []) {
+      for (const row of commentsIn || []) {
         commentByPost.set(row.post_id, (commentByPost.get(row.post_id) || 0) + 1);
       }
       topPosts = scored.map((p) => ({
@@ -118,10 +99,10 @@ async function fetchCommunityPostAnalytics(now) {
 
     return {
       configured: true,
-      totalPosts: postsRes.count || 0,
-      postsThisMonth: postsMonthRes.error ? 0 : postsMonthRes.count || 0,
-      totalLikes: likesRes.error ? 0 : likesRes.count || 0,
-      totalComments: commentsRes.error ? 0 : commentsRes.count || 0,
+      totalPosts,
+      postsThisMonth,
+      totalLikes,
+      totalComments,
       totalShares,
       postsLast7Days,
       topPosts,

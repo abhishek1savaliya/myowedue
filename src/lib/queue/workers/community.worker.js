@@ -1,4 +1,5 @@
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { upsertPostEmbedding } from "@/lib/community-db";
+import { isCommunityConfigured } from "@/lib/community-server";
 import { embedText, embeddingModelName, vectorToPgLiteral } from "@/lib/communityEmbeddings";
 import { reindexAllCommunityPostTopics } from "@/lib/community-reindex-topics";
 import { clearCommunityCaches, clearCommunityTrendingCache } from "@/lib/redis";
@@ -7,7 +8,7 @@ export const COMMUNITY_QUEUE_NAME = "community-jobs";
 export const COMMUNITY_CONCURRENCY = 3;
 
 export async function communityProcessor(job) {
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     throw new Error("Community database not configured");
   }
 
@@ -26,27 +27,13 @@ export async function communityProcessor(job) {
 }
 
 async function handleGenerateEmbedding({ postId, body }) {
-  const supabase = getSupabaseAdmin();
-  if (!supabase) throw new Error("Supabase not configured");
-
   const vector = await embedText(body);
-  await supabase.from("community_post_embeddings").upsert(
-    {
-      post_id: postId,
-      embedding: vectorToPgLiteral(vector),
-      model: embeddingModelName(),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "post_id" }
-  );
+  await upsertPostEmbedding(postId, vectorToPgLiteral(vector), embeddingModelName());
   return { embedded: true, postId };
 }
 
 async function handleReindexTopics({ maxPosts, afterId }) {
-  const supabase = getSupabaseAdmin();
-  if (!supabase) throw new Error("Supabase not configured");
-
-  const result = await reindexAllCommunityPostTopics(supabase, {
+  const result = await reindexAllCommunityPostTopics({
     maxPosts: Number.isFinite(maxPosts) ? maxPosts : 10_000,
     afterId: afterId || "",
   });
@@ -64,4 +51,3 @@ async function handlePreWarmTrending() {
   await clearCommunityTrendingCache();
   return { warmed: true };
 }
-import "server-only";

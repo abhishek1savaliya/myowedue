@@ -9,7 +9,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import pg from "pg";
-import { getSupabaseDatabaseUrl, resolvePostgresConnectionString } from "@/lib/supabase-env";
+import { getCommunityDatabaseUrl, resolvePostgresConnectionString } from "@/lib/community-env";
 
 const { Pool } = pg;
 
@@ -135,7 +135,7 @@ export function getCommunityPool() {
 }
 
 function getPool() {
-  const raw = getSupabaseDatabaseUrl();
+  const raw = getCommunityDatabaseUrl();
   if (!raw) return null;
   const resolved = resolvePostgresConnectionString(raw);
   const url = stripTlsQueryParamsFromPostgresUrl(resolved);
@@ -227,7 +227,7 @@ export async function prepareCommunityPostgresSchema() {
     return { ok: true, existed: true };
   }
 
-  const rawUrl = getSupabaseDatabaseUrl();
+  const rawUrl = getCommunityDatabaseUrl();
   if (!rawUrl) {
     return { skipped: true };
   }

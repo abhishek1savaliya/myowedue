@@ -50,11 +50,19 @@ const SUPABASE_URL = (() => {
 
 const NEON_URL =
   process.env.NEON_TARGET_URL ||
+  process.env.COMMUNITY_DATABASE_URL ||
   process.env.NEON_DATABASE_URL ||
-  "postgresql://neondb_owner:npg_GCvNxoOD1g9h@ep-floral-queen-a7kn1rt6.ap-southeast-2.aws.neon.tech/neondb?sslmode=require";
+  "";
 
 if (!SUPABASE_URL) {
-  console.error("Missing Supabase source URL.");
+  console.error("Missing Supabase source URL. Set SUPABASE_SOURCE_URL or Supabase Postgres vars in .env.local");
+  process.exit(1);
+}
+
+if (!NEON_URL) {
+  console.error(
+    "Missing Neon target URL. Set NEON_TARGET_URL, COMMUNITY_DATABASE_URL, or NEON_DATABASE_URL in .env.local"
+  );
   process.exit(1);
 }
 

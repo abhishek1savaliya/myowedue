@@ -2,7 +2,7 @@ import { fail, ok } from "@/lib/api";
 import { searchCommunityMembers } from "@/lib/community-member-search";
 import { COMMUNITY_USERNAME_MAX, normalizeSavedUsernameHandle } from "@/lib/community-usernames";
 import { prepareCommunityApi } from "@/lib/community-api-setup";
-import { isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
 
 const DEFAULT_LIMIT = 12;
 
@@ -10,7 +10,7 @@ const DEFAULT_LIMIT = 12;
  * GET ?q= — public prefix search over community_usernames (autocomplete).
  */
 export async function GET(request) {
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return ok({ matches: [] });
   }
 

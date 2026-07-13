@@ -5,21 +5,30 @@ import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-
 import { normalizeSavedUsernameHandle, tryNormalizeCommunityUsername } from "@/lib/community-usernames";
 import { communitySuggestedCreatorsCacheKey, delRedisKey } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
+import {
+  deleteFollow,
+  findFollow,
+  findUsernameByHandle,
+  findUsernameByUserId,
+  insertFollow,
+  isCommunityDbConfigured,
+} from "@/lib/community-db";
 
 export async function POST(request, { params }) {
   const { user, error } = await requireUser(request);
   if (error) return error;
 
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return fail("Community database is not configured.", 503);
   }
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return fail("Community database is not configured.", 503);
+  if (!isCommunityDbConfigured()) {
+    return fail("Community database is not configured.", 503);
+  }
 
   const { username: raw } = await params;
   const segment = String(raw ?? "").trim();
@@ -33,31 +42,17 @@ export async function POST(request, { params }) {
     return fail("Profile not found.", 404);
   }
 
-  const { data: rowExact, error: qErr } = await supabase
-    .from("community_usernames")
-    .select("user_id")
-    .eq("username", parsed.normalized)
-    .maybeSingle();
-
-  if (qErr) {
-    const mapped = mapCommunitySupabaseError(qErr.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(qErr.message || "Lookup failed", 500);
-  }
-
-  let row = rowExact;
-  if (!row?.user_id) {
-    const { data: rowInsensitive, error: iErr } = await supabase
-      .from("community_usernames")
-      .select("user_id")
-      .ilike("username", parsed.normalized)
-      .maybeSingle();
-    if (iErr) {
-      const mapped = mapCommunitySupabaseError(iErr.message, setup);
-      if (mapped) return fail(mapped, 503);
-      return fail(iErr.message || "Lookup failed", 500);
+  let row;
+  try {
+    row = await findUsernameByHandle(parsed.normalized);
+    if (!row?.user_id) {
+      row = await findUsernameByHandle(parsed.normalized, { ilike: true });
     }
-    row = rowInsensitive;
+  } catch (qErr) {
+    const message = qErr instanceof Error ? qErr.message : String(qErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
+    if (mapped) return fail(mapped, 503);
+    return fail(message || "Lookup failed", 500);
   }
 
   if (!row?.user_id) {
@@ -71,42 +66,36 @@ export async function POST(request, { params }) {
     return fail("You cannot follow yourself.", 400);
   }
 
-  const { data: existing } = await supabase
-    .from("community_follows")
-    .select("follower_id")
-    .eq("follower_id", uid)
-    .eq("following_id", targetId)
-    .maybeSingle();
+  let existing;
+  try {
+    existing = await findFollow(uid, targetId);
+  } catch {
+    existing = null;
+  }
 
   if (existing) {
-    const { error: delErr } = await supabase
-      .from("community_follows")
-      .delete()
-      .eq("follower_id", uid)
-      .eq("following_id", targetId);
-    if (delErr) {
-      const mapped = mapCommunitySupabaseError(delErr.message, setup);
+    try {
+      await deleteFollow(uid, targetId);
+    } catch (delErr) {
+      const message = delErr instanceof Error ? delErr.message : String(delErr);
+      const mapped = mapCommunitySupabaseError(message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(delErr.message, 500);
+      return fail(message, 500);
     }
     void delRedisKey(communitySuggestedCreatorsCacheKey());
     return ok({ following: false });
   }
 
-  const { error: insErr } = await supabase
-    .from("community_follows")
-    .insert({ follower_id: uid, following_id: targetId });
-  if (insErr) {
-    const mapped = mapCommunitySupabaseError(insErr.message, setup);
+  try {
+    await insertFollow(uid, targetId);
+  } catch (insErr) {
+    const message = insErr instanceof Error ? insErr.message : String(insErr);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(insErr.message, 500);
+    return fail(message, 500);
   }
 
-  const { data: actorRow } = await supabase
-    .from("community_usernames")
-    .select("username")
-    .eq("user_id", uid)
-    .maybeSingle();
+  const actorRow = await findUsernameByUserId(uid).catch(() => null);
   const actorCommunityUsername = actorRow?.username ? String(actorRow.username) : null;
 
   void notifyCommunityActivity({

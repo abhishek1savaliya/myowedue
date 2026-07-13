@@ -9,7 +9,8 @@ import UserSession from "@/models/UserSession";
 import { enforceConcurrentSessionLimit, extractClientIp } from "@/lib/session";
 import { normalizeCommunityUsername } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
+import { findUsernameByHandle, insertUsername } from "@/lib/community-db";
 
 export async function POST(request) {
   try {
@@ -33,28 +34,21 @@ export async function POST(request) {
       return fail(e?.message || "Invalid community username.", 422);
     }
 
-    if (!isSupabaseCommunityConfigured()) {
+    if (!isCommunityConfigured()) {
       return fail("New accounts require community services to be configured. Please try again later.", 503);
     }
 
     const { setup, fail503 } = await prepareCommunityApi();
     if (fail503) return fail(fail503, 503);
 
-    const supabase = getSupabaseAdmin();
-    if (!supabase) {
-      return fail("Community database is not available. Please try again later.", 503);
-    }
-
-    const { data: takenRow, error: takenErr } = await supabase
-      .from("community_usernames")
-      .select("user_id")
-      .eq("username", normalizedHandle)
-      .maybeSingle();
-
-    if (takenErr) {
-      const mapped = mapCommunitySupabaseError(takenErr.message, setup);
+    let takenRow;
+    try {
+      takenRow = await findUsernameByHandle(normalizedHandle);
+    } catch (takenErr) {
+      const message = takenErr instanceof Error ? takenErr.message : String(takenErr);
+      const mapped = mapCommunitySupabaseError(message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(takenErr.message || "Could not verify username.", 500);
+      return fail(message || "Could not verify username.", 500);
     }
     if (takenRow) {
       return fail("That community username is already taken.", 409);
@@ -73,16 +67,11 @@ export async function POST(request) {
       phone: String(phone || "").trim(),
     });
 
-    const nowIso = new Date().toISOString();
-    const { error: insErr } = await supabase.from("community_usernames").insert({
-      user_id: String(user._id),
-      username: normalizedHandle,
-      updated_at: nowIso,
-    });
-
-    if (insErr) {
+    try {
+      await insertUsername(String(user._id), normalizedHandle);
+    } catch (insErr) {
       await User.deleteOne({ _id: user._id });
-      const msg = String(insErr.message || "").toLowerCase();
+      const msg = String(insErr?.message || "").toLowerCase();
       if (msg.includes("unique") || msg.includes("duplicate")) {
         return fail("That community username is already taken.", 409);
       }
@@ -91,11 +80,11 @@ export async function POST(request) {
         msg.includes("check constraint") ||
         msg.includes("violates check constraint")
       ) {
-        return fail(insErr.message || "Username is not allowed.", 422);
+        return fail(insErr?.message || "Username is not allowed.", 422);
       }
-      const mapped = mapCommunitySupabaseError(insErr.message, setup);
+      const mapped = mapCommunitySupabaseError(insErr?.message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(insErr.message || "Failed to reserve username.", 500);
+      return fail(insErr?.message || "Failed to reserve username.", 500);
     }
     void upsertCommunityUsernameInAlgolia({ userId: String(user._id), username: normalizedHandle });
 

@@ -3,7 +3,7 @@ import { checkCommunityHandleAvailability } from "@/lib/community-handle-availab
 import { COMMUNITY_USERNAME_MAX, COMMUNITY_USERNAME_MIN } from "@/lib/community-usernames";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { requireUser } from "@/lib/session";
-import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
+import { isCommunityConfigured } from "@/lib/community-server";
 
 /**
  * GET ?q=proposed — live uniqueness check for community username (authenticated).
@@ -13,7 +13,7 @@ export async function GET(request) {
   const { user, error } = await requireUser(request);
   if (error) return error;
 
-  if (!isSupabaseCommunityConfigured()) {
+  if (!isCommunityConfigured()) {
     return ok({
       configured: false,
       status: "unconfigured",
@@ -25,17 +25,6 @@ export async function GET(request) {
 
   const { setup, fail503 } = await prepareCommunityApi();
   if (fail503) return fail(fail503, 503);
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return ok({
-      configured: false,
-      status: "unconfigured",
-      available: null,
-      min: COMMUNITY_USERNAME_MIN,
-      max: COMMUNITY_USERNAME_MAX,
-    });
-  }
 
   const { searchParams } = new URL(request.url);
   const raw = searchParams.get("q") ?? searchParams.get("username") ?? "";
@@ -50,7 +39,7 @@ export async function GET(request) {
     max: COMMUNITY_USERNAME_MAX,
   };
 
-  const result = await checkCommunityHandleAvailability(s, user._id, { supabase });
+  const result = await checkCommunityHandleAvailability(s, user._id);
 
   if (result.status === "error") {
     const mapped = mapCommunitySupabaseError(result.error, setup);
