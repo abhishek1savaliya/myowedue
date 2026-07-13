@@ -130,6 +130,10 @@ function stripTlsQueryParamsFromPostgresUrl(connStr) {
   return q ? `${base}?${q}${hash}` : `${base}${hash}`;
 }
 
+export function getCommunityPool() {
+  return getPool();
+}
+
 function getPool() {
   const raw = getSupabaseDatabaseUrl();
   if (!raw) return null;

@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import { hasActivePremium } from "@/lib/subscription";
+import { fetchPostLikesForPosts, isCommunityDbConfigured } from "@/lib/community-db";
 
 /** Pro subscribers hide their likes from everyone else (counts and liked state). */
 export function hasPrivateCommunityLikes(user) {
@@ -80,13 +81,14 @@ export async function buildPublicLikesMap(likeRows, viewerUserId, privateLikerId
 }
 
 /**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} postId
  * @param {string} viewerUserId
  */
-export async function countPublicPostLikes(supabase, postId, viewerUserId) {
-  const { data: rows, error } = await supabase.from("community_post_likes").select("user_id").eq("post_id", postId);
-  if (error) throw error;
+export async function countPublicPostLikes(postId, viewerUserId) {
+  if (!isCommunityDbConfigured()) {
+    throw new Error("Community database not configured");
+  }
+  const rows = await fetchPostLikesForPosts([postId]);
   const privateSet = await getPrivateLikeUserIdSet((rows || []).map((r) => r.user_id));
   const viewerId = viewerUserId ? String(viewerUserId) : "";
   let count = 0;

@@ -123,6 +123,7 @@ function inferDirectDbHostFromProjectUrl(projectUrl) {
  */
 export function getSupabaseDatabaseUrl() {
   const full = fromEnvKeys([
+    "NEON_DATABASE_URL",
     "SUPABASE_DATABASE_URL",
     "myoweduesupa_POSTGRES_URL_NON_POOLING",
     "myoweduesupa_POSTGRES_URL",

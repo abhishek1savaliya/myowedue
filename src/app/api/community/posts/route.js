@@ -18,6 +18,15 @@ import {
 import { getSessionUser, requireUser } from "@/lib/session";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 import {
+  fetchCommentCountsForPosts,
+  fetchPostLikesByUser,
+  fetchPostLikesForPosts,
+  fetchPostsByIds,
+  fetchLikedPostIdsByUser,
+  isCommunityDbConfigured,
+  listPosts,
+} from "@/lib/community-db";
+import {
   aggregateEngagementWithPrivateLikes,
   buildPublicLikesMap,
   communityViewerPayload,
@@ -79,19 +88,34 @@ async function enrichAndVerifyPosts(supabase, page, currentUserId) {
   const postIds = page.map((p) => p.id);
   if (postIds.length === 0) return { posts: [] };
 
-  const [likesRes, commentsRes, verifiedPosts] = await Promise.all([
-    supabase.from("community_post_likes").select("post_id, user_id").in("post_id", postIds),
-    supabase.from("community_comments").select("post_id").in("post_id", postIds),
-    attachAuthorVerifiedToPosts(page),
-  ]);
+  let likesData = [];
+  let commentsData = [];
+  if (isCommunityDbConfigured()) {
+    try {
+      [likesData, commentsData] = await Promise.all([
+        fetchPostLikesForPosts(postIds),
+        fetchCommentCountsForPosts(postIds),
+      ]);
+    } catch (error) {
+      return { error };
+    }
+  } else {
+    const [likesRes, commentsRes] = await Promise.all([
+      supabase.from("community_post_likes").select("post_id, user_id").in("post_id", postIds),
+      supabase.from("community_comments").select("post_id").in("post_id", postIds),
+    ]);
+    if (likesRes.error) return { error: likesRes.error };
+    if (commentsRes.error) return { error: commentsRes.error };
+    likesData = likesRes.data || [];
+    commentsData = commentsRes.data || [];
+  }
 
-  if (likesRes.error) return { error: likesRes.error };
-  if (commentsRes.error) return { error: commentsRes.error };
+  const verifiedPosts = await attachAuthorVerifiedToPosts(page);
 
-  const privateLikerIds = await getPrivateLikeUserIdSet((likesRes.data || []).map((r) => r.user_id));
+  const privateLikerIds = await getPrivateLikeUserIdSet((likesData || []).map((r) => r.user_id));
   const { likeCount, commentCount, likedByMe } = aggregateEngagementWithPrivateLikes(
-    likesRes.data,
-    commentsRes.data,
+    likesData,
+    commentsData,
     currentUserId,
     privateLikerIds
   );
@@ -200,46 +224,42 @@ export async function GET(request) {
   }
 
   if (filter === "liked") {
-    let likesQuery = supabase
-      .from("community_post_likes")
-      .select("post_id, created_at")
-      .eq("user_id", currentUserId)
-      .order("created_at", { ascending: false })
-      .limit(PAGE_SIZE + 1);
-
-    if (cursor) {
-      likesQuery = likesQuery.lt("created_at", cursor);
-    }
-
-    const { data: likeRows, error: lErr } = await likesQuery;
-    if (lErr) {
-      const mapped = mapCommunitySupabaseError(lErr.message, setup);
+    let likePage = [];
+    try {
+      if (!isCommunityDbConfigured()) {
+        return fail("Community database is not configured.", 503);
+      }
+      likePage = await fetchPostLikesByUser(currentUserId, {
+        limit: PAGE_SIZE + 1,
+        cursor: cursor || null,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const mapped = mapCommunitySupabaseError(message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(lErr.message || "Failed to load likes", 500);
+      return fail(message || "Failed to load likes", 500);
     }
 
-    const likesSlice = likeRows || [];
-    const hasMoreLikes = likesSlice.length > PAGE_SIZE;
-    const likePage = hasMoreLikes ? likesSlice.slice(0, PAGE_SIZE) : likesSlice;
-    const postIds = likePage.map((r) => r.post_id);
+    const hasMoreLikes = likePage.length > PAGE_SIZE;
+    const likesSlice = hasMoreLikes ? likePage.slice(0, PAGE_SIZE) : likePage;
+    const postIds = likesSlice.map((r) => r.post_id);
 
     if (postIds.length === 0) {
       return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter }, user);
     }
 
-    const { data: postsRaw, error: pErr } = await supabase
-      .from("community_posts")
-      .select(COMMUNITY_POST_LIST_SELECT)
-      .in("id", postIds);
-
-    if (pErr) {
-      const mapped = mapCommunitySupabaseError(pErr.message, setup);
+    let postsRaw = [];
+    try {
+      postsRaw = await fetchPostsByIds(postIds);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const mapped = mapCommunitySupabaseError(message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(pErr.message || "Failed to load posts", 500);
+      return fail(message || "Failed to load posts", 500);
     }
 
     const byId = new Map((postsRaw || []).map((p) => [p.id, p]));
-    const page = likePage.map((r) => byId.get(r.post_id)).filter(Boolean);
+    const page = likesSlice.map((r) => byId.get(r.post_id)).filter(Boolean);
 
     const enriched = await enrichAndVerifyPosts(supabase, page, currentUserId);
     if (enriched.error) {
@@ -248,7 +268,7 @@ export async function GET(request) {
       return fail(enriched.error.message, 500);
     }
 
-    const nextCursor = hasMoreLikes ? likePage[likePage.length - 1]?.created_at : null;
+    const nextCursor = hasMoreLikes ? likesSlice[likesSlice.length - 1]?.created_at : null;
     return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter }, user);
   }
 
@@ -306,25 +326,23 @@ export async function GET(request) {
   }
 
   if (filter === "mine") {
-    let mineQuery = supabase
-      .from("community_posts")
-      .select(COMMUNITY_POST_LIST_SELECT)
-      .eq("author_id", currentUserId)
-      .order("created_at", { ascending: false })
-      .limit(PAGE_SIZE + 1);
-
-    if (cursor) {
-      mineQuery = mineQuery.lt("created_at", cursor);
-    }
-
-    const { data: minePosts, error: mErr } = await mineQuery;
-    if (mErr) {
-      const mapped = mapCommunitySupabaseError(mErr.message, setup);
+    let mineSlice = [];
+    try {
+      if (!isCommunityDbConfigured()) {
+        return fail("Community database is not configured.", 503);
+      }
+      mineSlice = await listPosts({
+        limit: PAGE_SIZE + 1,
+        cursor: cursor || null,
+        authorId: currentUserId,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const mapped = mapCommunitySupabaseError(message, setup);
       if (mapped) return fail(mapped, 503);
-      return fail(mErr.message || "Failed to load posts", 500);
+      return fail(message || "Failed to load posts", 500);
     }
 
-    const mineSlice = minePosts || [];
     const hasMoreMine = mineSlice.length > PAGE_SIZE;
     const page = hasMoreMine ? mineSlice.slice(0, PAGE_SIZE) : mineSlice;
 
@@ -354,14 +372,19 @@ export async function GET(request) {
     }
 
     const signalsSince = new Date(Date.now() - PHASE2_SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const usePg = isCommunityDbConfigured();
     const [candidateRes, followingRes, likesRes, sharesRes, myCommentsRes, signalRes, userVecRes] = await Promise.all([
-      supabase
-        .from("community_posts")
-        .select(COMMUNITY_POST_LIST_SELECT)
-        .order("created_at", { ascending: false })
-        .range(dbOffset, dbOffset + PERSONALIZED_MAX_CANDIDATES - 1),
+      usePg
+        ? listPosts({ limit: PERSONALIZED_MAX_CANDIDATES, offset: dbOffset }).then((data) => ({ data, error: null }))
+        : supabase
+            .from("community_posts")
+            .select(COMMUNITY_POST_LIST_SELECT)
+            .order("created_at", { ascending: false })
+            .range(dbOffset, dbOffset + PERSONALIZED_MAX_CANDIDATES - 1),
       supabase.from("community_follows").select("following_id").eq("follower_id", currentUserId),
-      supabase.from("community_post_likes").select("post_id").eq("user_id", currentUserId).limit(200),
+      usePg
+        ? fetchLikedPostIdsByUser(currentUserId, 200).then((data) => ({ data, error: null }))
+        : supabase.from("community_post_likes").select("post_id").eq("user_id", currentUserId).limit(200),
       supabase.from("community_post_shares").select("post_id").eq("user_id", currentUserId).limit(200),
       supabase.from("community_comments").select("post_id, body").eq("author_id", currentUserId).limit(200),
       supabase
@@ -405,9 +428,11 @@ export async function GET(request) {
     const candidateIds = candidates.map((p) => p.id);
 
     const [candidateLikes, candidateComments, postVecRes] = await Promise.all([
-      candidateIds.length > 0
-        ? supabase.from("community_post_likes").select("post_id, user_id").in("post_id", candidateIds)
-        : { data: [], error: null },
+      candidateIds.length > 0 && isCommunityDbConfigured()
+        ? fetchPostLikesForPosts(candidateIds).then((data) => ({ data, error: null }))
+        : candidateIds.length > 0
+          ? supabase.from("community_post_likes").select("post_id, user_id").in("post_id", candidateIds)
+          : { data: [], error: null },
       candidateIds.length > 0
         ? supabase.from("community_comments").select("post_id").in("post_id", candidateIds)
         : { data: [], error: null },
@@ -505,41 +530,38 @@ export async function GET(request) {
     return ok({ ...payload, viewer: viewerPayload(user) });
   }
 
-  let query = supabase
-    .from("community_posts")
-    .select(COMMUNITY_POST_LIST_SELECT)
-    .order("created_at", { ascending: false })
-    .limit(PAGE_SIZE + 1);
+  let page = [];
+  try {
+    if (!isCommunityDbConfigured()) {
+      return fail("Community database is not configured.", 503);
+    }
+    const slice = await listPosts({
+      limit: PAGE_SIZE + 1,
+      cursor: cursor || null,
+    });
+    const hasMore = slice.length > PAGE_SIZE;
+    page = hasMore ? slice.slice(0, PAGE_SIZE) : slice;
 
-  if (cursor) {
-    query = query.lt("created_at", cursor);
-  }
+    if (page.length === 0) {
+      return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter }, user);
+    }
 
-  const { data: posts, error: qErr } = await query;
-  if (qErr) {
-    const mapped = mapCommunitySupabaseError(qErr.message, setup);
+    const enriched = await enrichAndVerifyPosts(supabase, page, currentUserId);
+    if (enriched.error) {
+      const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
+      if (mapped) return fail(mapped, 503);
+      return fail(enriched.error.message, 500);
+    }
+
+    const nextCursor = hasMore ? page[page.length - 1]?.created_at : null;
+
+    return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter }, user);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const mapped = mapCommunitySupabaseError(message, setup);
     if (mapped) return fail(mapped, 503);
-    return fail(qErr.message || "Failed to load posts", 500);
+    return fail(message || "Failed to load posts", 500);
   }
-
-  const slice = posts || [];
-  const hasMore = slice.length > PAGE_SIZE;
-  const page = hasMore ? slice.slice(0, PAGE_SIZE) : slice;
-
-  if (page.length === 0) {
-    return serveFeedCache(feedCacheKey, { posts: [], nextCursor: null, currentUserId, filter }, user);
-  }
-
-  const enriched = await enrichAndVerifyPosts(supabase, page, currentUserId);
-  if (enriched.error) {
-    const mapped = mapCommunitySupabaseError(enriched.error.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(enriched.error.message, 500);
-  }
-
-  const nextCursor = hasMore ? page[page.length - 1]?.created_at : null;
-
-  return serveFeedCache(feedCacheKey, { posts: enriched.posts, nextCursor, currentUserId, filter }, user);
 }
 
 export async function POST(request) {

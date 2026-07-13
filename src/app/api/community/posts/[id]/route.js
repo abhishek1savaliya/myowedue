@@ -10,6 +10,12 @@ import { getSessionUser, requireUser } from "@/lib/session";
 import { hasActivePremium } from "@/lib/subscription";
 import { getSupabaseAdmin, isSupabaseCommunityConfigured } from "@/lib/supabase-server";
 import {
+  fetchCommentCountsForPosts,
+  fetchPostById,
+  fetchPostLikesForPosts,
+  isCommunityDbConfigured,
+} from "@/lib/community-db";
+import {
   aggregateEngagementWithPrivateLikes,
   communityViewerPayload,
   getPrivateLikeUserIdSet,
@@ -33,52 +39,42 @@ export async function GET(request, { params }) {
 
   const currentUserId = user ? String(user._id) : "";
 
-  const { data: row, error: qErr } = await supabase
-    .from("community_posts")
-    .select("id, author_id, author_name, body, share_count, created_at, updated_at")
-    .eq("id", postId)
-    .maybeSingle();
-
-  if (qErr) {
-    const mapped = mapCommunitySupabaseError(qErr.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(qErr.message || "Failed to load post", 500);
-  }
-  if (!row) return fail("Post not found", 404);
-
-  const [likesRes, commentsRes] = await Promise.all([
-    supabase.from("community_post_likes").select("post_id, user_id").eq("post_id", postId),
-    supabase.from("community_comments").select("post_id").eq("post_id", postId),
-  ]);
-
-  if (likesRes.error) {
-    const mapped = mapCommunitySupabaseError(likesRes.error.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(likesRes.error.message, 500);
-  }
-  if (commentsRes.error) {
-    const mapped = mapCommunitySupabaseError(commentsRes.error.message, setup);
-    if (mapped) return fail(mapped, 503);
-    return fail(commentsRes.error.message, 500);
+  if (!isCommunityDbConfigured()) {
+    return fail("Community database is not configured.", 503);
   }
 
-  const privateLikerIds = await getPrivateLikeUserIdSet((likesRes.data || []).map((r) => r.user_id));
-  const { likeCount, commentCount, likedByMe } = aggregateEngagementWithPrivateLikes(
-    likesRes.data,
-    commentsRes.data,
-    currentUserId,
-    privateLikerIds
-  );
-  const base = {
-    ...row,
-    likeCount: likeCount[row.id] || 0,
-    commentCount: commentCount[row.id] || 0,
-    liked: likedByMe.has(row.id),
-  };
-  const [verified] = await attachAuthorVerifiedToPosts([base]);
-  const [post] = await attachPrivacyAwareAuthorLabels(supabase, [verified], currentUserId);
+  try {
+    const row = await fetchPostById(postId);
+    if (!row) return fail("Post not found", 404);
 
-  return ok({ post, currentUserId, viewer: communityViewerPayload(user) });
+    const [likesData, commentsData] = await Promise.all([
+      fetchPostLikesForPosts([postId]),
+      fetchCommentCountsForPosts([postId]),
+    ]);
+
+    const privateLikerIds = await getPrivateLikeUserIdSet((likesData || []).map((r) => r.user_id));
+    const { likeCount, commentCount, likedByMe } = aggregateEngagementWithPrivateLikes(
+      likesData,
+      commentsData,
+      currentUserId,
+      privateLikerIds
+    );
+    const base = {
+      ...row,
+      likeCount: likeCount[row.id] || 0,
+      commentCount: commentCount[row.id] || 0,
+      liked: likedByMe.has(row.id),
+    };
+    const [verified] = await attachAuthorVerifiedToPosts([base]);
+    const [post] = await attachPrivacyAwareAuthorLabels(supabase, [verified], currentUserId);
+
+    return ok({ post, currentUserId, viewer: communityViewerPayload(user) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const mapped = mapCommunitySupabaseError(message, setup);
+    if (mapped) return fail(mapped, 503);
+    return fail(message || "Failed to load post", 500);
+  }
 }
 
 export async function PATCH(request, { params }) {
@@ -179,8 +175,12 @@ export async function PATCH(request, { params }) {
   }
 
   const [likesRes, commentsRes] = await Promise.all([
-    supabase.from("community_post_likes").select("post_id, user_id").eq("post_id", postId),
-    supabase.from("community_comments").select("post_id").eq("post_id", postId),
+    isCommunityDbConfigured()
+      ? fetchPostLikesForPosts([postId]).then((data) => ({ data, error: null }))
+      : supabase.from("community_post_likes").select("post_id, user_id").eq("post_id", postId),
+    isCommunityDbConfigured()
+      ? fetchCommentCountsForPosts([postId]).then((data) => ({ data, error: null }))
+      : supabase.from("community_comments").select("post_id").eq("post_id", postId),
   ]);
 
   if (likesRes.error) {
