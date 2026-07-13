@@ -1,6 +1,7 @@
 /**
- * Community Postgres (Neon) connection config.
+ * Community Postgres (Neon) connection config — server-only.
  */
+import "server-only";
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";

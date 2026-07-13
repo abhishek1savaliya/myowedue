@@ -1,5 +1,6 @@
 import { backfillCommunityPostSeoBatch } from "@/lib/community-post-seo";
-import { fetchCommunityPostSitemapRows, getCommunitySiteUrl } from "@/lib/community-seo";
+import { getCommunitySiteUrl } from "@/lib/community-seo";
+import { fetchCommunityPostSitemapRows } from "@/lib/community-seo-server";
 import { PUBLIC_SITELINKS } from "@/lib/site-seo";
 
 export default async function sitemap() {

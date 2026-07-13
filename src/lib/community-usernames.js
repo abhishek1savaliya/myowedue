@@ -1,5 +1,3 @@
-import { fetchUsernameMapByUserIds as fetchUsernameMapFromDb } from "@/lib/community-db";
-
 /** Allowed length for new usernames (must match DB check when migration applied). */
 export const COMMUNITY_USERNAME_MIN = 6;
 export const COMMUNITY_USERNAME_MAX = 21;
@@ -81,54 +79,4 @@ export function communityProfilePathByUsername(raw) {
   const s = normalizeSavedUsernameHandle(raw);
   if (!s) return "/community";
   return `/community/user/${encodeURIComponent(s)}`;
-}
-
-/**
- * @param {string[]} userIds — or legacy (supabase, userIds) signature
- */
-export async function fetchUsernameMapByUserIds(supabaseOrUserIds, maybeUserIds) {
-  const userIds = Array.isArray(supabaseOrUserIds) ? supabaseOrUserIds : maybeUserIds;
-  return fetchUsernameMapFromDb(userIds);
-}
-
-/**
- * @param {object[] | null} supabaseOrPosts
- * @param {object[]} [maybePosts]
- */
-export async function attachAuthorUsernamesToPosts(supabaseOrPosts, maybePosts) {
-  const posts = Array.isArray(supabaseOrPosts) ? supabaseOrPosts : maybePosts;
-  if (!posts?.length) return posts || [];
-  const ids = [...new Set(posts.map((p) => String(p.author_id || "").trim()).filter(Boolean))];
-  const map = await fetchUsernameMapByUserIds(ids);
-  return posts.map((p) => ({
-    ...p,
-    author_username: map.get(String(p.author_id)) || null,
-  }));
-}
-
-function collectCommentAuthorIds(nodes, out = []) {
-  for (const n of nodes || []) {
-    if (n?.author_id != null && String(n.author_id).trim()) out.push(String(n.author_id));
-    collectCommentAuthorIds(n.replies, out);
-  }
-  return out;
-}
-
-/**
- * @param {object[] | null} supabaseOrTree
- * @param {object[]} [maybeTree]
- */
-export async function attachAuthorUsernamesToCommentTree(supabaseOrTree, maybeTree) {
-  const tree = Array.isArray(supabaseOrTree) ? supabaseOrTree : maybeTree;
-  const ids = [...new Set(collectCommentAuthorIds(tree))];
-  const map = await fetchUsernameMapByUserIds(ids);
-
-  function walk(nodes) {
-    return (nodes || []).map((n) => ({
-      ...n,
-      author_username: map.get(String(n.author_id)) || null,
-      replies: walk(n.replies),
-    }));
-  }
-  return walk(tree);
 }

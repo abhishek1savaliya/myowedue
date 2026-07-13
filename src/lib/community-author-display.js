@@ -4,7 +4,7 @@ import {
   resolvePublicDisplayName,
   resolvePublicUsernameLabel,
 } from "@/lib/community-profile-privacy";
-import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames";
+import { attachAuthorUsernamesToPosts } from "@/lib/community-usernames-server";
 
 /**
  * Apply privacy-aware display names and @labels to posts for a viewer.

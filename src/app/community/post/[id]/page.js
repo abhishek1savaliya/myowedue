@@ -4,10 +4,10 @@ import {
   buildCommunityPostJsonLd,
   communityPostMetadataFromRecord,
   excerptFromPostBody,
-  fetchCommunityPostForSeo,
   getCommunitySiteUrl,
   isLikelyCommunityPostId,
 } from "@/lib/community-seo";
+import { fetchCommunityPostForSeo } from "@/lib/community-seo-server";
 
 /** ISR: refresh post HTML / metadata for search engines after publish or edit. */
 export const revalidate = 60;

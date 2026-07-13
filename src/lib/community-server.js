@@ -1,3 +1,5 @@
+import "server-only";
+
 import { isCommunityDbConfigured } from "@/lib/community-db";
 import { prepareCommunityPostgresSchema } from "@/lib/community-postgres";
 

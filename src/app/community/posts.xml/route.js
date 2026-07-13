@@ -1,9 +1,9 @@
 import {
   excerptFromPostBody,
-  fetchCommunityFeedForSeo,
   getCommunitySiteUrl,
   titleSnippetFromPost,
 } from "@/lib/community-seo";
+import { fetchCommunityFeedForSeo } from "@/lib/community-seo-server";
 
 export const revalidate = 300;
 

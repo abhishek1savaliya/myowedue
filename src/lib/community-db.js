@@ -1,3 +1,5 @@
+import "server-only";
+
 import { getCommunityPool } from "@/lib/community-postgres";
 import { getCommunityDatabaseUrl } from "@/lib/community-env";
 import { COMMUNITY_POST_LIST_SELECT } from "@/lib/community-post-edit-window";

@@ -1,7 +1,7 @@
 import { fail, ok } from "@/lib/api";
 import { notifyCommunityActivity } from "@/lib/community-notifications";
 import { formatUserDisplayName } from "@/lib/format-user-display-name";
-import { attachAuthorUsernamesToCommentTree } from "@/lib/community-usernames";
+import { attachAuthorUsernamesToCommentTree } from "@/lib/community-usernames-server";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { clearCommunityCaches, communityCommentsCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";

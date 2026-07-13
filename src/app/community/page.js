@@ -3,10 +3,10 @@ import CommunityFeedClient from "@/components/community/CommunityFeedClient";
 import {
   buildCommunityFeedJsonLd,
   excerptFromPostBody,
-  fetchCommunityFeedForSeo,
   getCommunitySiteUrl,
   lightKeywordsFromBody,
 } from "@/lib/community-seo";
+import { fetchCommunityFeedForSeo } from "@/lib/community-seo-server";
 
 /** ISR: refresh server HTML / meta / JSON-LD periodically for search engines. */
 export const revalidate = 60;

@@ -1,6 +1,6 @@
 import { fail, ok } from "@/lib/api";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
-import { fetchUsernameMapByUserIds } from "@/lib/community-usernames";
+import { fetchUsernameMapByUserIds } from "@/lib/community-usernames-server";
 import { communitySuggestedCreatorsCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
 import { getSessionUser } from "@/lib/session";
 import { isCommunityConfigured } from "@/lib/community-server";

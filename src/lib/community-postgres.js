@@ -1,11 +1,8 @@
 /**
- * Community “Posts” live in Supabase Postgres (SQL). The rest of the app uses MongoDB.
- * If SUPABASE_DATABASE_URL is set, we can auto-create community tables from
- * supabase/migrations when they are missing (001–003 core feed; 004 comment likes; 011 post SEO;
- * 005 usernames).
- *
- * Use Session mode (port 5432) or Direct connection — transaction pooler (6543) often cannot run DDL.
+ * Community Postgres (Neon) — server-only pool and schema bootstrap.
  */
+import "server-only";
+
 import { readFileSync } from "fs";
 import { join } from "path";
 import pg from "pg";

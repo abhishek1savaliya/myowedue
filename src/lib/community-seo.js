@@ -1,11 +1,3 @@
-import { cache } from "react";
-import {
-  fetchPostByIdFull,
-  listPostSitemapRows,
-  listPostsForSeo,
-} from "@/lib/community-db";
-import { isCommunityConfigured } from "@/lib/community-server";
-
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -107,49 +99,6 @@ export function lightKeywordsFromBody(body, limit = 12) {
     if (out.length >= limit) break;
   }
   return out;
-}
-
-/**
- * @param {string} postId
- * @returns {Promise<null | { id: string; author_id: string; author_name: string; body: string; created_at: string; updated_at: string }>}
- */
-export const fetchCommunityPostForSeo = cache(async (postId) => {
-  if (!isLikelyCommunityPostId(postId)) return null;
-  if (!isCommunityConfigured()) return null;
-  try {
-    return (await fetchPostByIdFull(postId.trim())) || null;
-  } catch {
-    return null;
-  }
-});
-
-/**
- * Latest public posts for SSR / JSON-LD / view-source (no auth).
- * @param {number} [limit]
- * @returns {Promise<{ posts: Array<{ id: string; author_id: string; author_name: string; body: string; created_at: string; updated_at: string; share_count?: number }> }>}
- */
-export const fetchCommunityFeedForSeo = cache(async (limit = 24) => {
-  const n = Math.min(Math.max(Number(limit) || 24, 1), 50);
-  if (!isCommunityConfigured()) return { posts: [] };
-  try {
-    const posts = await listPostsForSeo(n);
-    return { posts: Array.isArray(posts) ? posts : [] };
-  } catch {
-    return { posts: [] };
-  }
-});
-
-/**
- * @returns {Promise<Array<{ id: string; updated_at: string }>>}
- */
-export async function fetchCommunityPostSitemapRows(limit = 5000) {
-  if (!isCommunityConfigured()) return [];
-  try {
-    const rows = await listPostSitemapRows(limit);
-    return Array.isArray(rows) ? rows : [];
-  } catch {
-    return [];
-  }
 }
 
 /**
