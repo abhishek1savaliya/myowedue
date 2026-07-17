@@ -89,6 +89,8 @@ export default async function CommunityPublicPage() {
   const { posts } = await fetchCommunityFeedForSeo(FEED_SEO_LIMIT);
   const jsonLd = posts.length > 0 ? buildCommunityFeedJsonLd(posts, site) : null;
 
+  // SEO seed only — liked state is applied on the client from /api/community/me/liked-ids
+  // (ISR must not bake one viewer's private likes into shared HTML).
   const initialForClient = posts.map((p) => ({
     ...p,
     share_count: p.share_count ?? 0,

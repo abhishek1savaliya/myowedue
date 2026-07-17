@@ -1106,6 +1106,36 @@ function dedupePostsById(posts) {
   return out;
 }
 
+/** Merge viewer liked flags onto posts (private likes + SEO seed both need this). */
+function applyLikedFlagsToPosts(posts, likedIds) {
+  const likedSet = likedIds instanceof Set ? likedIds : new Set((likedIds || []).map(String));
+  return (posts || []).map((p) => {
+    const id = String(p?.id || "");
+    if (!id) return p;
+    const liked = likedSet.has(id);
+    const wasLiked = Boolean(p.liked);
+    if (liked === wasLiked) return p;
+    let likeCount = Number(p.likeCount || 0);
+    if (liked && !wasLiked) likeCount += 1;
+    if (!liked && wasLiked) likeCount = Math.max(0, likeCount - 1);
+    return { ...p, liked, likeCount };
+  });
+}
+
+async function fetchMyLikedMeta() {
+  const res = await fetch("/api/community/me/liked-ids", {
+    credentials: "include",
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, ids: [], currentUserId: "" };
+  return {
+    ok: true,
+    ids: Array.isArray(data.ids) ? data.ids.map(String) : [],
+    currentUserId: data.currentUserId ? String(data.currentUserId) : "",
+  };
+}
+
 /**
  * @param {{ variant?: "portal" | "public"; shareBasePath?: string; loginNextPath?: string; skin?: "default" | "x"; containerClassName?: string; initialFeedPosts?: Array<object> | null; initialUser?: object | null }} props
  */
@@ -1195,41 +1225,25 @@ export default function CommunityFeedClient({
     if (isMissingCommunityTables(rawMessage)) setConfigError(true);
   }, []);
 
+  const myLikedIdsRef = useRef(new Set());
+
   const mergePendingIntoPosts = useCallback(async () => {
     const user = useUserStore.getState().user;
     const pending = await getPendingCommunityPosts(user);
     setPosts((prev) => mergePostsWithPending(prev, pending));
   }, []);
 
-  /** Paint red hearts from the viewer's liked-ids — survives SEO seed + stale Redis. */
+  /** Paint red hearts from liked-ids. Never wipe hearts on a guest/empty response. */
   const hydrateMyLikedFlags = useCallback(async (isCancelled = () => false) => {
     if (!isOnline()) return;
     try {
-      const res = await fetch("/api/community/me/liked-ids", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || isCancelled()) return;
-      if (data.currentUserId) setCurrentUserId(String(data.currentUserId));
-      const likedSet = new Set((Array.isArray(data.ids) ? data.ids : []).map(String));
-      // Guest / no session → empty ids; still clear any stale liked flags from optimistic UI.
-      setPosts((prev) => {
-        let changed = false;
-        const next = prev.map((p) => {
-          const id = String(p?.id || "");
-          if (!id) return p;
-          const liked = likedSet.has(id);
-          const wasLiked = Boolean(p.liked);
-          if (liked === wasLiked) return p;
-          changed = true;
-          let likeCount = Number(p.likeCount || 0);
-          if (liked && !wasLiked) likeCount += 1;
-          if (!liked && wasLiked) likeCount = Math.max(0, likeCount - 1);
-          return { ...p, liked, likeCount };
-        });
-        return changed ? next : prev;
-      });
+      const likedMeta = await fetchMyLikedMeta();
+      if (!likedMeta.ok || isCancelled()) return;
+      // Unauthenticated response must not clear hearts (race with session hydrate).
+      if (!likedMeta.currentUserId) return;
+      myLikedIdsRef.current = new Set(likedMeta.ids);
+      setCurrentUserId(likedMeta.currentUserId);
+      setPosts((prev) => applyLikedFlagsToPosts(prev, myLikedIdsRef.current));
     } catch {
       /* non-critical */
     }
@@ -1275,26 +1289,44 @@ export default function CommunityFeedClient({
         return;
       }
 
+      const applyFeedPayload = (data, likedMeta) => {
+        let nextPosts = dedupePostsById(data.posts || []);
+        if (likedMeta?.ok && likedMeta.currentUserId) {
+          myLikedIdsRef.current = new Set(likedMeta.ids);
+          nextPosts = applyLikedFlagsToPosts(nextPosts, myLikedIdsRef.current);
+          setCurrentUserId(likedMeta.currentUserId);
+        } else {
+          setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
+          if (myLikedIdsRef.current.size > 0) {
+            nextPosts = applyLikedFlagsToPosts(nextPosts, myLikedIdsRef.current);
+          }
+        }
+        setPosts(nextPosts);
+        setNextCursor(data.nextCursor || null);
+        nextCursorRef.current = data.nextCursor || null;
+      };
+
       if (hasSeed && !force) {
         setLoading(false);
         setAuthResolved(true);
         feedHydratedRef.current = true;
-        const res = await fetch(buildPostsQuery(feedTab, null, portalMineHome, topicFilter), {
-          credentials: "include",
-          cache: "no-store",
-        });
+        // Fetch feed + liked ids together so setPosts never lands with empty hearts.
+        const [res, likedMeta] = await Promise.all([
+          fetch(buildPostsQuery(feedTab, null, portalMineHome, topicFilter), {
+            credentials: "include",
+            cache: "no-store",
+          }),
+          fetchMyLikedMeta().catch(() => ({ ok: false, ids: [], currentUserId: "" })),
+        ]);
         const data = await res.json().catch(() => ({}));
         if (isCancelled() || epoch !== feedEpochRef.current) return;
         if (res.ok) {
-          setPosts(dedupePostsById(data.posts || []));
-          setNextCursor(data.nextCursor || null);
-          nextCursorRef.current = data.nextCursor || null;
-          setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
+          applyFeedPayload(data, likedMeta);
           setConfigError(false);
-        }
-        // Always re-apply hearts from DB for the signed-in viewer (seed forces liked:false).
-        if (epoch === feedEpochRef.current) {
-          await hydrateMyLikedFlags(() => isCancelled() || epoch !== feedEpochRef.current);
+        } else if (likedMeta?.ok && likedMeta.currentUserId) {
+          myLikedIdsRef.current = new Set(likedMeta.ids);
+          setCurrentUserId(likedMeta.currentUserId);
+          setPosts((prev) => applyLikedFlagsToPosts(prev, myLikedIdsRef.current));
         }
         return;
       }
@@ -1309,10 +1341,13 @@ export default function CommunityFeedClient({
         setError("");
       }
       try {
-        const res = await fetch(buildPostsQuery(feedTab, null, portalMineHome, topicFilter), {
-          credentials: "include",
-          cache: "no-store",
-        });
+        const [res, likedMeta] = await Promise.all([
+          fetch(buildPostsQuery(feedTab, null, portalMineHome, topicFilter), {
+            credentials: "include",
+            cache: "no-store",
+          }),
+          fetchMyLikedMeta().catch(() => ({ ok: false, ids: [], currentUserId: "" })),
+        ]);
         const data = await res.json().catch(() => ({}));
         if (isCancelled()) return;
         if (res.status === 503) {
@@ -1335,19 +1370,19 @@ export default function CommunityFeedClient({
             setAuthResolved(true);
             setCurrentUserId(useUserStore.getState().user?.id || "");
             setError(msg);
-            await hydrateMyLikedFlags(() => isCancelled() || epoch !== feedEpochRef.current);
+            if (likedMeta?.ok && likedMeta.currentUserId) {
+              myLikedIdsRef.current = new Set(likedMeta.ids);
+              setPosts((prev) => applyLikedFlagsToPosts(prev, myLikedIdsRef.current));
+            }
             return;
           }
           throw new Error(msg);
         }
         if (isCancelled() || epoch !== feedEpochRef.current) return;
         setConfigError(false);
-        setPosts(dedupePostsById(data.posts || []));
-        setNextCursor(data.nextCursor || null);
-        setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
+        applyFeedPayload(data, likedMeta);
         setAuthResolved(true);
         feedHydratedRef.current = true;
-        await hydrateMyLikedFlags(() => isCancelled() || epoch !== feedEpochRef.current);
       } catch (e) {
         if (isCancelled()) return;
         const msg = e.message || "Failed to load";
@@ -1364,7 +1399,7 @@ export default function CommunityFeedClient({
         }
       }
     },
-    [feedTab, viewerUserId, isPortal, portalMineHome, seedList.length, topicFilter, hydrateMyLikedFlags]
+    [feedTab, viewerUserId, isPortal, portalMineHome, seedList.length, topicFilter]
   );
 
   useEffect(() => {
@@ -1430,7 +1465,8 @@ export default function CommunityFeedClient({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Failed to load more");
       if (epoch !== feedEpochRef.current) return;
-      setPosts((prev) => dedupePostsById([...prev, ...(data.posts || [])]));
+      const page = applyLikedFlagsToPosts(data.posts || [], myLikedIdsRef.current);
+      setPosts((prev) => dedupePostsById([...prev, ...page]));
       setNextCursor(data.nextCursor || null);
       setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
     } catch (e) {
@@ -1539,7 +1575,10 @@ export default function CommunityFeedClient({
     const prevPosts = posts;
     const prev = posts.find((p) => p.id === post.id);
     const nextLiked = !Boolean(prev?.liked);
+    const postId = String(post.id);
     // Optimistic: paint red heart immediately, then reconcile with server.
+    if (nextLiked) myLikedIdsRef.current.add(postId);
+    else myLikedIdsRef.current.delete(postId);
     if (feedTab === "liked" && !nextLiked) {
       setPosts((list) => list.filter((p) => p.id !== post.id));
     } else {
@@ -1559,6 +1598,8 @@ export default function CommunityFeedClient({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setPosts(prevPosts);
+        if (Boolean(prev?.liked)) myLikedIdsRef.current.add(postId);
+        else myLikedIdsRef.current.delete(postId);
         const msg = data.message || "Failed";
         if (res.status === 503) {
           setConfigError(true);
@@ -1571,6 +1612,8 @@ export default function CommunityFeedClient({
       skipNextCommunityMutateRef.current = true;
       dispatchCommunityMutate({ reason: "like" });
       const liked = Boolean(data.liked);
+      if (liked) myLikedIdsRef.current.add(postId);
+      else myLikedIdsRef.current.delete(postId);
       if (feedTab === "liked" && !liked) {
         setPosts((list) => list.filter((p) => p.id !== post.id));
       } else {
@@ -1589,6 +1632,8 @@ export default function CommunityFeedClient({
       }
     } catch (e) {
       setPosts(prevPosts);
+      if (Boolean(prev?.liked)) myLikedIdsRef.current.add(postId);
+      else myLikedIdsRef.current.delete(postId);
       reportActionError(e.message || "Failed");
     }
   }

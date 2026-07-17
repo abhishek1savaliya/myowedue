@@ -44,7 +44,7 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
             cache: "no-store",
           });
           const likedData = await likedRes.json().catch(() => ({}));
-          if (likedRes.ok && Array.isArray(likedData.ids)) {
+          if (likedRes.ok && likedData.currentUserId && Array.isArray(likedData.ids)) {
             const liked = likedData.ids.map(String).includes(String(nextPost.id));
             if (liked !== Boolean(nextPost.liked)) {
               let likeCount = Number(nextPost.likeCount || 0);
@@ -52,7 +52,7 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
               if (!liked && nextPost.liked) likeCount = Math.max(0, likeCount - 1);
               nextPost = { ...nextPost, liked, likeCount };
             }
-            if (likedData.currentUserId) setCurrentUserId(String(likedData.currentUserId));
+            setCurrentUserId(String(likedData.currentUserId));
           }
         } catch {
           /* non-critical */

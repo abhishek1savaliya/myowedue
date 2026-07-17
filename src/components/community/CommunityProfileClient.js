@@ -97,9 +97,9 @@ export default function CommunityProfileClient({ username: usernameParam }) {
             cache: "no-store",
           });
           const likedData = await likedRes.json().catch(() => ({}));
-          if (cancelled || !likedRes.ok || !Array.isArray(likedData.ids)) return;
+          if (cancelled || !likedRes.ok || !likedData.currentUserId || !Array.isArray(likedData.ids)) return;
           const likedSet = new Set(likedData.ids.map(String));
-          if (likedData.currentUserId) setCurrentUserId(String(likedData.currentUserId));
+          setCurrentUserId(String(likedData.currentUserId));
           setProfilePosts((prev) =>
             prev.map((p) => {
               const liked = likedSet.has(String(p.id));
