@@ -24,9 +24,11 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
   const sessionUserId = useUserStore((s) => s.user?.id || "");
   const viewerUserId = currentUserId || sessionUserId;
 
-  const loadPost = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadPost = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const res = await fetch(`/api/community/posts/${postId}`, { credentials: "include", cache: "no-store" });
       const data = await res.json().catch(() => ({}));
@@ -34,46 +36,59 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
       setPost(data.post || null);
       setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
     } catch (e) {
-      setError(e.message || "Failed to load");
-      setPost(null);
+      if (!silent) {
+        setError(e.message || "Failed to load");
+        setPost(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [postId]);
 
   useEffect(() => {
-    if (hasInitialPost) return;
-    void loadPost();
+    // Always hydrate with credentials so liked hearts survive refresh after SEO seed.
+    void loadPost({ silent: hasInitialPost });
   }, [loadPost, hasInitialPost]);
 
   const canInteract = Boolean(viewerUserId);
 
-  const onLikeToggle = useCallback(
-    async (p) => {
-      try {
-        const res = await fetch(`/api/community/posts/${p.id}/like`, { method: "POST", credentials: "include" });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.message || "Failed");
-        const liked = data.liked;
-        setPost((prev) =>
-          prev && prev.id === p.id
-            ? {
-                ...prev,
-                liked,
-                likeCount:
-                  typeof data.likeCount === "number"
-                    ? data.likeCount
-                    : Math.max(0, (prev.likeCount || 0) + (liked ? 1 : -1)),
-              }
-            : prev
-        );
-        dispatchCommunityMutate();
-      } catch {
-        /* ignore */
-      }
-    },
-    []
-  );
+  const onLikeToggle = useCallback(async (p) => {
+    const snapshotLiked = Boolean(p.liked);
+    const snapshotCount = Number(p.likeCount || 0);
+    const nextLiked = !snapshotLiked;
+    setPost((prev) =>
+      prev && prev.id === p.id
+        ? {
+            ...prev,
+            liked: nextLiked,
+            likeCount: Math.max(0, snapshotCount + (nextLiked ? 1 : -1)),
+          }
+        : prev
+    );
+    try {
+      const res = await fetch(`/api/community/posts/${p.id}/like`, { method: "POST", credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed");
+      const liked = Boolean(data.liked);
+      setPost((prev) =>
+        prev && prev.id === p.id
+          ? {
+              ...prev,
+              liked,
+              likeCount:
+                typeof data.likeCount === "number"
+                  ? data.likeCount
+                  : Math.max(0, (prev.likeCount || 0) + (liked ? 1 : -1)),
+            }
+          : prev
+      );
+      dispatchCommunityMutate();
+    } catch {
+      setPost((prev) =>
+        prev && prev.id === p.id ? { ...prev, liked: snapshotLiked, likeCount: snapshotCount } : prev
+      );
+    }
+  }, []);
 
   const bumpCommentCount = useCallback((postIdArg, delta) => {
     if (postIdArg !== postId) return;

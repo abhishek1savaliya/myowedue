@@ -117,6 +117,14 @@ export async function GET(request, { params }) {
   const commentCount = {};
   for (const row of comments) commentCount[row.post_id] = (commentCount[row.post_id] || 0) + 1;
 
+  const viewerIdStr = viewerId ? String(viewerId) : "";
+  const likedByMe = new Set();
+  if (viewerIdStr) {
+    for (const row of likes) {
+      if (String(row.user_id) === viewerIdStr) likedByMe.add(row.post_id);
+    }
+  }
+
   const authorVerified = hasActivePremium(user) && Boolean(user.showVerifiedBadge);
   const payload = (posts || []).map((p) => ({
     ...p,
@@ -124,6 +132,7 @@ export async function GET(request, { params }) {
     authorVerified,
     likeCount: likesMap.get(p.id) || 0,
     commentCount: commentCount[p.id] || 0,
+    liked: likedByMe.has(p.id),
   }));
 
   return ok({ posts: payload, currentUserId: viewerId, hidden: false, filter });

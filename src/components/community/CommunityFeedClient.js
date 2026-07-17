@@ -1249,9 +1249,14 @@ export default function CommunityFeedClient({
           cache: "no-store",
         });
         const data = await res.json().catch(() => ({}));
+        if (isCancelled() || epoch !== feedEpochRef.current) return;
         if (res.ok) {
+          // Replace SEO seed with authenticated payload so liked hearts / counts survive refresh.
+          setPosts(dedupePostsById(data.posts || []));
           setNextCursor(data.nextCursor || null);
           nextCursorRef.current = data.nextCursor || null;
+          setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
+          setConfigError(false);
         }
         return;
       }
@@ -1481,6 +1486,21 @@ export default function CommunityFeedClient({
   }
 
   async function onLikeToggle(post) {
+    const prevPosts = posts;
+    const prev = posts.find((p) => p.id === post.id);
+    const nextLiked = !Boolean(prev?.liked);
+    // Optimistic: paint red heart immediately, then reconcile with server.
+    if (feedTab === "liked" && !nextLiked) {
+      setPosts((list) => list.filter((p) => p.id !== post.id));
+    } else {
+      setPosts((list) =>
+        list.map((p) =>
+          p.id === post.id
+            ? { ...p, liked: nextLiked, likeCount: Math.max(0, (p.likeCount || 0) + (nextLiked ? 1 : -1)) }
+            : p
+        )
+      );
+    }
     try {
       const res = await fetch(`/api/community/posts/${post.id}/like`, {
         method: "POST",
@@ -1488,6 +1508,7 @@ export default function CommunityFeedClient({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        setPosts(prevPosts);
         const msg = data.message || "Failed";
         if (res.status === 503) {
           setConfigError(true);
@@ -1499,12 +1520,12 @@ export default function CommunityFeedClient({
       }
       skipNextCommunityMutateRef.current = true;
       dispatchCommunityMutate();
-      const liked = data.liked;
+      const liked = Boolean(data.liked);
       if (feedTab === "liked" && !liked) {
-        setPosts((prev) => prev.filter((p) => p.id !== post.id));
+        setPosts((list) => list.filter((p) => p.id !== post.id));
       } else {
-        setPosts((prev) =>
-          prev.map((p) =>
+        setPosts((list) =>
+          list.map((p) =>
             p.id === post.id
               ? {
                   ...p,
@@ -1519,6 +1540,7 @@ export default function CommunityFeedClient({
         );
       }
     } catch (e) {
+      setPosts(prevPosts);
       reportActionError(e.message || "Failed");
     }
   }
