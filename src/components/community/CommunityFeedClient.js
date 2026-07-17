@@ -15,7 +15,7 @@ import {
   isCommunityPostEditWindowOpen,
   wasCommunityPostEdited,
 } from "@/lib/community-post-edit-window";
-import { COMMUNITY_MUTATE_EVENT, dispatchCommunityMutate } from "@/lib/community-mutate-event";
+import { COMMUNITY_MUTATE_EVENT, dispatchCommunityMutate, isCommunityEngagementMutate } from "@/lib/community-mutate-event";
 import { isOnline } from "@/lib/offline/network";
 import {
   buildOptimisticCommunityComment,
@@ -1201,11 +1201,46 @@ export default function CommunityFeedClient({
     setPosts((prev) => mergePostsWithPending(prev, pending));
   }, []);
 
-  /** Refetch liked/shared when session becomes available; ignore user id changes on "all" to avoid double fetch. */
-  const tabAuthKey = useMemo(
-    () => (feedTab === "liked" || feedTab === "shared" ? viewerUserId || "__guest__" : "__all__"),
-    [feedTab, viewerUserId]
-  );
+  /** Paint red hearts from the viewer's liked-ids — survives SEO seed + stale Redis. */
+  const hydrateMyLikedFlags = useCallback(async (isCancelled = () => false) => {
+    if (!isOnline()) return;
+    try {
+      const res = await fetch("/api/community/me/liked-ids", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || isCancelled()) return;
+      if (data.currentUserId) setCurrentUserId(String(data.currentUserId));
+      const likedSet = new Set((Array.isArray(data.ids) ? data.ids : []).map(String));
+      // Guest / no session → empty ids; still clear any stale liked flags from optimistic UI.
+      setPosts((prev) => {
+        let changed = false;
+        const next = prev.map((p) => {
+          const id = String(p?.id || "");
+          if (!id) return p;
+          const liked = likedSet.has(id);
+          const wasLiked = Boolean(p.liked);
+          if (liked === wasLiked) return p;
+          changed = true;
+          let likeCount = Number(p.likeCount || 0);
+          if (liked && !wasLiked) likeCount += 1;
+          if (!liked && wasLiked) likeCount = Math.max(0, likeCount - 1);
+          return { ...p, liked, likeCount };
+        });
+        return changed ? next : prev;
+      });
+    } catch {
+      /* non-critical */
+    }
+  }, []);
+
+  /** Refetch when session appears — public feed likes are viewer-specific (private hearts). */
+  const tabAuthKey = useMemo(() => {
+    if (feedTab === "liked" || feedTab === "shared") return viewerUserId || "__guest__";
+    if (!isPortal) return `all:${sessionUserId || "__guest__"}`;
+    return "__all__";
+  }, [feedTab, viewerUserId, isPortal, sessionUserId]);
 
   const loadFeed = useCallback(
     async ({ force = false, isCancelled = () => false } = {}) => {
@@ -1251,12 +1286,15 @@ export default function CommunityFeedClient({
         const data = await res.json().catch(() => ({}));
         if (isCancelled() || epoch !== feedEpochRef.current) return;
         if (res.ok) {
-          // Replace SEO seed with authenticated payload so liked hearts / counts survive refresh.
           setPosts(dedupePostsById(data.posts || []));
           setNextCursor(data.nextCursor || null);
           nextCursorRef.current = data.nextCursor || null;
           setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
           setConfigError(false);
+        }
+        // Always re-apply hearts from DB for the signed-in viewer (seed forces liked:false).
+        if (epoch === feedEpochRef.current) {
+          await hydrateMyLikedFlags(() => isCancelled() || epoch !== feedEpochRef.current);
         }
         return;
       }
@@ -1297,6 +1335,7 @@ export default function CommunityFeedClient({
             setAuthResolved(true);
             setCurrentUserId(useUserStore.getState().user?.id || "");
             setError(msg);
+            await hydrateMyLikedFlags(() => isCancelled() || epoch !== feedEpochRef.current);
             return;
           }
           throw new Error(msg);
@@ -1308,6 +1347,7 @@ export default function CommunityFeedClient({
         setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
         setAuthResolved(true);
         feedHydratedRef.current = true;
+        await hydrateMyLikedFlags(() => isCancelled() || epoch !== feedEpochRef.current);
       } catch (e) {
         if (isCancelled()) return;
         const msg = e.message || "Failed to load";
@@ -1324,7 +1364,7 @@ export default function CommunityFeedClient({
         }
       }
     },
-    [feedTab, viewerUserId, isPortal, portalMineHome, seedList.length, topicFilter]
+    [feedTab, viewerUserId, isPortal, portalMineHome, seedList.length, topicFilter, hydrateMyLikedFlags]
   );
 
   useEffect(() => {
@@ -1336,8 +1376,18 @@ export default function CommunityFeedClient({
   }, [loadFeed, tabAuthKey]);
 
   useEffect(() => {
-    const onQueueOrCommunitySync = () => {
+    if (!sessionUserId) return undefined;
+    let cancelled = false;
+    void hydrateMyLikedFlags(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionUserId, hydrateMyLikedFlags]);
+
+  useEffect(() => {
+    const onQueueOrCommunitySync = (event) => {
       void mergePendingIntoPosts();
+      if (isCommunityEngagementMutate(event?.detail)) return;
       if (skipNextCommunityMutateRef.current) {
         skipNextCommunityMutateRef.current = false;
         return;
@@ -1519,7 +1569,7 @@ export default function CommunityFeedClient({
         return;
       }
       skipNextCommunityMutateRef.current = true;
-      dispatchCommunityMutate();
+      dispatchCommunityMutate({ reason: "like" });
       const liked = Boolean(data.liked);
       if (feedTab === "liked" && !liked) {
         setPosts((list) => list.filter((p) => p.id !== post.id));
@@ -1530,10 +1580,8 @@ export default function CommunityFeedClient({
               ? {
                   ...p,
                   liked,
-                  likeCount:
-                    typeof data.likeCount === "number"
-                      ? data.likeCount
-                      : Math.max(0, (p.likeCount || 0) + (liked ? 1 : -1)),
+                  // Server may omit likeCount on the fast path — keep optimistic value.
+                  likeCount: typeof data.likeCount === "number" ? data.likeCount : p.likeCount,
                 }
               : p
           )
@@ -1555,7 +1603,7 @@ export default function CommunityFeedClient({
         return mapped;
       });
       skipNextCommunityMutateRef.current = true;
-      dispatchCommunityMutate();
+      dispatchCommunityMutate({ reason: "share" });
     },
     [feedTab, canInteract]
   );

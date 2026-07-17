@@ -2,10 +2,10 @@ import { fail, ok } from "@/lib/api";
 import { notifyCommunityActivity } from "@/lib/community-notifications";
 import { formatUserDisplayName } from "@/lib/format-user-display-name";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
-import { clearCommunityCaches } from "@/lib/redis";
+import { invalidateCommunityEngagementCaches } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import { isCommunityConfigured } from "@/lib/community-server";
-import { countPublicPostLikes, hasPrivateCommunityLikes } from "@/lib/community-private-likes";
+import { hasPrivateCommunityLikes } from "@/lib/community-private-likes";
 import {
   deletePostLike,
   fetchPostAuthorBody,
@@ -36,30 +36,35 @@ export async function POST(request, { params }) {
 
     if (existing) {
       await deletePostLike(postId, uid);
-      const likeCount = await countPublicPostLikes(postId, uid);
-      await clearCommunityCaches();
-      return ok({ liked: false, likeCount });
+      // O(1) invalidate — do not SCAN or recount (client keeps optimistic likeCount).
+      await invalidateCommunityEngagementCaches();
+      return ok({ liked: false });
     }
 
     await insertPostLike(postId, uid);
 
-    const postRow = await fetchPostAuthorBody(postId);
-    if (postRow?.author_id && String(postRow.author_id) !== uid && !hasPrivateCommunityLikes(user)) {
-      void notifyCommunityActivity({
-        recipientUserId: String(postRow.author_id),
-        actorUserId: uid,
-        actorName: formatUserDisplayName(user),
-        kind: "post_like",
-        postId,
-        postBodySnippet: postRow.body,
-      });
-    }
-
+    // Notify + signals off the critical path; heart response returns immediately after cache bump.
+    void (async () => {
+      try {
+        const postRow = await fetchPostAuthorBody(postId);
+        if (postRow?.author_id && String(postRow.author_id) !== uid && !hasPrivateCommunityLikes(user)) {
+          void notifyCommunityActivity({
+            recipientUserId: String(postRow.author_id),
+            actorUserId: uid,
+            actorName: formatUserDisplayName(user),
+            kind: "post_like",
+            postId,
+            postBodySnippet: postRow.body,
+          });
+        }
+      } catch {
+        /* non-critical */
+      }
+    })();
     void insertFeedSignalLike(uid, postId);
 
-    const likeCount = await countPublicPostLikes(postId, uid);
-    await clearCommunityCaches();
-    return ok({ liked: true, likeCount });
+    await invalidateCommunityEngagementCaches();
+    return ok({ liked: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const mapped = mapCommunitySupabaseError(message, setup);

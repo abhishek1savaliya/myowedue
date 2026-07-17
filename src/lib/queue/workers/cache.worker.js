@@ -55,13 +55,15 @@ async function handleClearCommunityCache() {
   const client = await getRedisClient();
   if (!client) return { skipped: true };
 
+  // Feed/post list caches are invalidated via generation bump in clearCommunityCaches.
+  // Worker only needs to drop non-generation-scoped + legacy keys.
   const patterns = [
-    "community:feed:v1:*",
-    "community:feed:topic:v1:*",
-    "community:feed:personalized:v1:*",
     "community:comments:v1:*",
     "community:trending:*",
     "community:suggested_creators:*",
+    "community:feed:v1:*",
+    "community:feed:topic:v1:*",
+    "community:feed:personalized:v1:*",
   ];
 
   const deleted = await scanAndDelete(client, patterns);

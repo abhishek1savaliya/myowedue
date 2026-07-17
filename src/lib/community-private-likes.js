@@ -1,11 +1,48 @@
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import { hasActivePremium } from "@/lib/subscription";
-import { fetchPostLikesForPosts, isCommunityDbConfigured } from "@/lib/community-db";
+import { fetchLikedPostIdsByUser, fetchPostLikesForPosts, isCommunityDbConfigured } from "@/lib/community-db";
 
 /** Pro subscribers hide their likes from everyone else (counts and liked state). */
 export function hasPrivateCommunityLikes(user) {
   return hasActivePremium(user);
+}
+
+/**
+ * Re-apply the viewer's like flags onto a cached feed page.
+ * Cheap (one DB query) — fixes stale Redis / SEO seed where hearts reset after refresh,
+ * especially for Pro private likes (counts look like 0 to everyone else).
+ *
+ * @param {Array<object>} posts
+ * @param {string} viewerUserId
+ * @returns {Promise<Array<object>>}
+ */
+export async function overlayViewerLikeFlags(posts, viewerUserId) {
+  const list = Array.isArray(posts) ? posts : [];
+  const viewerId = viewerUserId ? String(viewerUserId) : "";
+  if (!viewerId || list.length === 0 || !isCommunityDbConfigured()) return list;
+
+  let likedRows = [];
+  try {
+    likedRows = await fetchLikedPostIdsByUser(viewerId, 500);
+  } catch {
+    return list;
+  }
+
+  const likedSet = new Set((likedRows || []).map((r) => String(r.post_id)));
+  return list.map((p) => {
+    const id = String(p?.id || "");
+    if (!id) return p;
+    const wasLiked = Boolean(p.liked);
+    const liked = likedSet.has(id);
+    let likeCount = Number(p.likeCount || 0);
+    if (liked && !wasLiked) likeCount += 1;
+    if (!liked && wasLiked) likeCount = Math.max(0, likeCount - 1);
+    if (liked !== wasLiked || Boolean(p.liked) !== liked) {
+      return { ...p, liked, likeCount };
+    }
+    return p;
+  });
 }
 
 /**
@@ -40,14 +77,16 @@ export function aggregateEngagementWithPrivateLikes(likesRows, commentRows, curr
 
   for (const row of likesRows || []) {
     const likerId = String(row.user_id);
+    const postId = String(row.post_id);
     const isPrivate = privateSet.has(likerId);
     if (isPrivate && likerId !== viewerId) continue;
-    likeCount[row.post_id] = (likeCount[row.post_id] || 0) + 1;
-    if (likerId === viewerId) likedByMe.add(row.post_id);
+    likeCount[postId] = (likeCount[postId] || 0) + 1;
+    if (likerId === viewerId) likedByMe.add(postId);
   }
 
   for (const row of commentRows || []) {
-    commentCount[row.post_id] = (commentCount[row.post_id] || 0) + 1;
+    const postId = String(row.post_id);
+    commentCount[postId] = (commentCount[postId] || 0) + 1;
   }
 
   return { likeCount, commentCount, likedByMe };

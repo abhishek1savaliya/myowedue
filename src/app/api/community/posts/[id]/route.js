@@ -5,7 +5,7 @@ import { isCommunityPostEditWindowOpen } from "@/lib/community-post-edit-window"
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
 import { extractPostTopics } from "@/lib/post-topic-extraction";
 import { persistCommunityPostSeo, revalidateCommunityPostSeo } from "@/lib/community-post-seo";
-import { clearCommunityCaches } from "@/lib/redis";
+import { clearCommunityCaches, communityPostCacheKey, getCommunityCacheGeneration, getRedisJSON, setRedisJSON } from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { hasActivePremium } from "@/lib/subscription";
 import { isCommunityConfigured } from "@/lib/community-server";
@@ -24,6 +24,7 @@ import {
   aggregateEngagementWithPrivateLikes,
   communityViewerPayload,
   getPrivateLikeUserIdSet,
+  overlayViewerLikeFlags,
 } from "@/lib/community-private-likes";
 
 export async function GET(request, { params }) {
@@ -40,6 +41,18 @@ export async function GET(request, { params }) {
   if (!postId) return fail("Missing post id", 400);
 
   const currentUserId = user ? String(user._id) : "";
+  const cacheGen = await getCommunityCacheGeneration();
+  const postCacheKey = communityPostCacheKey(postId, currentUserId || "anon", cacheGen);
+  const cached = await getRedisJSON(postCacheKey);
+  if (cached && typeof cached === "object" && cached.post) {
+    const [post] = await overlayViewerLikeFlags([cached.post], currentUserId);
+    return ok({
+      ...cached,
+      post: post || cached.post,
+      currentUserId,
+      viewer: communityViewerPayload(user),
+    });
+  }
 
   if (!isCommunityDbConfigured()) {
     return fail("Community database is not configured.", 503);
@@ -70,7 +83,9 @@ export async function GET(request, { params }) {
     const [verified] = await attachAuthorVerifiedToPosts([base]);
     const [post] = await attachPrivacyAwareAuthorLabels([verified], currentUserId);
 
-    return ok({ post, currentUserId, viewer: communityViewerPayload(user) });
+    const payload = { post, currentUserId, viewer: communityViewerPayload(user) };
+    void setRedisJSON(postCacheKey, payload, 60);
+    return ok(payload);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const mapped = mapCommunitySupabaseError(message, setup);

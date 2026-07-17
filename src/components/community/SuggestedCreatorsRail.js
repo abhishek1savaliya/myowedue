@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles, UserRound } from "lucide-react";
-import { COMMUNITY_MUTATE_EVENT, dispatchCommunityMutate } from "@/lib/community-mutate-event";
+import { COMMUNITY_MUTATE_EVENT, dispatchCommunityMutate, isCommunityEngagementMutate } from "@/lib/community-mutate-event";
 import { COMMUNITY_GLASS_CARD, COMMUNITY_GLASS_CARD_INNER } from "@/lib/community-ui";
 
 /**
@@ -50,7 +50,10 @@ export default function SuggestedCreatorsRail({ loggedIn, authChecked, className
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const handler = () => scheduleRefetch();
+    const handler = (event) => {
+      if (isCommunityEngagementMutate(event?.detail)) return;
+      scheduleRefetch();
+    };
     window.addEventListener(COMMUNITY_MUTATE_EVENT, handler);
     return () => {
       window.removeEventListener(COMMUNITY_MUTATE_EVENT, handler);
@@ -74,7 +77,7 @@ export default function SuggestedCreatorsRail({ loggedIn, authChecked, className
       if (!res.ok) throw new Error(data.message || "Failed");
       const following = Boolean(data.following);
       setCreators((list) => list.map((c) => (c.user_id === userId ? { ...c, viewer_follows: following } : c)));
-      dispatchCommunityMutate();
+      dispatchCommunityMutate({ reason: "follow" });
     } catch {
       setCreators(prev);
     } finally {

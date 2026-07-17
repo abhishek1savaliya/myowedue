@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { COMMUNITY_MUTATE_EVENT } from "@/lib/community-mutate-event";
+import { COMMUNITY_MUTATE_EVENT, isCommunityEngagementMutate } from "@/lib/community-mutate-event";
 import { createDebouncedSessionStorage } from "@/lib/debounced-storage";
 
 const debouncedSessionStorage = createDebouncedSessionStorage(450);
@@ -18,7 +18,8 @@ function attachMutateListener(fetchTrending) {
   if (mutateListenerAttached || typeof window === "undefined") return;
   mutateListenerAttached = true;
 
-  window.addEventListener(COMMUNITY_MUTATE_EVENT, () => {
+  window.addEventListener(COMMUNITY_MUTATE_EVENT, (event) => {
+    if (isCommunityEngagementMutate(event?.detail)) return;
     if (debounceTimer) window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(() => {
       debounceTimer = null;

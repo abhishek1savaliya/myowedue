@@ -1,9 +1,3 @@
-import { createRequire } from "node:module";
-import path from "node:path";
-
-const pdfkitRequire = createRequire(path.join(process.cwd(), "package.json"));
-const PDFDocument = pdfkitRequire("pdfkit");
-
 /** Aligns with public landing: zinc surfaces, amber CTAs, emerald accents, soft aurora header */
 const THEME = {
   pageBg: "#f4f4f5",
@@ -34,7 +28,6 @@ const THEME = {
 
 const M = 50;
 const PAGE_MAX_Y = 770;
-const COL_W = { label: 220, val: 80 };
 
 function trunc(s, n) {
   const t = String(s ?? "");
@@ -125,8 +118,24 @@ function kpiCardRow(doc, y, label, val) {
   return y + 30;
 }
 
+/**
+ * Lazy-load pdfkit (listed in serverExternalPackages).
+ * Do not use createRequire(process.cwd()) — Next webpack cannot parse it and
+ * leaves PDFDocument undefined during `next build` page-data collection.
+ */
+async function loadPdfKit() {
+  const mod = await import("pdfkit");
+  const PDFDocument = mod?.default ?? mod;
+  if (typeof PDFDocument !== "function") {
+    throw new Error("pdfkit failed to load");
+  }
+  return PDFDocument;
+}
+
 /** Build a multi-page PDF buffer from the superadmin analytics bundle. */
-export function buildSuperadminAnalyticsPdfBuffer(bundle, admin = {}) {
+export async function buildSuperadminAnalyticsPdfBuffer(bundle, admin = {}) {
+  const PDFDocument = await loadPdfKit();
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",

@@ -89,6 +89,31 @@ export default function CommunityProfileClient({ username: usernameParam }) {
         if (!res.ok) return;
         setProfilePosts(Array.isArray(data.posts) ? data.posts : []);
         setCurrentUserId(data.currentUserId || "");
+
+        // Re-apply viewer likes (API may omit liked after private-like filtering / cache).
+        try {
+          const likedRes = await fetch("/api/community/me/liked-ids", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const likedData = await likedRes.json().catch(() => ({}));
+          if (cancelled || !likedRes.ok || !Array.isArray(likedData.ids)) return;
+          const likedSet = new Set(likedData.ids.map(String));
+          if (likedData.currentUserId) setCurrentUserId(String(likedData.currentUserId));
+          setProfilePosts((prev) =>
+            prev.map((p) => {
+              const liked = likedSet.has(String(p.id));
+              const wasLiked = Boolean(p.liked);
+              if (liked === wasLiked) return p;
+              let likeCount = Number(p.likeCount || 0);
+              if (liked && !wasLiked) likeCount += 1;
+              if (!liked && wasLiked) likeCount = Math.max(0, likeCount - 1);
+              return { ...p, liked, likeCount };
+            })
+          );
+        } catch {
+          /* non-critical */
+        }
       } finally {
         if (!cancelled) setPostsLoading(false);
       }
@@ -159,10 +184,7 @@ export default function CommunityProfileClient({ username: usernameParam }) {
             ? {
                 ...p,
                 liked: Boolean(data.liked),
-                likeCount:
-                  typeof data.likeCount === "number"
-                    ? data.likeCount
-                    : Math.max(0, (p.likeCount || 0) + (data.liked ? 1 : -1)),
+                likeCount: typeof data.likeCount === "number" ? data.likeCount : p.likeCount,
               }
             : p
         )

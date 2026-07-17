@@ -3,7 +3,13 @@ import { notifyCommunityActivity } from "@/lib/community-notifications";
 import { formatUserDisplayName } from "@/lib/format-user-display-name";
 import { attachAuthorUsernamesToCommentTree } from "@/lib/community-usernames-server";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
-import { clearCommunityCaches, communityCommentsCacheKey, getRedisJSON, setRedisJSON } from "@/lib/redis";
+import {
+  communityCommentsCacheKey,
+  getRedisJSON,
+  invalidateCommunityCommentsForPost,
+  invalidateCommunityEngagementCaches,
+  setRedisJSON,
+} from "@/lib/redis";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { isCommunityConfigured } from "@/lib/community-server";
 import {
@@ -309,7 +315,7 @@ export async function POST(request, { params }) {
     event_type: "comment",
   });
 
-  await clearCommunityCaches();
+  await Promise.all([invalidateCommunityEngagementCaches(), invalidateCommunityCommentsForPost(postId)]);
 
   const actorId = String(user._id);
   const actorName = formatUserDisplayName(user);

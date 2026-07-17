@@ -2,7 +2,7 @@ import { fail, ok } from "@/lib/api";
 import { notifyCommunityActivity } from "@/lib/community-notifications";
 import { formatUserDisplayName } from "@/lib/format-user-display-name";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
-import { clearCommunityCaches } from "@/lib/redis";
+import { invalidateCommunityEngagementCaches } from "@/lib/redis";
 import { getSessionUser } from "@/lib/session";
 import { isCommunityConfigured } from "@/lib/community-server";
 import {
@@ -77,7 +77,7 @@ export async function POST(request, { params }) {
     });
   }
 
-  await clearCommunityCaches();
+  await invalidateCommunityEngagementCaches();
 
   return ok({ shareCount: next });
 }

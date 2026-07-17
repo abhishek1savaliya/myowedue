@@ -12,6 +12,7 @@ import {
   communityFeedTopicCacheKey,
   communityPersonalizedFeedCacheKey,
   clearCommunityCaches,
+  getCommunityCacheGeneration,
   getRedisJSON,
   setRedisJSON,
 } from "@/lib/redis";
@@ -43,9 +44,12 @@ import {
   buildPublicLikesMap,
   communityViewerPayload,
   getPrivateLikeUserIdSet,
+  overlayViewerLikeFlags,
 } from "@/lib/community-private-likes";
 import { enqueueCommunityJob } from "@/lib/queue/producers";
 import { persistCommunityPostSeo, revalidateCommunityPostSeo } from "@/lib/community-post-seo";
+
+export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 10;
 const COMMUNITY_FEED_CACHE_TTL_SEC = 120;
@@ -61,6 +65,17 @@ function serveFeedCache(cacheKey, payload, sessionUser) {
   const body = { ...payload, viewer: sessionUser ? viewerPayload(sessionUser) : null };
   void setRedisJSON(cacheKey, body, COMMUNITY_FEED_CACHE_TTL_SEC);
   return ok(body);
+}
+
+/** Cache hit — always refresh liked hearts for the signed-in viewer (private likes + stale Redis). */
+async function serveCachedFeed(cached, sessionUser, currentUserId) {
+  const posts = await overlayViewerLikeFlags(cached.posts || [], currentUserId);
+  return ok({
+    ...cached,
+    posts,
+    currentUserId: currentUserId || cached.currentUserId || "",
+    viewer: sessionUser ? viewerPayload(sessionUser) : null,
+  });
 }
 
 function displayName(user) {
@@ -124,14 +139,15 @@ async function enrichAndVerifyPosts(page, currentUserId) {
 
   const posts = page.map((p) => ({
     ...p,
-    likeCount: likeCount[p.id] || 0,
-    commentCount: commentCount[p.id] || 0,
-    liked: likedByMe.has(p.id),
+    likeCount: likeCount[p.id] || likeCount[String(p.id)] || 0,
+    commentCount: commentCount[p.id] || commentCount[String(p.id)] || 0,
+    liked: likedByMe.has(p.id) || likedByMe.has(String(p.id)),
     authorVerified: verifiedMap.get(p.id) || false,
   }));
 
   const withPrivacy = await attachPrivacyAwareAuthorLabels(posts, currentUserId);
-  return { posts: withPrivacy };
+  const withViewerLikes = await overlayViewerLikeFlags(withPrivacy, currentUserId);
+  return { posts: withViewerLikes };
 }
 
 export async function GET(request) {
@@ -156,14 +172,15 @@ export async function GET(request) {
 
   const currentUserId = user ? String(user._id) : "";
   const viewerCacheId = currentUserId || "anon";
-  const feedCacheKey = communityFeedCacheKey(filter, cursor || "", viewerCacheId);
+  const cacheGen = await getCommunityCacheGeneration();
+  const feedCacheKey = communityFeedCacheKey(filter, cursor || "", viewerCacheId, cacheGen);
   const topicNormalized = filter === "all" ? normalizeCommunityTopicParam(searchParams.get("topic")) : "";
 
   if (topicNormalized) {
-    const topicCacheKey = communityFeedTopicCacheKey(topicNormalized, cursor || "", viewerCacheId);
+    const topicCacheKey = communityFeedTopicCacheKey(topicNormalized, cursor || "", viewerCacheId, cacheGen);
     const cachedTopic = await getRedisJSON(topicCacheKey);
     if (cachedTopic && typeof cachedTopic === "object" && Array.isArray(cachedTopic.posts)) {
-      return ok({ ...cachedTopic, viewer: user ? viewerPayload(user) : null });
+      return serveCachedFeed(cachedTopic, user, currentUserId);
     }
 
     let topicSlice = [];
@@ -212,7 +229,7 @@ export async function GET(request) {
 
   const cachedFeed = await getRedisJSON(feedCacheKey);
   if (cachedFeed && typeof cachedFeed === "object" && Array.isArray(cachedFeed.posts)) {
-    return ok({ ...cachedFeed, viewer: user ? viewerPayload(user) : null });
+    return serveCachedFeed(cachedFeed, user, currentUserId);
   }
 
   if (filter === "liked") {
@@ -344,10 +361,10 @@ export async function GET(request) {
   if (filter === "all" && user && (!cursor || isPersonalizedCursor)) {
     const pageOffset = parsedPersonalizedCursor?.rankOffset || 0;
     const dbOffset = parsedPersonalizedCursor?.dbOffset || 0;
-    const personalizedCacheKey = `${communityPersonalizedFeedCacheKey(currentUserId)}:${dbOffset}:${pageOffset}`;
+    const personalizedCacheKey = `${communityPersonalizedFeedCacheKey(currentUserId, cacheGen)}:${dbOffset}:${pageOffset}`;
     const cachedPersonalized = await getRedisJSON(personalizedCacheKey);
     if (cachedPersonalized && typeof cachedPersonalized === "object" && Array.isArray(cachedPersonalized.posts)) {
-      return ok({ ...cachedPersonalized, viewer: viewerPayload(user) });
+      return serveCachedFeed(cachedPersonalized, user, currentUserId);
     }
 
     const signalsSince = new Date(Date.now() - PHASE2_SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -451,7 +468,7 @@ export async function GET(request) {
         nextCursor = buildPersonalizedCursor(0, dbOffset + PERSONALIZED_MAX_CANDIDATES);
       }
 
-      const myLikedSet = new Set((likesRows || []).map((r) => r.post_id));
+      const myLikedSet = new Set((likesRows || []).map((r) => String(r.post_id)));
       const verifiedPosts = await attachAuthorVerifiedToPosts(rankedPage);
       const verifiedMap = new Map((verifiedPosts || []).map((p) => [p.id, p.authorVerified]));
 
@@ -459,10 +476,11 @@ export async function GET(request) {
         ...p,
         likeCount: likesMap.get(p.id) || 0,
         commentCount: commentsMap.get(p.id) || 0,
-        liked: myLikedSet.has(p.id),
+        liked: myLikedSet.has(String(p.id)),
         authorVerified: verifiedMap.get(p.id) || false,
       }));
-      const finalPosts = await attachPrivacyAwareAuthorLabels(mappedPosts, currentUserId);
+      const labeled = await attachPrivacyAwareAuthorLabels(mappedPosts, currentUserId);
+      const finalPosts = await overlayViewerLikeFlags(labeled, currentUserId);
 
       const payload = {
         posts: finalPosts,

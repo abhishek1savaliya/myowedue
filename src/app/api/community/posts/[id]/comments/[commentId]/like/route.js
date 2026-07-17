@@ -2,7 +2,7 @@ import { fail, ok } from "@/lib/api";
 import { notifyCommunityActivity } from "@/lib/community-notifications";
 import { formatUserDisplayName } from "@/lib/format-user-display-name";
 import { mapCommunitySupabaseError, prepareCommunityApi } from "@/lib/community-api-setup";
-import { clearCommunityCaches } from "@/lib/redis";
+import { invalidateCommunityCommentsForPost } from "@/lib/redis";
 import { requireUser } from "@/lib/session";
 import { isCommunityConfigured } from "@/lib/community-server";
 import {
@@ -41,7 +41,7 @@ export async function POST(request, { params }) {
     if (existing) {
       await deleteCommentLike(commentId, uid);
       const commentLikeCount = await countCommentLikes(commentId);
-      await clearCommunityCaches();
+      await invalidateCommunityCommentsForPost(postId);
       return ok({ liked: false, commentLikeCount });
     }
 
@@ -61,7 +61,7 @@ export async function POST(request, { params }) {
     }
 
     const commentLikeCount = await countCommentLikes(commentId);
-    await clearCommunityCaches();
+    await invalidateCommunityCommentsForPost(postId);
     return ok({ liked: true, commentLikeCount });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

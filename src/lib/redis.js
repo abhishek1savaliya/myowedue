@@ -135,24 +135,94 @@ export function filesCacheKey(userId, queryString = "", origin = "") {
   return `files:${String(userId)}:${encodeKeyPart(origin)}:${encodeKeyPart(queryString)}`;
 }
 
+/** Bumped on engagement/feed writes so old feed keys miss immediately (no SCAN). */
+const COMMUNITY_CACHE_GEN_KEY = "community:cache:generation";
+
+/**
+ * Current community feed cache generation. Include in feed keys so a single INCR
+ * invalidates all list caches without waiting for a queue SCAN/DEL.
+ */
+export async function getCommunityCacheGeneration() {
+  try {
+    const redis = await getRedisClient();
+    if (!redis) return 0;
+    const value = await redis.get(COMMUNITY_CACHE_GEN_KEY);
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch (error) {
+    handleRedisError("Redis community generation get failed", error);
+    return 0;
+  }
+}
+
+/** O(1) invalidate of all generation-scoped community feed / post list caches. */
+export async function bumpCommunityCacheGeneration() {
+  try {
+    const redis = await getRedisClient();
+    if (!redis) return 0;
+    const next = Number(await redis.incr(COMMUNITY_CACHE_GEN_KEY));
+    return Number.isFinite(next) ? next : 0;
+  } catch (error) {
+    handleRedisError("Redis community generation bump failed", error);
+    return 0;
+  }
+}
+
+/**
+ * Likes / unlikes / share counts — invalidate feed payloads that embed liked + likeCount.
+ * Does not wipe trending or suggested-creators (those are unrelated to a single heart click).
+ */
+export async function invalidateCommunityEngagementCaches() {
+  await bumpCommunityCacheGeneration();
+  return true;
+}
+
 /** Community feed list (GET /api/community/posts) — viewer-specific for like flags. */
-export function communityFeedCacheKey(filter, cursor, viewerId) {
-  return `community:feed:v1:${encodeKeyPart(filter)}:${encodeKeyPart(cursor || "")}:${encodeKeyPart(viewerId || "anon")}`;
+export function communityFeedCacheKey(filter, cursor, viewerId, gen = 0) {
+  return `community:feed:v2:${gen}:${encodeKeyPart(filter)}:${encodeKeyPart(cursor || "")}:${encodeKeyPart(viewerId || "anon")}`;
 }
 
 /** Topic-filtered feed pages (GET /api/community/posts?topic=). */
-export function communityFeedTopicCacheKey(topic, cursor, viewerId) {
-  return `community:feed:topic:v1:${encodeKeyPart(topic)}:${encodeKeyPart(cursor || "")}:${encodeKeyPart(viewerId || "anon")}`;
+export function communityFeedTopicCacheKey(topic, cursor, viewerId, gen = 0) {
+  return `community:feed:topic:v2:${gen}:${encodeKeyPart(topic)}:${encodeKeyPart(cursor || "")}:${encodeKeyPart(viewerId || "anon")}`;
 }
 
 /** Personalized first-page cache for community feed. */
-export function communityPersonalizedFeedCacheKey(viewerId) {
-  return `community:feed:personalized:v1:${encodeKeyPart(viewerId || "anon")}`;
+export function communityPersonalizedFeedCacheKey(viewerId, gen = 0) {
+  return `community:feed:personalized:v2:${gen}:${encodeKeyPart(viewerId || "anon")}`;
+}
+
+/** Single post detail (GET /api/community/posts/[id]) — viewer-specific for liked. */
+export function communityPostCacheKey(postId, viewerId, gen = 0) {
+  return `community:post:v1:${gen}:${encodeKeyPart(postId)}:${encodeKeyPart(viewerId || "anon")}`;
 }
 
 /** Thread for one post (GET .../comments) — includes viewer id for future personalization. */
 export function communityCommentsCacheKey(postId, viewerId) {
   return `community:comments:v1:${encodeKeyPart(postId)}:${encodeKeyPart(viewerId || "anon")}`;
+}
+
+/** Drop cached comment threads for one post (all viewers). */
+export async function invalidateCommunityCommentsForPost(postId) {
+  try {
+    const redis = await getRedisClient();
+    if (!redis) return false;
+    const match = `community:comments:v1:${encodeKeyPart(postId)}:*`;
+    const keysToDelete = new Set();
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await redis.scan(cursor, { match, count: 100 });
+      cursor = String(nextCursor);
+      for (const key of keys || []) keysToDelete.add(String(key));
+    } while (cursor !== "0");
+    if (keysToDelete.size > 0) {
+      await redis.del(...Array.from(keysToDelete));
+    }
+    return true;
+  } catch (error) {
+    handleRedisError("Redis comments cache clear failed", error);
+    return false;
+  }
 }
 
 /** Max topics stored in one aggregate cache entry (slice per `limit` query param). */
@@ -194,29 +264,38 @@ export async function clearCommunityTrendingCache() {
   }
 }
 
-/** Invalidate cached community feeds and comment threads (after writes). */
+/**
+ * Invalidate community list caches immediately (generation bump), then clear
+ * comment/trending/suggested keys via queue when available (or sync SCAN).
+ * Always bumps generation first so likes/feed never wait on the worker.
+ */
 export async function clearCommunityCaches() {
   try {
-    const client = await getRedisClient();
-    if (!client) return false;
+    // Sync O(1): feed/topic/personalized/post keys become unreachable immediately.
+    await bumpCommunityCacheGeneration();
+
+    const redis = await getRedisClient();
+    if (!redis) return false;
 
     const { enqueueCacheInvalidation } = await import("@/lib/queue/producers");
     const queued = await enqueueCacheInvalidation("clear-community-cache", {});
     if (queued) return true;
 
+    // Side caches not generation-scoped (comments / trending / suggested).
     const patterns = [
-      "community:feed:v1:*",
-      "community:feed:topic:v1:*",
-      "community:feed:personalized:v1:*",
       "community:comments:v1:*",
       "community:trending:*",
       "community:suggested_creators:*",
+      // Legacy pre-v2 feed keys (expire via TTL otherwise).
+      "community:feed:v1:*",
+      "community:feed:topic:v1:*",
+      "community:feed:personalized:v1:*",
     ];
     const keysToDelete = new Set();
     for (const pattern of patterns) {
       let cursor = "0";
       do {
-        const [nextCursor, keys] = await client.scan(cursor, { match: pattern, count: 100 });
+        const [nextCursor, keys] = await redis.scan(cursor, { match: pattern, count: 100 });
         cursor = String(nextCursor);
         for (const key of keys || []) {
           keysToDelete.add(String(key));
@@ -225,7 +304,7 @@ export async function clearCommunityCaches() {
     }
 
     if (keysToDelete.size > 0) {
-      await client.del(...Array.from(keysToDelete));
+      await redis.del(...Array.from(keysToDelete));
     }
     return true;
   } catch (error) {

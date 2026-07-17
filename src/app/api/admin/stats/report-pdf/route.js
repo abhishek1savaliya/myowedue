@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminSession";
 import { fail } from "@/lib/api";
-import { buildSuperadminStatsBundle } from "@/lib/buildSuperadminStatsBundle";
-import { buildSuperadminAnalyticsPdfBuffer } from "@/lib/superadminReportPdf";
 import { enqueuePdf } from "@/lib/queue/producers";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { admin, error } = await requireAdmin();
@@ -24,6 +23,10 @@ export async function GET() {
     if (jobId) {
       return Response.json({ jobId, status: "processing" }, { status: 202 });
     }
+
+    // Lazy-import so `next build` page-data collection does not load pdfkit.
+    const { buildSuperadminStatsBundle } = await import("@/lib/buildSuperadminStatsBundle");
+    const { buildSuperadminAnalyticsPdfBuffer } = await import("@/lib/superadminReportPdf");
 
     const bundle = await buildSuperadminStatsBundle();
     const buffer = await buildSuperadminAnalyticsPdfBuffer(bundle, {

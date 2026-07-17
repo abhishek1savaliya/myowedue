@@ -33,8 +33,33 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
       const res = await fetch(`/api/community/posts/${postId}`, { credentials: "include", cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Failed to load post");
-      setPost(data.post || null);
+      let nextPost = data.post || null;
       setCurrentUserId(data.currentUserId || useUserStore.getState().user?.id || "");
+
+      // Belt-and-suspenders: confirm liked from dedicated endpoint (SEO seed / cache can omit it).
+      if (nextPost && (data.currentUserId || useUserStore.getState().user?.id)) {
+        try {
+          const likedRes = await fetch("/api/community/me/liked-ids", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const likedData = await likedRes.json().catch(() => ({}));
+          if (likedRes.ok && Array.isArray(likedData.ids)) {
+            const liked = likedData.ids.map(String).includes(String(nextPost.id));
+            if (liked !== Boolean(nextPost.liked)) {
+              let likeCount = Number(nextPost.likeCount || 0);
+              if (liked && !nextPost.liked) likeCount += 1;
+              if (!liked && nextPost.liked) likeCount = Math.max(0, likeCount - 1);
+              nextPost = { ...nextPost, liked, likeCount };
+            }
+            if (likedData.currentUserId) setCurrentUserId(String(likedData.currentUserId));
+          }
+        } catch {
+          /* non-critical */
+        }
+      }
+
+      setPost(nextPost);
     } catch (e) {
       if (!silent) {
         setError(e.message || "Failed to load");
@@ -75,14 +100,11 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
           ? {
               ...prev,
               liked,
-              likeCount:
-                typeof data.likeCount === "number"
-                  ? data.likeCount
-                  : Math.max(0, (prev.likeCount || 0) + (liked ? 1 : -1)),
+              likeCount: typeof data.likeCount === "number" ? data.likeCount : prev.likeCount,
             }
           : prev
       );
-      dispatchCommunityMutate();
+      dispatchCommunityMutate({ reason: "like" });
     } catch {
       setPost((prev) =>
         prev && prev.id === p.id ? { ...prev, liked: snapshotLiked, likeCount: snapshotCount } : prev
@@ -99,7 +121,7 @@ export default function CommunitySinglePostClient({ postId, loginNextPath, backH
 
   const applyShareCount = useCallback((id, nextCount) => {
     setPost((prev) => (prev && prev.id === id ? { ...prev, share_count: nextCount } : prev));
-    dispatchCommunityMutate();
+    dispatchCommunityMutate({ reason: "share" });
   }, []);
 
   if (loading && !post) {
