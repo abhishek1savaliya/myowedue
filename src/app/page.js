@@ -23,42 +23,63 @@ export const metadata = {
 };
 
 export default async function Home() {
-  const store = await cookies();
-  const token = store.get("session_token")?.value;
+  try {
+    const store = await cookies();
+    const token = store.get("session_token")?.value;
 
-  if (token) {
-    redirect("/dashboard");
+    if (token) {
+      redirect("/dashboard");
+    }
+
+    const { content } = await getCmsPageContent("home");
+    const features = Array.isArray(content.features) ? content.features : [];
+    const heroStats = Array.isArray(content.heroStats) ? content.heroStats : [];
+    const howItWorksSteps = Array.isArray(content.howItWorksSteps) ? content.howItWorksSteps : [];
+    const securityItems = Array.isArray(content.securityItems) ? content.securityItems : [];
+    const freePlan = content.freePlan && typeof content.freePlan === "object" ? content.freePlan : {};
+    const paidPlan = content.paidPlan && typeof content.paidPlan === "object" ? content.paidPlan : {};
+    const freePlanFeatures = Array.isArray(freePlan.features) ? freePlan.features : [];
+    const paidPlanFeatures = Array.isArray(paidPlan.features) ? paidPlan.features : [];
+
+    const structuredData = buildSiteGraphJsonLd({
+      includeWebPage: true,
+      pageName: HOME_TITLE,
+      pageDescription: HOME_DESCRIPTION,
+      pagePath: "/",
+    });
+
+    return (
+      <>
+        <SeoJsonLd data={structuredData} />
+        <LandingPage
+          content={content}
+          features={features}
+          heroStats={heroStats}
+          howItWorksSteps={howItWorksSteps}
+          securityItems={securityItems}
+          freePlan={{ ...freePlan, features: freePlanFeatures }}
+          paidPlan={{ ...paidPlan, features: paidPlanFeatures }}
+        />
+      </>
+    );
+  } catch (error) {
+    // redirect() throws; rethrow so Next can handle navigation.
+    if (typeof error?.digest === "string" && error.digest.startsWith("NEXT_REDIRECT")) {
+      throw error;
+    }
+    console.error("[home] render failed:", error?.message || error);
+    return (
+      <>
+        <SeoJsonLd
+          data={buildSiteGraphJsonLd({
+            includeWebPage: true,
+            pageName: HOME_TITLE,
+            pageDescription: HOME_DESCRIPTION,
+            pagePath: "/",
+          })}
+        />
+        <LandingPage content={{}} />
+      </>
+    );
   }
-
-  const { content } = await getCmsPageContent("home");
-  const features = Array.isArray(content.features) ? content.features : [];
-  const heroStats = Array.isArray(content.heroStats) ? content.heroStats : [];
-  const howItWorksSteps = Array.isArray(content.howItWorksSteps) ? content.howItWorksSteps : [];
-  const securityItems = Array.isArray(content.securityItems) ? content.securityItems : [];
-  const freePlan = content.freePlan && typeof content.freePlan === "object" ? content.freePlan : {};
-  const paidPlan = content.paidPlan && typeof content.paidPlan === "object" ? content.paidPlan : {};
-  const freePlanFeatures = Array.isArray(freePlan.features) ? freePlan.features : [];
-  const paidPlanFeatures = Array.isArray(paidPlan.features) ? paidPlan.features : [];
-
-  const structuredData = buildSiteGraphJsonLd({
-    includeWebPage: true,
-    pageName: HOME_TITLE,
-    pageDescription: HOME_DESCRIPTION,
-    pagePath: "/",
-  });
-
-  return (
-    <>
-      <SeoJsonLd data={structuredData} />
-      <LandingPage
-        content={content}
-        features={features}
-        heroStats={heroStats}
-        howItWorksSteps={howItWorksSteps}
-        securityItems={securityItems}
-        freePlan={{ ...freePlan, features: freePlanFeatures }}
-        paidPlan={{ ...paidPlan, features: paidPlanFeatures }}
-      />
-    </>
-  );
 }

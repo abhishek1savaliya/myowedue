@@ -48,7 +48,19 @@ export async function POST(request) {
     });
 
     return res;
-  } catch {
+  } catch (error) {
+    console.error("Login error:", error?.message || error);
+    const msg = String(error?.message || "");
+    if (
+      msg.includes("MONGODB_URI") ||
+      msg.includes("querySrv") ||
+      msg.includes("ENOTFOUND") ||
+      msg.includes("Mongo") ||
+      msg.includes("buffering timed out") ||
+      msg.includes("server selection")
+    ) {
+      return fail("Database unavailable. Please try again later.", 503);
+    }
     return fail("Failed to login", 500);
   }
 }
