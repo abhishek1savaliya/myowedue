@@ -9,6 +9,10 @@ const nextConfig = {
     "ioredis",
     "node-cron",
   ],
+  // Vercel Node middleware/lambdas have been missing this module at runtime (Next 16.2.x).
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/@swc/helpers/**/*"],
+  },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),

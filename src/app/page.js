@@ -1,5 +1,3 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import LandingPage from "@/components/landing/LandingPage";
 import SeoJsonLd from "@/components/SeoJsonLd";
 import { getCmsPageContent } from "@/lib/cmsPublic";
@@ -24,13 +22,6 @@ export const metadata = {
 
 export default async function Home() {
   try {
-    const store = await cookies();
-    const token = store.get("session_token")?.value;
-
-    if (token) {
-      redirect("/dashboard");
-    }
-
     const { content } = await getCmsPageContent("home");
     const features = Array.isArray(content.features) ? content.features : [];
     const heroStats = Array.isArray(content.heroStats) ? content.heroStats : [];
@@ -63,10 +54,6 @@ export default async function Home() {
       </>
     );
   } catch (error) {
-    // redirect() throws; rethrow so Next can handle navigation.
-    if (typeof error?.digest === "string" && error.digest.startsWith("NEXT_REDIRECT")) {
-      throw error;
-    }
     console.error("[home] render failed:", error?.message || error);
     return (
       <>
