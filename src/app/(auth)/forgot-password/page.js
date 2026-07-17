@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { KeyRound } from "lucide-react";
 import BackButton from "@/components/BackButton";
 
@@ -16,14 +15,13 @@ const labelClass =
   "block text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-500";
 
 export default function ForgotPasswordPage() {
-  const router = useRouter();
-  const [step, setStep] = useState("request");
-  const [form, setForm] = useState({ email: "", otp: "", password: "", confirmPassword: "" });
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
 
-  async function requestCode(e) {
+  async function onSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -32,51 +30,21 @@ export default function ForgotPasswordPage() {
     const res = await fetch("/api/auth/forgot-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: form.email }),
+      body: JSON.stringify({ email }),
     });
     const data = await res.json();
     setLoading(false);
 
     if (!res.ok) {
-      setError(data.message || "Could not send reset code");
+      setError(data.message || "Could not submit request");
       return;
     }
 
-    setMessage(data.message || "If that email is registered, a reset code has been sent.");
-    setStep("reset");
-  }
-
-  async function resetPassword(e) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    setMessage("");
-
-    if (form.password !== form.confirmPassword) {
-      setLoading(false);
-      setError("Passwords do not match");
-      return;
-    }
-
-    const res = await fetch("/api/auth/reset-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: form.email,
-        otp: form.otp,
-        password: form.password,
-      }),
-    });
-    const data = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setError(data.message || "Could not reset password");
-      return;
-    }
-
-    setMessage(data.message || "Password reset successful.");
-    setTimeout(() => router.push("/login"), 1200);
+    setSubmitted(true);
+    setMessage(
+      data.message ||
+        "Your password reset request was sent to our team. An admin will contact you with a reset link."
+    );
   }
 
   return (
@@ -93,18 +61,34 @@ export default function ForgotPasswordPage() {
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="font-(family-name:--font-display) text-[1.65rem] font-semibold leading-tight tracking-[0.12em] text-zinc-900 sm:text-3xl dark:text-zinc-50">
-            Reset Password
+            Forgot Password
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            {step === "request"
-              ? "Enter your email and we will send a reset code."
-              : "Enter the code from your email and choose a new password."}
+            Submit your email. Our team will review the request and send you a unique reset link with a 6-digit code.
           </p>
         </div>
       </header>
 
-      {step === "request" ? (
-        <form onSubmit={requestCode} className="mt-8 space-y-5">
+      {submitted ? (
+        <div className="mt-8 space-y-5">
+          <div
+            className="rounded-2xl border border-emerald-200/90 bg-emerald-50/95 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200"
+            role="status"
+          >
+            {message}
+          </div>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            The reset link is valid for <strong>7 days</strong> after an admin creates it. Check your email or messages from support.
+          </p>
+          <Link
+            href="/login"
+            className="inline-flex w-full items-center justify-center rounded-2xl bg-linear-to-r from-amber-500 via-amber-500 to-amber-600 px-4 py-3.5 text-[15px] font-semibold text-white shadow-lg shadow-amber-500/25 sm:py-4"
+          >
+            Back to sign in
+          </Link>
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="mt-8 space-y-5">
           <div className="space-y-2">
             <label htmlFor="forgot-email" className={labelClass}>
               Email
@@ -114,15 +98,18 @@ export default function ForgotPasswordPage() {
               type="email"
               autoComplete="email"
               placeholder="your@email.com"
-              value={form.email}
-              onChange={(e) => setForm((v) => ({ ...v, email: e.target.value }))}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className={inputClass}
               required
             />
           </div>
 
           {error ? (
-            <div className="rounded-2xl border border-red-200/90 bg-red-50/95 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200" role="alert">
+            <div
+              className="rounded-2xl border border-red-200/90 bg-red-50/95 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+              role="alert"
+            >
               {error}
             </div>
           ) : null}
@@ -132,99 +119,17 @@ export default function ForgotPasswordPage() {
             disabled={loading}
             className="w-full rounded-2xl bg-linear-to-r from-amber-500 via-amber-500 to-amber-600 px-4 py-3.5 text-[15px] font-semibold text-white shadow-lg shadow-amber-500/25 transition hover:from-amber-500 hover:via-amber-600 hover:to-amber-600 disabled:opacity-60 sm:py-4"
           >
-            {loading ? "Sending…" : "Send reset code"}
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={resetPassword} className="mt-8 space-y-5">
-          <div className="space-y-2">
-            <label htmlFor="forgot-otp" className={labelClass}>
-              Reset code
-            </label>
-            <input
-              id="forgot-otp"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="6-digit code"
-              value={form.otp}
-              onChange={(e) => setForm((v) => ({ ...v, otp: e.target.value }))}
-              className={inputClass}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="forgot-password" className={labelClass}>
-              New password
-            </label>
-            <input
-              id="forgot-password"
-              type="password"
-              autoComplete="new-password"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={(e) => setForm((v) => ({ ...v, password: e.target.value }))}
-              className={inputClass}
-              minLength={6}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="forgot-confirm-password" className={labelClass}>
-              Confirm password
-            </label>
-            <input
-              id="forgot-confirm-password"
-              type="password"
-              autoComplete="new-password"
-              placeholder="••••••••"
-              value={form.confirmPassword}
-              onChange={(e) => setForm((v) => ({ ...v, confirmPassword: e.target.value }))}
-              className={inputClass}
-              minLength={6}
-              required
-            />
-          </div>
-
-          {message ? (
-            <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/95 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200" role="status">
-              {message}
-            </div>
-          ) : null}
-
-          {error ? (
-            <div className="rounded-2xl border border-red-200/90 bg-red-50/95 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200" role="alert">
-              {error}
-            </div>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-linear-to-r from-amber-500 via-amber-500 to-amber-600 px-4 py-3.5 text-[15px] font-semibold text-white shadow-lg shadow-amber-500/25 transition hover:from-amber-500 hover:via-amber-600 hover:to-amber-600 disabled:opacity-60 sm:py-4"
-          >
-            {loading ? "Resetting…" : "Reset password"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setStep("request");
-              setError("");
-              setMessage("");
-            }}
-            className="w-full text-sm text-zinc-600 underline underline-offset-2 dark:text-zinc-400"
-          >
-            Resend code
+            {loading ? "Submitting…" : "Request password reset"}
           </button>
         </form>
       )}
 
       <p className="mt-8 border-t border-zinc-100 pt-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
         Remembered it?{" "}
-        <Link href="/login" className="font-semibold text-amber-600 underline decoration-amber-600/30 underline-offset-2 dark:text-amber-400">
+        <Link
+          href="/login"
+          className="font-semibold text-amber-600 underline decoration-amber-600/30 underline-offset-2 dark:text-amber-400"
+        >
           Sign in
         </Link>
       </p>

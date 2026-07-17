@@ -1,12 +1,17 @@
 import { connectDB } from "@/lib/db";
 import { fail, ok } from "@/lib/api";
-import { resetPasswordWithOtp } from "@/lib/password-reset";
+import { completePasswordReset } from "@/lib/password-reset";
 
 export async function POST(request) {
   try {
-    const { email, otp, password } = await request.json();
+    const { token, linkToken, email, otp, code, password } = await request.json();
     await connectDB();
-    const result = await resetPasswordWithOtp({ email, otp, password });
+    const result = await completePasswordReset({
+      linkToken: linkToken || token,
+      email,
+      code: code || otp,
+      password,
+    });
 
     if (!result.ok) {
       return fail(result.message, result.status);

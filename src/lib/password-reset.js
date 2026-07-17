@@ -1,78 +1,140 @@
 import "server-only";
-import { createHash, randomInt } from "crypto";
 import { hashPassword } from "@/lib/auth";
 import User from "@/models/User";
 import UserSession from "@/models/UserSession";
-import { sendMail } from "@/lib/mailer";
+import PasswordResetRequest, {
+  generatePasswordResetCode,
+  generatePasswordResetLinkToken,
+  hashPasswordResetCode,
+  PASSWORD_RESET_LINK_TTL_MS,
+} from "@/models/PasswordResetRequest";
 
-export const DEV_PASSWORD_RESET_OTP = "112233";
-const OTP_TTL_MS = 15 * 60 * 1000;
-
-function hashOtp(otp) {
-  return createHash("sha256").update(String(otp)).digest("hex");
+function siteBaseUrl() {
+  return (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
-function generateOtp() {
-  return String(randomInt(100000, 1000000));
+export function buildPasswordResetUrl(linkToken) {
+  return `${siteBaseUrl()}/reset-password/${encodeURIComponent(linkToken)}`;
 }
 
-export function isDevPasswordResetOtp(otp) {
-  return process.env.NODE_ENV === "development" && String(otp).trim() === DEV_PASSWORD_RESET_OTP;
-}
-
-export async function issuePasswordResetOtp(email) {
+export async function createPasswordResetRequest(email) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (!normalizedEmail) {
     return { ok: false, status: 422, message: "Email is required" };
   }
 
-  const user = await User.findOne({ email: normalizedEmail }).select("_id email name");
+  const user = await User.findOne({ email: normalizedEmail }).select("_id email");
+
+  // Always acknowledge — avoid email enumeration. Only queue when the account exists.
   if (!user) {
     return {
       ok: true,
       status: 200,
-      message: "If that email is registered, a reset code has been sent.",
-      devOtp: null,
+      message: "If that email is registered, your request was sent to our team.",
     };
   }
 
-  const otp = generateOtp();
-  user.passwordResetOtpHash = hashOtp(otp);
-  user.passwordResetOtpExpiresAt = new Date(Date.now() + OTP_TTL_MS);
-  await user.save();
+  const existingPending = await PasswordResetRequest.findOne({
+    email: normalizedEmail,
+    status: "pending",
+  }).select("_id");
 
-  const mailResult = await sendMail({
-    to: user.email,
-    subject: "Reset your MYOWEDUE password",
-    headline: "Password reset code",
-    message: `Use this code to reset your password: <strong style="font-size:18px;letter-spacing:0.2em;">${otp}</strong>. It expires in 15 minutes. If you did not request this, you can ignore this email.`,
-  });
-
-  const response = {
-    ok: true,
-    status: 200,
-    message: "If that email is registered, a reset code has been sent.",
-    devOtp: null,
-  };
-
-  if (process.env.NODE_ENV === "development") {
-    if (!mailResult?.ok) {
-      response.devOtp = otp;
-      response.message = `Development mode: use OTP ${otp} or test code ${DEV_PASSWORD_RESET_OTP}.`;
-    } else {
-      response.message = `Reset code sent. In development you can also use test code ${DEV_PASSWORD_RESET_OTP}.`;
-    }
+  if (!existingPending) {
+    await PasswordResetRequest.create({
+      email: normalizedEmail,
+      userId: user._id,
+      status: "pending",
+    });
   }
 
-  return response;
+  return {
+    ok: true,
+    status: 200,
+    message: "Your password reset request was sent to our team. An admin will contact you with a reset link.",
+  };
 }
 
-export async function resetPasswordWithOtp({ email, otp, password }) {
+export async function issuePasswordResetLink(requestId, adminId) {
+  const request = await PasswordResetRequest.findById(requestId);
+  if (!request) {
+    return { ok: false, status: 404, message: "Request not found" };
+  }
+
+  if (request.status === "used") {
+    return { ok: false, status: 400, message: "This request was already used" };
+  }
+
+  if (request.status === "cancelled") {
+    return { ok: false, status: 400, message: "This request was cancelled" };
+  }
+
+  const user = await User.findOne({ email: request.email }).select("_id email name");
+  if (!user) {
+    return { ok: false, status: 400, message: "No user account found for this email" };
+  }
+
+  const code = generatePasswordResetCode();
+  const linkToken = generatePasswordResetLinkToken();
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_LINK_TTL_MS);
+
+  request.userId = user._id;
+  request.linkToken = linkToken;
+  request.codeHash = hashPasswordResetCode(code);
+  request.expiresAt = expiresAt;
+  request.issuedBy = adminId;
+  request.issuedAt = new Date();
+  request.status = "issued";
+  await request.save();
+
+  return {
+    ok: true,
+    status: 200,
+    message: "Reset link created. Copy the code and link and send them to the user manually.",
+    reset: {
+      id: request._id.toString(),
+      email: request.email,
+      code,
+      linkToken,
+      resetUrl: buildPasswordResetUrl(linkToken),
+      expiresAt: expiresAt.toISOString(),
+      validDays: 7,
+    },
+  };
+}
+
+export async function getPasswordResetLinkStatus(linkToken) {
+  const token = String(linkToken || "").trim();
+  if (!token) {
+    return { ok: false, status: 404, message: "Invalid reset link" };
+  }
+
+  const request = await PasswordResetRequest.findOne({ linkToken: token }).lean();
+  if (!request || request.status !== "issued") {
+    return { ok: false, status: 404, message: "Invalid or expired reset link" };
+  }
+
+  if (!request.expiresAt || new Date(request.expiresAt).getTime() <= Date.now()) {
+    await PasswordResetRequest.updateOne({ _id: request._id }, { $set: { status: "expired" } });
+    return { ok: false, status: 410, message: "This reset link has expired" };
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    reset: {
+      emailHint: request.email,
+      expiresAt: request.expiresAt,
+    },
+  };
+}
+
+export async function completePasswordReset({ linkToken, email, code, password }) {
+  const token = String(linkToken || "").trim();
   const normalizedEmail = String(email || "").trim().toLowerCase();
-  const normalizedOtp = String(otp || "").trim();
+  const normalizedCode = String(code || "").trim();
   const nextPassword = String(password || "");
 
-  if (!normalizedEmail || !normalizedOtp || !nextPassword) {
+  if (!token || !normalizedEmail || !normalizedCode || !nextPassword) {
     return { ok: false, status: 422, message: "Email, reset code, and new password are required" };
   }
 
@@ -80,27 +142,43 @@ export async function resetPasswordWithOtp({ email, otp, password }) {
     return { ok: false, status: 422, message: "Password must be at least 6 characters" };
   }
 
-  const user = await User.findOne({ email: normalizedEmail });
-  if (!user) {
-    return { ok: false, status: 400, message: "Invalid or expired reset code" };
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    return { ok: false, status: 422, message: "Reset code must be 6 digits" };
   }
 
-  const devBypass = isDevPasswordResetOtp(normalizedOtp);
-  const otpValid =
-    devBypass ||
-    (user.passwordResetOtpHash &&
-      user.passwordResetOtpExpiresAt &&
-      user.passwordResetOtpExpiresAt.getTime() > Date.now() &&
-      user.passwordResetOtpHash === hashOtp(normalizedOtp));
+  const request = await PasswordResetRequest.findOne({ linkToken: token });
+  if (!request || request.status !== "issued") {
+    return { ok: false, status: 400, message: "Invalid or expired reset link" };
+  }
 
-  if (!otpValid) {
-    return { ok: false, status: 400, message: "Invalid or expired reset code" };
+  if (!request.expiresAt || request.expiresAt.getTime() <= Date.now()) {
+    request.status = "expired";
+    await request.save();
+    return { ok: false, status: 410, message: "This reset link has expired" };
+  }
+
+  if (request.email !== normalizedEmail) {
+    return { ok: false, status: 400, message: "Email does not match this reset link" };
+  }
+
+  if (!request.codeHash || request.codeHash !== hashPasswordResetCode(normalizedCode)) {
+    return { ok: false, status: 400, message: "Invalid reset code" };
+  }
+
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user) {
+    return { ok: false, status: 400, message: "Account not found" };
   }
 
   user.password = await hashPassword(nextPassword);
   user.passwordResetOtpHash = null;
   user.passwordResetOtpExpiresAt = null;
   await user.save();
+
+  request.status = "used";
+  request.usedAt = new Date();
+  request.codeHash = null;
+  await request.save();
 
   await UserSession.updateMany(
     { userId: user._id, status: "active" },
@@ -114,4 +192,33 @@ export async function resetPasswordWithOtp({ email, otp, password }) {
   );
 
   return { ok: true, status: 200, message: "Password reset successful. You can sign in now." };
+}
+
+export function serializePasswordResetRequest(doc, { includeSecrets = false } = {}) {
+  const item = {
+    id: doc._id.toString(),
+    email: doc.email,
+    userId: doc.userId?.toString?.() || doc.userId || null,
+    status: doc.status,
+    expiresAt: doc.expiresAt || null,
+    issuedAt: doc.issuedAt || null,
+    usedAt: doc.usedAt || null,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    issuedBy: doc.issuedBy
+      ? {
+          id: doc.issuedBy._id?.toString?.() || doc.issuedBy.toString?.() || null,
+          name: doc.issuedBy.name || null,
+          email: doc.issuedBy.email || null,
+        }
+      : null,
+    hasActiveLink: Boolean(doc.linkToken && doc.status === "issued"),
+  };
+
+  if (includeSecrets && doc.linkToken && doc.status === "issued") {
+    item.resetUrl = buildPasswordResetUrl(doc.linkToken);
+    item.linkToken = doc.linkToken;
+  }
+
+  return item;
 }

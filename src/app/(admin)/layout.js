@@ -28,6 +28,7 @@ const ADMIN_NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/admin/premium", label: "Premium", icon: "👑", superadminOnly: true },
   { href: "/admin/tickets", label: "Support Tickets", icon: "🎫" },
+  { href: "/admin/password-resets", label: "Password resets", icon: "🔑" },
   { href: "/admin/team", label: "Team", icon: "👥" },
   { href: "/admin/chat", label: "Chat", icon: "💬" },
   { href: "/admin/vouchers", label: "Vouchers", icon: "🎟️" },
@@ -38,6 +39,7 @@ const ADMIN_NAV = [
 const EMPLOYEE_NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/admin/tickets", label: "My Tickets", icon: "🎫" },
+  { href: "/admin/password-resets", label: "Password resets", icon: "🔑" },
   { href: "/admin/team", label: "Team", icon: "👥" },
   { href: "/admin/chat", label: "Chat", icon: "💬" },
   { href: "/admin/profile", label: "Profile", icon: "🧾" },
