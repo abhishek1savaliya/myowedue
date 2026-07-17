@@ -53,6 +53,8 @@ const UserSchema = new Schema(
     concurrentSessionLimit: { type: Number, min: 1, max: 5, default: 1 },
     /** After we send the one-time "set your @username" notification, this is true. */
     communityUsernamePromptSent: { type: Boolean, default: false },
+    passwordResetOtpHash: { type: String, default: null },
+    passwordResetOtpExpiresAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
@@ -116,6 +118,12 @@ if (mongoose.models.User) {
   if (!User.schema.path("concurrentSessionLimit")) missingPaths.concurrentSessionLimit = { type: Number, min: 1, max: 5, default: 1 };
   if (!User.schema.path("communityUsernamePromptSent")) {
     missingPaths.communityUsernamePromptSent = { type: Boolean, default: false };
+  }
+  if (!User.schema.path("passwordResetOtpHash")) {
+    missingPaths.passwordResetOtpHash = { type: String, default: null };
+  }
+  if (!User.schema.path("passwordResetOtpExpiresAt")) {
+    missingPaths.passwordResetOtpExpiresAt = { type: Date, default: null };
   }
 
   if (Object.keys(missingPaths).length > 0) {

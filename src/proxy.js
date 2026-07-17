@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const protectedRoutes = ["/dashboard", "/posts", "/people", "/cards", "/files", "/transactions", "/bin", "/reports", "/settings", "/my-subscription", "/content-editor", "/support"];
-const authRoutes = ["/login", "/signup"];
+const authRoutes = ["/login", "/signup", "/forgot-password"];
 const adminProtectedRoutes = [
   "/admin/dashboard",
   "/admin/team",
@@ -54,6 +54,7 @@ export const config = {
     "/support/:path*",
     "/login",
     "/signup",
+    "/forgot-password",
     "/admin/dashboard/:path*",
     "/admin/team/:path*",
     "/admin/tickets/:path*",
